@@ -1,0 +1,55 @@
+{
+  "blog": {
+    "name": "Blog Posts",
+    "subfolder": "blog",
+    "description": "Articles and updates",
+    "seo": {
+      "titleTemplate": "{title} | Spool Blog",
+      "defaultDescription": "Latest insights and tutorials from Spool",
+      "ogImageTemplate": "/api/og?title={title}&collection=blog"
+    },
+    "fields": [
+      { "name": "title", "type": "text", "required": true, "label": "Title" },
+      { "name": "excerpt", "type": "textarea", "label": "Excerpt", "maxLength": 200 },
+      { "name": "body", "type": "markdown", "required": true, "label": "Content" },
+      { "name": "publishedAt", "type": "datetime", "label": "Publish Date" },
+      { "name": "featured", "type": "boolean", "label": "Featured Post" },
+      { "name": "tags", "type": "tags", "label": "Tags" },
+      { "name": "author", "type": "text", "label": "Author" },
+      { "name": "featuredImage", "type": "image", "label": "Featured Image" }
+    ]
+  },
+  "docs": {
+    "name": "Documentation",
+    "subfolder": "docs",
+    "description": "Help articles and guides",
+    "seo": {
+      "titleTemplate": "{title} | Spool Docs",
+      "defaultDescription": "Comprehensive documentation for Spool CMS",
+      "ogImageTemplate": "/api/og?title={title}&collection=docs"
+    },
+    "fields": [
+      { "name": "title", "type": "text", "required": true, "label": "Title" },
+      { "name": "description", "type": "textarea", "label": "Description" },
+      { "name": "body", "type": "markdown", "required": true, "label": "Content" },
+      { "name": "category", "type": "select", "label": "Category", "options": ["Getting Started", "API", "Guides", "Reference"] },
+      { "name": "order", "type": "number", "label": "Sort Order" }
+    ]
+  },
+  "pages": {
+    "name": "Pages",
+    "subfolder": null,
+    "description": "Static pages like About, Contact, etc.",
+    "seo": {
+      "titleTemplate": "{title} | Spool",
+      "defaultDescription": "Learn more about Spool CMS",
+      "ogImageTemplate": "/api/og?title={title}&collection=pages"
+    },
+    "fields": [
+      { "name": "title", "type": "text", "required": true, "label": "Page Title" },
+      { "name": "description", "type": "textarea", "label": "Meta Description", "maxLength": 160 },
+      { "name": "body", "type": "markdown", "required": true, "label": "Page Content" },
+      { "name": "showInNav", "type": "boolean", "label": "Show in Navigation" }
+    ]
+  }
+} 
