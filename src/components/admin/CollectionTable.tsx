@@ -49,6 +49,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TbLayoutSidebarRightExpand } from 'react-icons/tb';
 
 interface CollectionTableProps {
   collection: CollectionConfig;
@@ -74,9 +75,10 @@ interface RowMenuProps {
 interface DraggableHeaderProps {
   header: any;
   children: React.ReactNode;
+  isLastHeader: boolean;
 }
 
-function DraggableHeader({ header, children }: DraggableHeaderProps) {
+function DraggableHeader({ header, children, isLastHeader }: DraggableHeaderProps) {
   const { isDragging, setNodeRef, transform, transition, listeners, attributes } = useSortable({
     id: header.id,
   });
@@ -112,7 +114,7 @@ function DraggableHeader({ header, children }: DraggableHeaderProps) {
         ...style,
       }}
       className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative ${
-        header.column.getCanSort() && header.column.id !== 'edit-action' && header.column.id !== 'more-actions'
+        header.column.getCanSort() && header.column.id !== 'more-actions'
           ? 'cursor-pointer hover:bg-gray-100'
           : ''
       }`}
@@ -120,7 +122,7 @@ function DraggableHeader({ header, children }: DraggableHeaderProps) {
     >
       <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-nowrap overflow-hidden">
         {/* Drag handle - only show for draggable columns */}
-        {header.column.id !== 'edit-action' && 
+        {
          header.column.id !== 'system_title' && 
          header.column.id !== 'more-actions' && (
           <div
@@ -148,6 +150,9 @@ function DraggableHeader({ header, children }: DraggableHeaderProps) {
           onDoubleClick={() => header.column.resetSize()}
           className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
         />
+      )}
+      {!isLastHeader && (
+        <div className="absolute top-0 right-0 h-full w-px bg-gray-200" />
       )}
     </th>
   );
@@ -354,7 +359,6 @@ export function CollectionTable({
 
   // Define column order, excluding the fixed "more-actions" column
   const initialColumnOrder = [
-    'edit-action',
     'system_title',
     'system_slug',
     'system_ogImage',
@@ -368,7 +372,7 @@ export function CollectionTable({
   // Get draggable column IDs (exclude fixed columns)
   const draggableColumnIds = columnOrder.filter(columnId => 
     columnId && 
-    columnId !== 'edit-action' && 
+    
     columnId !== 'system_title' &&
     columnId !== 'more-actions'
   );
@@ -631,37 +635,7 @@ export function CollectionTable({
 
   // Create columns from collection fields
   const columns: ColumnDef<ContentItem>[] = [
-    // Actions column
-    {
-      id: 'edit-action',
-      header: '',
-      enableSorting: false,
-      enableResizing: false, // Prevent actions column from being resized
-      size: 70, // Increase size to accommodate status indicator
-      cell: ({ row }) => {
-        const isPublished = !!row.original.publishedAt;
-        return (
-          <div className="flex items-center justify-center gap-1">
-            {/* Status indicator */}
-            <div
-              className={`ml-5 w-2 h-2 rounded-full flex-shrink-0 ${
-                isPublished ? 'bg-green-400' : 'bg-gray-200'
-              }`}
-              title={isPublished ? 'Published' : 'Draft'}
-            />
-            <button
-              onClick={() => setSelectedItem(row.original)}
-              className="text-gray-600 hover:text-gray-900 hover:bg-gray-200/80 rounded-md p-1"
-              title="Edit"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
-          </div>
-        );
-      },
-    },
+
     // Title column (always first and sticky)
     {
       id: 'system_title', // Unique ID to avoid conflicts
@@ -671,9 +645,17 @@ export function CollectionTable({
       cell: ({ row, getValue, column }) => {
         const isEditing = editingCell?.rowId === row.original.id && editingCell?.field === 'title';
         const isSaving = savingItems.has(row.original.id);
+        const isPublished = !!row.original.publishedAt;
 
         return (
-          <>
+          <div className="relative flex items-center pr-20 group">
+            {/* Status indicator */}
+            <div
+              className={`ml-4 mr-2 w-2 h-2 rounded-full flex-shrink-0 ${
+                isPublished ? 'bg-green-400' : 'bg-gray-300'
+              }`}
+              title={isPublished ? 'Published' : 'Draft'}
+            />
             <FieldEditor
               field={{ name: 'title', type: 'text', required: true, label: 'Title' }}
               value={getValue() as string}
@@ -695,7 +677,16 @@ export function CollectionTable({
                 </svg>
               </div>
             )}
-          </>
+            {/* Open button */}
+            <button
+              onClick={() => setSelectedItem(row.original)}
+              className="absolute right-1.5 top-1/2 gap-1 -translate-y-1/2 flex items-center border border-gray-300 bg-white text-gray-600 hover:text-gray-800 rounded-sm pl-1 pr-2 py-[2px] text-[11px] font-medium opacity-0 group-hover:opacity-100 transition shadow"
+              title="Open"
+            >
+              <TbLayoutSidebarRightExpand size={16} />
+              OPEN
+            </button>
+          </div>
         );
       },
     },
@@ -900,7 +891,7 @@ export function CollectionTable({
     // debugColumns: true,
   });
 
-  return (
+                    return (
     <div className="flex flex-col h-full min-w-0">
       <CollectionHeader
         collection={collection}
@@ -936,8 +927,6 @@ export function CollectionTable({
         }
       `}</style>
       <div className="bg-white shadow-sm flex flex-col flex-1 min-w-0">
-
-        {/* Table */}
         {localItems.length > 0 ? (
           <div className="overflow-x-auto overflow-y-auto flex-grow min-w-0">
             <DndContext
@@ -945,7 +934,7 @@ export function CollectionTable({
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <table className="divide-y divide-gray-200 table-fixed min-w-full" style={{ width: table.getTotalSize() }}>
+              <table className="divide-y-0 divide-gray-200 table-fixed min-w-full" style={{ width: table.getTotalSize() }}>
                 <thead className="bg-gray-50">
                   {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id}>
@@ -953,28 +942,38 @@ export function CollectionTable({
                         items={draggableColumnIds}
                         strategy={horizontalListSortingStrategy}
                       >
-                        {headerGroup.headers.map(header => {
+                        {headerGroup.headers.map((header, index) => {
                           const isDraggable = draggableColumnIds.includes(header.id);
-                          const isSticky = header.id === 'edit-action' || header.id === 'system_title' || header.id === 'more-actions';
-                          
+                          const isLastHeader = index === headerGroup.headers.length - 1;
+
                           if (isDraggable) {
                             return (
-                              <DraggableHeader key={header.id} header={header}>
+                              <DraggableHeader 
+                                key={header.id} 
+                                header={header}
+                                isLastHeader={isLastHeader}
+                              >
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                               </DraggableHeader>
                             );
                           }
                           
-                          // Render non-draggable headers (sticky columns)
+                          const isSticky = header.id === 'system_title' || header.id === 'more-actions';
                           return (
                             <th
                               key={header.id}
-                              className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible ${
-                                isSticky ? 'sticky z-10 bg-gray-50' : ''
+                              className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative ${
+                                isSticky ? 'sticky z-20 bg-gray-50' : ''
                               } ${
-                                header.id === 'more-actions' ? 'right-0' : (header.id === 'system_title' ? 'left-[70px]' : (header.id === 'edit-action' ? 'left-0' : ''))
-                              } ${header.column.getCanSort() && header.id !== 'edit-action' && header.id !== 'more-actions' ? 'cursor-pointer hover:bg-gray-100' : ''}`}
-                              style={{ width: header.getSize(), minWidth: header.getSize(), maxWidth: header.getSize() }}
+                                header.id === 'more-actions' ? 'right-0' : (header.id === 'system_title' ? 'left-0' : '')
+                              } ${header.column.getCanSort() && header.id !== 'more-actions' ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                              style={{ 
+                                width: header.getSize(), 
+                                minWidth: header.getSize(), 
+                                maxWidth: header.getSize(),
+                                left: header.id === 'system_title' ? 0 : undefined,
+                                right: header.id === 'more-actions' ? 0 : undefined,
+                              }}
                               onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
                             >
                               <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-nowrap overflow-hidden">
@@ -994,6 +993,12 @@ export function CollectionTable({
                                   className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
                                 />
                               )}
+                              {!isLastHeader && (
+                                <div className="absolute top-0 right-0 h-full w-px bg-gray-200" />
+                              )}
+                              {header.id === 'more-actions' && (
+                                <div className="absolute top-0 left-0 h-full w-px bg-gray-200" />
+                              )}
                             </th>
                           );
                         })}
@@ -1001,29 +1006,35 @@ export function CollectionTable({
                     </tr>
                   ))}
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white">
                   {table.getRowModel().rows.map(row => (
-                    <tr key={row.id} className="hover:bg-gray-50 group">
-                      {row.getVisibleCells().map(cell => {
-                         const isActionsColumn = cell.column.id === 'more-actions';
-                         const isEditColumn = cell.column.id === 'edit-action';
-                         const isTitleColumn = cell.column.id === 'system_title';
+                    <tr key={row.id} className="hover:bg-gray-50 group border-b border-gray-200 last:border-b-0">
+                      {row.getVisibleCells().map((cell, index) => {
+                        const isActionsColumn = cell.column.id === 'more-actions';
+                        const isTitleColumn = cell.column.id === 'system_title';
+                        const isLastCell = index === row.getVisibleCells().length - 1;
 
                         return (
                           <td
                             key={cell.id}
                             className={`relative text-sm text-gray-900 ${
-                              isActionsColumn || isEditColumn || isTitleColumn ? 'sticky z-10 bg-white group-hover:bg-gray-50' : ''
+                              isActionsColumn || isTitleColumn ? 'sticky z-10 bg-white group-hover:bg-gray-50' : ''
                             }`}
                             style={{
                               width: cell.column.getSize(),
                               minWidth: cell.column.getSize(),
                               maxWidth: cell.column.getSize(),
+                              left: isTitleColumn ? 0 : undefined,
                               right: isActionsColumn ? 0 : undefined,
-                              left: isEditColumn ? 0 : (isTitleColumn ? '70px' : undefined),
                             }}
                           >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            {!isLastCell && (
+                              <div className="absolute top-0 right-0 h-full w-px bg-gray-200" />
+                            )}
+                            {isActionsColumn && (
+                              <div className="absolute top-0 left-0 h-full w-px bg-gray-200" />
+                            )}
                           </td>
                         )
                       })}
@@ -1055,16 +1066,15 @@ export function CollectionTable({
         )}
       </div>
 
-      {/* Detail Panel */}
       {selectedItem && authToken && (
         <DetailPanel
           collection={collection}
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
           onFieldUpdate={handleFieldUpdate}
-          authToken={authToken} // Pass the authToken to DetailPanel
+          authToken={authToken}
         />
       )}
     </div>
   );
-} 
+}
