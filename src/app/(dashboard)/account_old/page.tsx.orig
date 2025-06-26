@@ -1,0 +1,938 @@
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import { createBrowserClient } from '@supabase/ssr';
+import type { Database } from '@/lib/database.types';
+import type { User } from '@supabase/supabase-js'; // Import User type
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from 'sonner'; // Reverted import back to sonner
+import { useRouter } from 'next/navigation'
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog"
+import { PricingTable } from "@/components/pricing/pricing-table"
+import { UsageDisplay } from "@/components/pricing/usage-display"
+import { PLANS } from "@/lib/config/pricing"
+import { useSearchParams } from "next/navigation"
+import { validatePassword } from "@/lib/password-validation"
+
+// Define UsageData type inline
+interface UsageData {
+  messageCredits: { used: number; total: number };
+  trainingData: { used: number; total: number }; // in KB
+  trainingUrls: { used: number; total: number };
+};
+
+// Placeholder type for Subscription - replace with actual generated type if available
+interface SubscriptionWithPriceAndProduct {
+  id: string;
+  user_id: string;
+  status: string;
+  prices: {
+    id: string;
+    products: {
+      id: string;
+      name: string;
+      // ... other product fields
+    } | null;
+    // ... other price fields
+  } | null;
+  // ... other subscription fields
+};
+
+export default function AccountPage() {
+  const router = useRouter();
+  // Explicitly pass env variables to createBrowserClient
+  const [supabase] = useState(() =>
+    createBrowserClient<
+      Database,
+      'public',
+      Database['public']['Tables']
+    >(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  );
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null); // Correctly type user state
+  const [fullName, setFullName] = useState<string | null>(null); // Correctly type fullName state
+  const [email, setEmail] = useState<string | null>(null); // Correctly type email state
+  const [originalEmail, setOriginalEmail] = useState<string | null>(''); // Store original email
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [subscription, setSubscription] = useState<SubscriptionWithPriceAndProduct | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Combined loading for user/sub
+  const [isLoadingUsage, setIsLoadingUsage] = useState(true); // Can keep separate if needed
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [passwordChangeMode, setPasswordChangeMode] = useState(false);
+
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState("account")
+  
+  // Handle tab change and update URL
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    
+    // Update URL without full page reload
+    const url = new URL(window.location.href)
+    if (value === "billing") {
+      url.searchParams.set("tab", "billing")
+    } else {
+      url.searchParams.delete("tab")
+    }
+    window.history.pushState({}, "", url)
+  }
+
+  const [currentPlan, setCurrentPlan] = useState(PLANS.FREE)
+  const [usageData, setUsageData] = useState<UsageData | null>({
+    messageCredits: { used: 0, total: 100 },
+    trainingData: { used: 0, total: 400 }, // in KB
+    trainingUrls: { used: 0, total: 10 }
+  })
+
+  // --- Fetch Functions --- (Defined outside useEffect)
+  const fetchUserAndSubscription = useCallback(async (userId: string) => {
+    // Fetch user details (already done via session usually, but good to confirm)
+    // In this context, we mostly need the subscription
+    setIsLoading(true);
+    try {
+      const { data: subscriptionData, error: subscriptionError } = await supabase
+        .from('subscriptions')
+        .select('*')  // Select only fields that exist in the subscriptions table
+        .eq('user_id', userId)
+        .in('status', ['trialing', 'active'])
+        .maybeSingle();
+
+      if (subscriptionError) {
+        console.error('Error fetching subscription:', subscriptionError);
+        throw subscriptionError;
+      }
+
+      if (subscriptionData) {
+        console.log("Current subscription data:", subscriptionData);
+        setSubscription(subscriptionData as any); // Use 'as any' temporarily
+        
+        // Use the plan field directly from subscriptions table
+        const planName = subscriptionData.plan?.toLowerCase();
+        if (planName?.includes('hobby')) {
+          setCurrentPlan(PLANS.HOBBY);
+        } else if (planName?.includes('business')) {
+          setCurrentPlan(PLANS.BUSINESS);
+        } else {
+          setCurrentPlan(PLANS.FREE);
+        }
+      } else {
+        setSubscription(null);
+        setCurrentPlan(PLANS.FREE);
+      }
+    } catch (error) {
+      console.error('Error fetching subscription data:', error);
+      toast.error("Failed to load subscription details.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase]);
+
+  const fetchUsageData = useCallback(async (authToken: string) => {
+    setIsLoadingUsage(true);
+    try {
+       if (!authToken) {
+          console.error('No auth token provided for usage data fetch.');
+          toast.error("Session error, cannot load usage data.");
+          setIsLoadingUsage(false);
+          return;
+        }
+
+      const response = await fetch('/api/usage', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.usage) {
+          console.log("Usage data fetched:", data.usage);
+          setUsageData(data.usage as any); // Use 'as any' temporarily
+        } else {
+          console.log("Usage API success, but no usage data found.");
+          setUsageData(null);
+        }
+      } else {
+        console.error('Error fetching usage data from API:', response.status, await response.text());
+        toast.error("Failed to load usage data.");
+        setUsageData(null); // Clear potentially stale data
+      }
+    } catch (error) {
+      console.error('Error fetching usage data:', error);
+      toast.error("Failed to load usage data.");
+       setUsageData(null); // Clear potentially stale data
+    } finally {
+      setIsLoadingUsage(false);
+    }
+  }, [activeTab]);
+
+  // --- Effect to react to session changes --- 
+  useEffect(() => {
+    console.log("Session state changed:");
+
+    const fetchSessionAndData = async () => {
+      setLoading(true);
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Error fetching session:", error);
+        toast.error("Could not fetch session."); // Use sonner toast
+        setUser(null);
+        setLoading(false);
+        router.push('/login'); // Redirect if session fetch fails
+        return;
+      }
+
+      if (session) {
+        setUser(session.user);
+        setEmail(session.user.email || null);
+        setFullName(session.user.user_metadata?.full_name || null);
+        // Fetch subscription and usage data
+        await Promise.all([
+          fetchUserAndSubscription(session.user.id),
+          fetchUsageData(session.access_token)
+        ]);
+      } else {
+        setUser(null);
+        // Redirect to login if there's no session
+        router.push('/login?message=Please login to view your account settings.');
+      }
+      setLoading(false);
+    };
+
+    fetchSessionAndData();
+
+    // Listen for auth changes to keep the session updated
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setUser(session.user);
+        setEmail(session.user.email || null);
+        setFullName(session.user.user_metadata?.full_name || null);
+        if (_event === 'SIGNED_IN' || _event === 'USER_UPDATED') {
+          // Refetch data if user signs in or updates profile
+          fetchUserAndSubscription(session.user.id);
+          fetchUsageData(session.access_token);
+        }
+      } else {
+        setUser(null);
+        setEmail(null);
+        setFullName(null);
+        setSubscription(null);
+        setUsageData(null);
+        // Optional: Redirect if user signs out while on the page
+        // router.push('/login');
+      }
+    });
+
+    // Cleanup listener on unmount
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [supabase, router, fetchUserAndSubscription, fetchUsageData]);
+
+  // Set the active tab based on the URL query parameter
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab === "billing") {
+      setActiveTab("billing")
+    } else {
+      setActiveTab("account")
+    }
+  }, [searchParams])
+
+  const handleSaveAccount = async () => {
+     if (!user) {
+        toast.error("You must be logged in to update settings.");
+        return;
+     }
+     if (!fullName?.trim()) {
+        toast.error("Name cannot be empty.");
+        return;
+     }
+     setIsSaving(true);
+     try {
+       // Handle password change separately if in password change mode
+       if (passwordChangeMode) {
+         if (!currentPassword) {
+           toast.error("Current password is required.");
+           setIsSaving(false);
+           return;
+         }
+         
+         if (!newPassword) {
+           toast.error("New password is required.");
+           setIsSaving(false);
+           return;
+         }
+         
+         if (newPassword !== confirmPassword) {
+           toast.error("New passwords do not match.");
+           setIsSaving(false);
+           return;
+         }
+         
+         // Validate password strength
+         const passwordValidation = validatePassword(newPassword);
+         if (!passwordValidation.isValid) {
+           toast.error("Please fix the password requirements below");
+           setIsSaving(false);
+           return;
+         }
+         
+         // First verify the current password by attempting to sign in
+         const { error: signInError } = await supabase.auth.signInWithPassword({
+           email: user.email!,
+           password: currentPassword
+         });
+         
+         if (signInError) {
+           console.error("Error verifying current password:", signInError);
+           toast.error("Current password is incorrect.");
+           setIsSaving(false);
+           return;
+         }
+         
+         // If current password is verified, update to the new password
+         const { error: updateError } = await supabase.auth.updateUser({
+           password: newPassword
+         });
+         
+         if (updateError) {
+           console.error("Error updating password:", updateError);
+           toast.error(`Failed to update password: ${updateError.message}`);
+           setIsSaving(false);
+           return;
+         }
+         
+         toast.success("Password updated successfully!");
+         setCurrentPassword('');
+         setNewPassword('');
+         setConfirmPassword('');
+         setPasswordChangeMode(false);
+         setIsSaving(false);
+         return;
+       }
+       
+       // Handle profile updates (name and email)
+       const updates: { data?: { name: string }; email?: string } = {
+         data: { name: fullName?.trim() } // Always include name update
+       };
+      
+       let emailChanged = false;
+       // Basic validation: check if email changed and is not empty
+       if (email && email.trim() !== originalEmail) {
+         // Add more robust email validation if needed
+         updates.email = email.trim();
+         emailChanged = true;
+       }
+       
+       // Check if there are any actual changes to save
+       const isNameChanged = fullName?.trim() !== (user?.user_metadata?.name || '');
+
+       if (!isNameChanged && !emailChanged) {
+         toast.info("No changes detected.");
+         setIsSaving(false);
+         return;
+       }
+       
+       // Only proceed if changes were detected
+       const { error } = await supabase.auth.updateUser(updates);
+
+       if (error) {
+         console.error("Error updating user:", error);
+         toast.error(`Failed to update settings: ${error.message}`);
+       } else {
+         if (emailChanged) {
+           toast.success(`Settings saved. Please check ${updates.email} for a confirmation link to update your email.`);
+           // Update originalEmail now that the request succeeded, even if confirmation is pending
+           setOriginalEmail(updates.email!); 
+         } else {
+           toast.success("Account settings updated successfully!");
+         }
+       }
+     } catch (err) {
+       console.error("Unexpected error saving account:", err);
+       toast.error("An unexpected error occurred. Please try again.");
+     } finally {
+       setIsSaving(false);
+     }
+   }
+  
+  // Fetch user's subscription and usage data
+  useEffect(() => {
+    const fetchSubscriptionData = async () => {
+      if (!user) return;
+
+      try {
+        // Fetch subscription data from the customers table
+        const { data: subscriptionData, error: subscriptionError } = await supabase
+          .from('customers')
+          .select('plan_id, stripe_subscription_id, status')
+          .eq('user_id', user.id)
+          .in('status', ['trialing', 'active'])
+          .maybeSingle();
+
+        // Log only if error is an object with a code property that isn't PGRST116
+        if (subscriptionError && typeof subscriptionError === 'object' && subscriptionError.code && subscriptionError.code !== 'PGRST116') {
+          console.error('Error fetching subscription data:', subscriptionError);
+        } else if (subscriptionData) {
+          console.log('Current subscription data:', subscriptionData);
+          
+          // Check URL parameters for successful checkout
+          const urlParams = new URLSearchParams(window.location.search);
+          const success = urlParams.get('success');
+          const sessionParam = urlParams.get('session_id');
+          const planParam = urlParams.get('planId');
+          // If we just completed a checkout, refresh subscription via API
+          if (success === 'true' && sessionParam) {
+            try {
+              // fetch latest subscription and update DB/UI
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              if (token) {
+                const resp = await fetch(`/api/stripe/get-subscription?session_id=${sessionParam}`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (resp.ok) {
+                  const sub = await resp.json();
+                  if (sub.plan_id) setCurrentPlan(sub.plan_id);
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching updated subscription:', err);
+            }
+            // fallback to planParam
+            if (planParam) setCurrentPlan(planParam);
+            // clean URL
+            window.history.replaceState(null, '', window.location.pathname);
+            return;
+          }
+          
+          // Only set the plan if the subscription is active
+          if (subscriptionData.status === 'active' || subscriptionData.status === 'trialing') {
+            console.log('Active subscription found with data:', subscriptionData);
+            
+            // Handle different plan name formats - use the plan_id field
+            const planField = subscriptionData.plan_id || '';
+            console.log('Using plan field:', planField);
+            const planLower = planField.toLowerCase() || '';
+            
+            if (planLower.includes('hobby') || planLower === 'hobby') {
+              console.log('Setting plan to HOBBY');
+              setCurrentPlan(PLANS.HOBBY);
+            } else if (planLower.includes('business') || planLower === 'business') {
+              console.log('Setting plan to BUSINESS');
+              setCurrentPlan(PLANS.BUSINESS);
+            } else {
+              console.log('Plan not recognized, defaulting to FREE');
+              setCurrentPlan(PLANS.FREE);
+            }
+          } else {
+            // If subscription is not active, default to free plan
+            console.log('No active subscription found, setting plan to FREE');
+            setCurrentPlan(PLANS.FREE);
+          }
+        }
+
+        // Fetch usage data using the API instead of direct database query
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          
+          if (token) {
+            const response = await fetch('/api/usage', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.usage) {
+                console.log("Usage data fetched from API:", data.usage);
+                setUsageData(data.usage);
+              }
+            } else {
+              console.error('Error fetching usage data from API:', response.status);
+            }
+          }
+        } catch (usageError) {
+          console.error('Error fetching usage data:', usageError);
+        }
+      } catch (error) {
+        console.error('Error fetching subscription data:', error);
+      }
+    };
+
+    fetchSubscriptionData();
+  }, [supabase, user, activeTab]);
+
+  const handleUpgrade = async (planId: string) => {
+    if (!user) {
+      toast.error("You must be logged in to upgrade your plan.");
+      return;
+    }
+
+    try {
+      // Get the JWT token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        toast.error("Authentication error. Please log in again.");
+        return;
+      }
+
+      // Call the API to create a checkout session
+      const response = await fetch('/api/stripe/create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ planId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      // Redirect to the checkout URL
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        // Handle free plan upgrade directly
+        if (planId === PLANS.FREE) {
+          setCurrentPlan(PLANS.FREE);
+          toast.success("Successfully downgraded to the Free plan.");
+          router.refresh();
+        } else {
+          throw new Error('No checkout URL returned');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error creating checkout session:', error);
+      toast.error(`Failed to upgrade: ${error.message}`);
+    }
+  }
+
+  const confirmDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/account/delete', {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("API Error:", result);
+        toast.error(`Failed to delete account: ${result.error || 'Unknown error'}`);
+      } else {
+        toast.success("Account deleted successfully. Signing out...");
+        await supabase.auth.signOut();
+        router.push('/'); // Redirect to home or login page after sign out
+        router.refresh(); // Force refresh to clear state
+      }
+    } catch (error: any) { // Catch network or unexpected errors
+      console.error("Delete request failed:", error);
+      toast.error(`An error occurred: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  // Only show a login message if there's no user at all
+  if (!user) {
+     return <div className="container mx-auto p-4 md:p-6 text-center">Please log in to view your account settings.</div>;
+  }
+
+  return (
+    <div className="container mx-auto p-4 md:p-6">
+      <h1 className="text-2xl font-bold mb-6">Account</h1>
+
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="account">Overview</TabsTrigger>
+          <TabsTrigger value="billing">Plan & Billing</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="account" className="space-y-6">
+          {loading ? (
+            <div className="space-y-6">
+              <Card className="py-6 animate-pulse">
+                <CardHeader>
+                  <div className="h-6 bg-muted rounded w-1/3 mb-2"></div>
+                  <div className="h-4 bg-muted rounded w-1/2"></div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
+                    <div className="h-10 bg-muted rounded w-full"></div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
+                    <div className="h-10 bg-muted rounded w-full"></div>
+                  </div>
+                  <div className="h-10 bg-muted rounded w-1/4"></div>
+                </CardContent>
+              </Card>
+              
+              <Card className="py-6 animate-pulse">
+                <CardHeader>
+                  <div className="h-6 bg-muted rounded w-1/3 mb-2"></div>
+                  <div className="h-4 bg-muted rounded w-1/2"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-10 bg-muted rounded w-1/4"></div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+        <Card className="py-6">
+          <CardHeader>
+            <CardTitle>Account Settings</CardTitle>
+            <CardDescription>
+              Manage your account information
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="name" className="text-sm font-medium">Name</label>
+              <Input 
+                id="name" 
+                value={fullName || ''} 
+                onChange={(e) => setFullName(e.target.value)} 
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">Email</label>
+              <Input 
+                id="email" 
+                value={email || ''} 
+                onChange={(e) => setEmail(e.target.value)} 
+                // Email change requires confirmation via link sent to the new address
+              /> 
+            </div>
+            {!passwordChangeMode ? (
+              <div className="space-y-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setPasswordChangeMode(true)}
+                  type="button"
+                >
+                  Change Password
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4 border p-4 rounded-md">
+                <h3 className="font-medium">Change Password</h3>
+                <div className="space-y-2">
+                  <label htmlFor="currentPassword" className="text-sm font-medium">Current Password</label>
+                  <Input 
+                    id="currentPassword" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="newPassword" className="text-sm font-medium">New Password</label>
+                  <Input 
+                    id="newPassword" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm New Password</label>
+                  <Input 
+                    id="confirmPassword" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setPasswordChangeMode(false);
+                      setCurrentPassword('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleSaveAccount} 
+                    disabled={isSaving}
+                  >
+                    {isSaving ? 'Updating Password...' : 'Update Password'}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <Button onClick={handleSaveAccount} disabled={isSaving || passwordChangeMode}>
+              {isSaving ? 'Saving...' : 'Save Profile Changes'}
+            </Button>
+          </CardContent>
+        </Card>
+        
+        <Card className="py-6">
+          <CardHeader>
+            <CardTitle>Delete Account</CardTitle>
+            <CardDescription>
+              Permanently delete your account and all data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={isDeleting}>
+                  {isDeleting ? 'Deleting...' : 'Delete account'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete your 
+                    account and remove all your associated data from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={confirmDeleteAccount} 
+                    disabled={isDeleting} 
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    {isDeleting ? 'Deleting...' : 'Yes, delete my account'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+             <p className="text-sm text-muted-foreground mt-4">
+              This action cannot be undone. All your data will be permanently deleted.
+            </p>
+          </CardContent>
+        </Card>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="billing" className="space-y-6">
+          {loading ? (
+            <div className="space-y-6">
+              <div className="animate-pulse">
+                <div className="h-6 bg-muted rounded w-1/3 mb-4"></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="h-40 bg-muted rounded"></div>
+                  <div className="h-40 bg-muted rounded"></div>
+                  <div className="h-40 bg-muted rounded"></div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 animate-pulse">
+                <div className="h-32 bg-muted rounded"></div>
+    </div>
+  ) : (
+    <div className="space-y-6">
+      {/* Pricing Table */}
+      <div>
+        <PricingTable currentPlan={currentPlan} onUpgrade={handleUpgrade} />
+      </div>
+  
+      {/* Usage Metrics - 3 column layout */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+        {isLoadingUsage ? (
+          <>
+            <Card className="py-4 h-full animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-5 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-1/2 mt-2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-2 bg-muted rounded w-full"></div>
+              </CardContent>
+            </Card>
+            <Card className="py-4 h-full animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-5 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-1/2 mt-2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-2 bg-muted rounded w-full"></div>
+              </CardContent>
+            </Card>
+            <Card className="py-4 h-full animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-5 bg-muted rounded w-3/4"></div>
+                <div className="h-4 bg-muted rounded w-1/2 mt-2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-2 bg-muted rounded w-full"></div>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <UsageDisplay 
+              metric={{
+                title: "Message Credits",
+                used: usageData?.messageCredits.used || 0,
+                total: usageData?.messageCredits.total || 100,
+                description: "credits used this month",
+                note: "Credits reset at the beginning of your billing cycle"
+              }}
+            />
+            <UsageDisplay 
+              metric={{
+                title: "Training Data",
+                used: usageData?.trainingData.used || 0,
+                total: usageData?.trainingData.total || 400,
+                description: "used",
+                isBytes: true
+              }}
+            />
+            <UsageDisplay 
+              metric={{
+                title: "Training URLs",
+                used: usageData?.trainingUrls.used || 0,
+                total: usageData?.trainingUrls.total || 10,
+                description: "URLs used",
+                isUnlimited: usageData?.trainingUrls.total === -1
+              }}
+            />
+          </>
+        )}
+      </div>
+      
+      {/* Manage Billing Button - Only show if not on free plan */}
+      {currentPlan !== PLANS.FREE && (
+        <div className="mt-8">
+          <Card className="py-5">
+            <CardHeader>
+              <CardTitle>Manage Your Subscription</CardTitle>
+              <CardDescription>
+                View invoices, update payment methods, and manage your subscription
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                className="w-full" 
+                onClick={async () => {
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const token = session?.access_token;
+                    
+                    if (!token) {
+                      toast.error("Authentication error. Please log in again.");
+                      return;
+                    }
+                    
+                    // Call the API to create a customer portal session
+                    const response = await fetch('/api/stripe/customer-portal', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                      // If no Stripe customer found, create one first
+                      if (data.error === 'No Stripe customer found') {
+                        toast.info('Setting up your billing account...');
+                        
+                        // Call the create-customer endpoint first
+                        const customerResponse = await fetch('/api/stripe/create-customer', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          }
+                        });
+                        
+                        const customerData = await customerResponse.json();
+                        
+                        if (!customerResponse.ok) {
+                          throw new Error(customerData.error || 'Failed to create Stripe customer');
+                        }
+                        
+                        // Now try the customer portal again
+                        const portalRetryResponse = await fetch('/api/stripe/customer-portal', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          }
+                        });
+                        
+                        const portalRetryData = await portalRetryResponse.json();
+                        
+                        if (!portalRetryResponse.ok) {
+                          throw new Error(portalRetryData.error || 'Failed to create customer portal session');
+                        }
+                        
+                        // Use the URL from the retry
+                        if (portalRetryData.url) {
+                          window.location.href = portalRetryData.url;
+                          return;
+                        }
+                      } else {
+                        throw new Error(data.error || 'Failed to create customer portal session');
+                      }
+                    }
+                    
+                    // Redirect to the customer portal URL
+                    if (data.url) {
+                      window.location.href = data.url;
+                    }
+                  } catch (error) {
+                    console.error('Error creating customer portal session:', error);
+                    toast.error('Failed to access billing portal. Please try again.');
+                  }
+                }}
+              >
+                Manage Billing in Stripe Portal
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )}
+</TabsContent>

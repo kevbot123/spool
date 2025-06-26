@@ -401,7 +401,7 @@ export default function DashboardLayout({
                 )}
                 {/* Upgrade button shown for free plan (trialing) OR inactive/expired/canceled state */}
                 {!isLoading && (subscriptionPlan === PLANS.FREE || subscriptionPlan === PLANS.POST_TRIAL || (subscriptionStatus && ['canceled', 'expired', 'past_due', 'unpaid'].includes(subscriptionStatus))) && (
-                  <Link href="/account?tab=billing">
+                  <Link href="/admin/account?tab=billing">
                     <Button variant="outline" size="sm" className="text-blue-600 border-none hover:text-blue-600 shadow-none px-2">
                       <LuRocket />
                       Upgrade
@@ -427,7 +427,7 @@ export default function DashboardLayout({
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/account?tab=account">
+                      <Link href="/admin/account?tab=account">
                         <User className="mr-2 h-4 w-4" />
                         <span>Account</span>
                       </Link>
@@ -454,13 +454,13 @@ export default function DashboardLayout({
               </Link>
 
               <Link 
-                href="/people" 
+                href="/admin/team" 
 
                 className={`py-2.5 px-1 mx-2.5 text-[15px] font-medium flex items-center transition-colors rounded-t-lg border-b-2 hover:text-black hover:border-black ${
-                  pathname === "/people" ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
+                  pathname === "/admin/team" ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
                 }`}
               >
-                People
+                Team
               </Link>
               <Link 
                 href="/trends" 

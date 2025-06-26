@@ -303,7 +303,7 @@ export function TeamSwitcher() {
               </div>
             </DropdownMenuLabel> */}
             <DropdownMenuItem asChild>
-              <Link href="/account?tab=account">
+              <Link href="/admin/account?tab=account">
                 <User className="mr-2 h-4 w-4" />
                 <span>Account</span>
               </Link>

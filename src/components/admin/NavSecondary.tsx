@@ -22,12 +22,12 @@ const items = [
 //   },
   {
     title: 'Team members',
-    url: '/trash',
+    url: '/admin/team',
     icon: UserRoundCog,
   },
   {
     title: 'Site settings',
-    url: '/trash',
+    url: '/admin/settings',
     icon: Cog,
   },
   {
@@ -128,7 +128,7 @@ export function NavSecondary() {
           {shouldShowUpgrade && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/account?tab=billing" className="text-primary">
+                <Link href="/admin/account?tab=billing" className="text-primary">
                   <LuRocket />
                   <span>Upgrade</span>
                 </Link>

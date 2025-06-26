@@ -83,57 +83,50 @@ export function NavFavorites() {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Collections</SidebarGroupLabel>
-      <SidebarGroupAction onClick={handleCreateCollection}>
-        <Plus />
-        <span className="sr-only">Add Collection</span>
-      </SidebarGroupAction>
       <SidebarGroupContent>
         <SidebarMenu>
-          {collections.length === 0 ? (
-            <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleCreateCollection}>
-                <Plus />
-                <span>Create Collection</span>
+          {collections.map((collection) => (
+            <SidebarMenuItem key={collection.slug}>
+              <SidebarMenuButton 
+                asChild 
+                isActive={pathname === `/admin/collections/${collection.slug}`}
+              >
+                <Link href={`/admin/collections/${collection.slug}`}>
+                  <Folder />
+                  <span>{collection.name}</span>
+                </Link>
               </SidebarMenuButton>
-            </SidebarMenuItem>
-          ) : (
-            collections.map((collection) => (
-              <SidebarMenuItem key={collection.slug}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={pathname === `/admin/collections/${collection.slug}`}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuAction showOnHover>
+                    <MoreHorizontal />
+                    <span className="sr-only">More</span>
+                  </SidebarMenuAction>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  className="w-48 rounded-lg"
+                  side="right"
+                  align="start"
                 >
-                  <Link href={`/admin/collections/${collection.slug}`}>
-                    <Folder />
-                    <span>{collection.name}</span>
-                  </Link>
-                </SidebarMenuButton>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <SidebarMenuAction showOnHover>
-                      <MoreHorizontal />
-                      <span className="sr-only">More</span>
-                    </SidebarMenuAction>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    className="w-48 rounded-lg"
-                    side="right"
-                    align="start"
-                  >
-                    <DropdownMenuItem>
-                      <span>Edit Collection</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <span>Collection Settings</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <span>View Content</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </SidebarMenuItem>
-            ))
-          )}
+                  <DropdownMenuItem>
+                    <span>Edit Collection</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <span>Collection Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <span>View Content</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          ))}
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleCreateCollection} className="text-primary">
+              <Plus />
+              <span>New Collection</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
