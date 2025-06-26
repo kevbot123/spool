@@ -88,7 +88,7 @@
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.94 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
@@ -224,7 +224,6 @@
   font-family: var(--font-mono);
 }
 
-
 .markdown-content pre {
   background-color: var(--muted);
   padding: 1rem;
@@ -258,7 +257,6 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
-
 
 textarea, input {
   background-color: #f6f6f6;
@@ -446,7 +444,9 @@ th:hover > .resizer {
 .rootcard {
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
-
+label {
+  padding-bottom: 5px;
+}
 
 /* globals.css */
 

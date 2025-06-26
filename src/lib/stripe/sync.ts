@@ -3,11 +3,13 @@ import { stripe } from '@/lib/stripe';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
-// Initialize Redis for KV storage
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// Initialize Redis for KV storage (optional for development)
+const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN 
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : null;
 
 // Initialize Supabase admin client for user lookups
 const supabaseAdmin = createClient(
@@ -58,7 +60,9 @@ export async function syncStripeDataToKV(customerId: string): Promise<STRIPE_SUB
     if (subscriptions.data.length === 0) {
       console.log(`[syncStripeDataToKV] No subscriptions found for customer: ${customerId}`);
       const subData: STRIPE_SUB_CACHE = { status: "none" };
-      await redis.set(`stripe:customer:${customerId}`, subData);
+      if (redis) {
+        await redis.set(`stripe:customer:${customerId}`, subData);
+      }
       return subData;
     }
 
@@ -95,9 +99,13 @@ export async function syncStripeDataToKV(customerId: string): Promise<STRIPE_SUB
           : null,
     };
 
-    // Store the data in KV
-    await redis.set(`stripe:customer:${customerId}`, subData);
-    console.log(`[syncStripeDataToKV] Successfully synced data for customer: ${customerId}`);
+    // Store the data in KV (if available)
+    if (redis) {
+      await redis.set(`stripe:customer:${customerId}`, subData);
+      console.log(`[syncStripeDataToKV] Successfully synced data for customer: ${customerId}`);
+    } else {
+      console.log(`[syncStripeDataToKV] Redis not available, skipping KV storage for customer: ${customerId}`);
+    }
     
     return subData;
   } catch (error) {
@@ -111,6 +119,10 @@ export async function syncStripeDataToKV(customerId: string): Promise<STRIPE_SUB
  */
 export async function getStripeDataFromKV(customerId: string): Promise<STRIPE_SUB_CACHE | null> {
   try {
+    if (!redis) {
+      console.log(`[getStripeDataFromKV] Redis not available, returning null for customer: ${customerId}`);
+      return null;
+    }
     const data = await redis.get(`stripe:customer:${customerId}`);
     return data as STRIPE_SUB_CACHE | null;
   } catch (error) {
@@ -124,6 +136,20 @@ export async function getStripeDataFromKV(customerId: string): Promise<STRIPE_SU
  */
 export async function getStripeCustomerId(userId: string): Promise<string | null> {
   try {
+    if (!redis) {
+      // Fall back to Supabase database lookup
+      const { data: customerData, error } = await supabaseAdmin
+        .from('customers')
+        .select('stripe_customer_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (error || !customerData) {
+        return null;
+      }
+      return customerData.stripe_customer_id;
+    }
+    
     const customerId = await redis.get(`stripe:user:${userId}`);
     return customerId as string | null;
   } catch (error) {
@@ -133,12 +159,28 @@ export async function getStripeCustomerId(userId: string): Promise<string | null
 }
 
 /**
- * Store the relationship between user and Stripe customer in KV
+ * Store the relationship between user and Stripe customer in KV and database
  */
 export async function setStripeCustomerId(userId: string, customerId: string): Promise<void> {
   try {
-    await redis.set(`stripe:user:${userId}`, customerId);
-    console.log(`[setStripeCustomerId] Stored customer ID ${customerId} for user ${userId}`);
+    // Always store in database for persistence
+    const { error } = await supabaseAdmin
+      .from('customers')
+      .update({ stripe_customer_id: customerId })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error(`[setStripeCustomerId] Error updating database for user ${userId}:`, error);
+      throw error;
+    }
+
+    // Also store in Redis if available for faster access
+    if (redis) {
+      await redis.set(`stripe:user:${userId}`, customerId);
+      console.log(`[setStripeCustomerId] Stored customer ID ${customerId} for user ${userId} in Redis and database`);
+    } else {
+      console.log(`[setStripeCustomerId] Stored customer ID ${customerId} for user ${userId} in database only`);
+    }
   } catch (error) {
     console.error(`[setStripeCustomerId] Error storing customer ID for user ${userId}:`, error);
     throw error;
@@ -167,5 +209,37 @@ export async function getUserIdFromCustomerId(customerId: string): Promise<strin
   } catch (error) {
     console.error(`[getUserIdFromCustomerId] Error getting user ID for customer ${customerId}:`, error);
     return null;
+  }
+}
+
+/**
+ * Get subscription data for a user (for frontend use)
+ * This is the main function your components should use to get subscription state
+ * 
+ * Following Theo's recommendation to have a simple way to expose sub data to frontend
+ */
+export async function getUserSubscriptionData(userId: string): Promise<STRIPE_SUB_CACHE | null> {
+  try {
+    // Get the Stripe customer ID for this user
+    const customerId = await getStripeCustomerId(userId);
+    
+    if (!customerId) {
+      console.log(`[getUserSubscriptionData] No customer ID found for user ${userId}`);
+      return { status: "none" };
+    }
+
+    // Try to get cached data from KV first
+    let subData = await getStripeDataFromKV(customerId);
+    
+    // If no cached data, sync from Stripe and return fresh data
+    if (!subData) {
+      console.log(`[getUserSubscriptionData] No cached data for customer ${customerId}, syncing from Stripe`);
+      subData = await syncStripeDataToKV(customerId);
+    }
+    
+    return subData;
+  } catch (error) {
+    console.error(`[getUserSubscriptionData] Error getting subscription data for user ${userId}:`, error);
+    return { status: "none" };
   }
 } 

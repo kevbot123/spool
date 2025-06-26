@@ -1,10 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getContentManager } from '@/lib/cms/content';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{
     collection: string;
   }>;
+}
+
+// Helper function to get user's site ID
+async function getUserSiteId(): Promise<string> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('sites')
+    .select('id')
+    .eq('user_id', user.id)
+    .limit(1)
+    .single();
+
+  if (error || !data) {
+    throw new Error('No site found for user. Please create a site first.');
+  }
+
+  return data.id;
 }
 
 // GET - List all content in a collection
@@ -16,10 +40,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
     const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined;
+    const siteId = await getUserSiteId();
     
     const result = await contentManager.listContent(collection, {
       limit,
-      offset
+      offset,
+      siteId
     });
     
     return NextResponse.json(result);
@@ -40,10 +66,13 @@ export async function POST(
   try {
     const { collection } = await params;
     const contentManager = getContentManager();
+    const siteId = await getUserSiteId();
+    
     const newItem = await contentManager.createContent(collection, {
       title: 'New Item',
       slug: `new-item-${Date.now()}`,
-    });
+    }, siteId);
+    
     return NextResponse.json(newItem, { status: 201 });
   } catch (error: any) {
     console.error('Failed to create content item:', error);

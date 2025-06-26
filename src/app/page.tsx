@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
 export default function HomePage() {
-  // Redirect to admin on root access
+  // Redirect to CMS interface on root access
   redirect('/admin')
 } 

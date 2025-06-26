@@ -14,7 +14,7 @@ import { Logo } from "@/components/ui/logo"
 function SignInForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirectedFrom') || '/playground'
+  const redirectTo = searchParams.get('redirectedFrom') || '/admin'
   
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")

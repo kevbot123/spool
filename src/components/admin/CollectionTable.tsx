@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table';
 import { FieldEditor } from './FieldEditor';
 import { DetailPanel } from './DetailPanel';
+import { CollectionHeader } from './CollectionHeader';
 import {
   MoreHorizontal,
   Trash2,
@@ -306,7 +307,6 @@ export function CollectionTable({
   const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map());
   const [savingItems, setSavingItems] = useState<Set<string>>(new Set());
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   
   const storageKey = `table-column-sizing-${collection.name}`;
@@ -334,40 +334,44 @@ export function CollectionTable({
     }
   }, [storageKey]);
 
-  // Initialize column order with default order and load from localStorage
+  // Load column order from localStorage
   useEffect(() => {
-    // Get all column IDs in their default order
-    const defaultColumnOrder = [
-      'edit-action',
-      'system_title',
-      'system_slug',
-      'system_ogImage',
-      ...collection.fields
-        .filter(field => !['body', 'title', 'slug', 'ogImage', 'seoTitle', 'seoDescription'].includes(field.name))
-        .map(field => `field_${field.name}`),
-      'more-actions'
-    ];
-
     try {
       const saved = window.localStorage.getItem(orderStorageKey);
       if (saved) {
         const savedOrder = JSON.parse(saved);
-        // Merge saved order with any new columns that might have been added
-        const mergedOrder = [...savedOrder];
-        defaultColumnOrder.forEach(colId => {
-          if (!mergedOrder.includes(colId)) {
-            mergedOrder.push(colId);
-          }
-        });
+        // Merge with initial order to handle new fields
+        const mergedOrder = [
+          ...savedOrder.filter((id: string) => initialColumnOrder.includes(id)),
+          ...initialColumnOrder.filter(id => !savedOrder.includes(id))
+        ];
         setColumnOrder(mergedOrder);
-      } else {
-        setColumnOrder(defaultColumnOrder);
       }
     } catch (error) {
       console.error('Error reading column order from localStorage', error);
-      setColumnOrder(defaultColumnOrder);
     }
-  }, [orderStorageKey, collection.fields]);
+  }, [orderStorageKey]); // Only depend on the storage key, not initialColumnOrder
+
+  // Define column order, excluding the fixed "more-actions" column
+  const initialColumnOrder = [
+    'edit-action',
+    'system_title',
+    'system_slug',
+    'system_ogImage',
+    ...collection.fields
+      .filter(field => !['body', 'title', 'slug', 'ogImage', 'seoTitle', 'seoDescription'].includes(field.name))
+      .map(field => `field_${field.name}`)
+  ];
+
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(initialColumnOrder);
+
+  // Get draggable column IDs (exclude fixed columns)
+  const draggableColumnIds = columnOrder.filter(columnId => 
+    columnId && 
+    columnId !== 'edit-action' && 
+    columnId !== 'system_title' &&
+    columnId !== 'more-actions'
+  );
 
   // Save column sizing to localStorage
   useEffect(() => {
@@ -839,44 +843,53 @@ export function CollectionTable({
           );
         },
       })),
+  ];
+
+  // Add the "more actions" column to the columns array
+  const allColumns = [
+    ...columns,
+    // Fixed "more actions" column on the right
     {
       id: 'more-actions',
       header: '',
       enableSorting: false,
       enableResizing: false,
       size: 50,
-              cell: ({ row }) => {
-          const isPublished = !!row.original.publishedAt;
-          // Generate the view URL based on collection URL pattern
-          const viewUrl = collection.urlPattern.replace('{slug}', row.original.slug);
-          
-          return (
-            <div className="flex items-center justify-center">
-              <RowMenu 
-                onDelete={() => handleDelete(row.original.id)} 
-                onTogglePublish={() => handleTogglePublish(row.original.id)}
-                isPublished={isPublished}
-                viewUrl={viewUrl}
-              />
-            </div>
-          );
-        },
+      cell: ({ row }: { row: any }) => {
+        const isPublished = !!row.original.publishedAt;
+        const viewUrl = collection.urlPattern.replace('{slug}', row.original.slug);
+        
+        return (
+          <div className="flex items-center justify-center">
+            <RowMenu 
+              onDelete={() => handleDelete(row.original.id)} 
+              onTogglePublish={() => handleTogglePublish(row.original.id)}
+              isPublished={isPublished}
+              viewUrl={viewUrl}
+            />
+          </div>
+        );
+      },
     },
   ];
 
   const table = useReactTable({
     data: localItems,
-    columns,
+    columns: allColumns,
     state: {
       sorting,
       globalFilter,
       columnSizing, // Added columnSizing state
-      columnOrder, // Added columnOrder state
+      columnOrder: [...columnOrder, 'more-actions'], // Ensure more-actions is always last
     },
     enableColumnResizing: true, // Enable column resizing
     columnResizeMode: 'onChange' as ColumnResizeMode, // Set resize mode
     onColumnSizingChange: setColumnSizing, // Handler for column size changes
-    onColumnOrderChange: setColumnOrder, // Handler for column order changes
+    onColumnOrderChange: (updater) => {
+      const newOrder = typeof updater === 'function' ? updater([...columnOrder, 'more-actions']) : updater;
+      // Filter out more-actions from the new order since it should always be last
+      setColumnOrder(newOrder.filter(id => id !== 'more-actions'));
+    },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
@@ -887,16 +900,19 @@ export function CollectionTable({
     // debugColumns: true,
   });
 
-  // Get draggable column IDs (exclude fixed columns)
-  const draggableColumnIds = columnOrder.filter(columnId => 
-    columnId && 
-    columnId !== 'edit-action' && 
-    columnId !== 'system_title' && 
-    columnId !== 'more-actions'
-  );
-
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-w-0">
+      <CollectionHeader
+        collection={collection}
+        itemCount={localItems.length}
+        pendingChangesCount={pendingChanges.size}
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
+        onSaveAll={pendingChanges.size > 0 ? saveAllChanges : undefined}
+        onCreate={onCreate}
+        onPublishAll={() => handleBulkAction('publish')}
+        onUnpublishAll={() => handleBulkAction('unpublish')}
+      />
       <style jsx>{`
         .resizer {
           position: absolute;
@@ -919,71 +935,11 @@ export function CollectionTable({
           }
         }
       `}</style>
-      <div className="bg-white shadow-sm flex flex-col flex-1">
-        {/* Header */}
-        <div className="pl-5 pr-4 py-3 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="text-base font-semibold text-gray-900">{collection.name}</h2>
-              <span className="text-sm text-gray-500">{localItems.length} items</span>
-              {pendingChanges.size > 0 && (
-                <span className="text-sm text-amber-600">
-                  {pendingChanges.size} unsaved {pendingChanges.size === 1 ? 'change' : 'changes'}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Search */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={globalFilter}
-                  onChange={(e) => setGlobalFilter(e.target.value)}
-                  placeholder="Search..."
-                  className="pl-8 pr-4 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                <svg className="absolute left-2 top-1.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              
-              {/* Save All Button - shows when there are pending changes */}
-              {pendingChanges.size > 0 && (
-                <button
-                  onClick={saveAllChanges}
-                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Save All
-                </button>
-              )}
-              
-
-              {/* New Item Button */}
-              <button
-                onClick={onCreate}
-                className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-              >
-                New {collection.name}...
-              </button>
-
-              {/* Bulk Actions Dropdown */}
-              {localItems.length > 0 && (
-                <BulkActionsDropdown
-                  onPublishAll={() => handleBulkAction('publish')}
-                  onUnpublishAll={() => handleBulkAction('unpublish')}
-                  collection={collection}
-                />
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="bg-white shadow-sm flex flex-col flex-1 min-w-0">
 
         {/* Table */}
         {localItems.length > 0 ? (
-          <div className="overflow-auto flex-grow">
+          <div className="overflow-x-auto overflow-y-auto flex-grow min-w-0">
             <DndContext
               sensors={sensors}
               onDragStart={handleDragStart}
@@ -993,153 +949,84 @@ export function CollectionTable({
                 <thead className="bg-gray-50">
                   {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id}>
-                      {draggableColumnIds.length > 0 ? (
-                        <SortableContext
-                          items={draggableColumnIds}
-                          strategy={horizontalListSortingStrategy}
-                        >
-                          {headerGroup.headers.map(header => {
-                            // Fixed columns (non-draggable)
-                            if (header.column.id === 'edit-action' || header.column.id === 'system_title' || header.column.id === 'more-actions') {
-                              return (
-                                <th
-                                  key={header.id}
-                                  className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible ${
-                                    header.column.id === 'edit-action'
-                                      ? 'sticky left-0 z-10 bg-gray-50'
-                                                                    : header.column.id === 'system_title'
-                              ? 'sticky left-[70px] z-10 bg-gray-50' // Make title sticky, positioned after edit-action
-                                      : header.column.id === 'more-actions'
-                                      ? 'sticky right-0 z-10 bg-gray-50'
-                                      : 'relative' // Ensure non-action headers are relative for the resizer
-                                  } ${
-                                    header.column.getCanSort() && header.column.id !== 'edit-action' && header.column.id !== 'more-actions'
-                                      ? 'cursor-pointer hover:bg-gray-100'
-                                      : ''
-                                  }`}
-                                  style={{
-                                    width: header.getSize(),
-                                    minWidth: header.getSize(),
-                                    maxWidth: header.getSize(),
-                                  }}
-                                  onClick={header.column.getCanSort() && header.column.id !== 'edit-action' && header.column.id !== 'more-actions' ? header.column.getToggleSortingHandler() : undefined}
-                                >
-                                  <div className="flex items-center gap-2 px-6 py-2 text-[11px] text-nowrap overflow-hidden">
-                                    {flexRender(
-                                      header.column.columnDef.header,
-                                      header.getContext()
-                                    )}
-                                    {header.column.getIsSorted() && (
-                                      <span>
-                                        {header.column.getIsSorted() === 'asc' ? '↑' : '↓'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {header.column.getCanResize() && (
-                                    <div
-                                      onMouseDown={header.getResizeHandler()}
-                                      onTouchStart={header.getResizeHandler()}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onDoubleClick={() => header.column.resetSize()} // Optional: reset size
-                                      className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
-                                      // This div needs CSS for positioning and appearance (see explanation)
-                                    />
-                                  )}
-                                </th>
-                              );
-                            }
-
-                            // Draggable columns
+                      <SortableContext
+                        items={draggableColumnIds}
+                        strategy={horizontalListSortingStrategy}
+                      >
+                        {headerGroup.headers.map(header => {
+                          const isDraggable = draggableColumnIds.includes(header.id);
+                          const isSticky = header.id === 'edit-action' || header.id === 'system_title' || header.id === 'more-actions';
+                          
+                          if (isDraggable) {
                             return (
                               <DraggableHeader key={header.id} header={header}>
-                                {flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
+                                {flexRender(header.column.columnDef.header, header.getContext())}
                               </DraggableHeader>
                             );
-                          })}
-                        </SortableContext>
-                      ) : (
-                        // Fallback when no draggable columns are ready yet
-                        headerGroup.headers.map(header => (
-                          <th
-                            key={header.id}
-                            className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible ${
-                              header.column.id === 'edit-action'
-                                ? 'sticky left-0 z-10 bg-gray-50'
-                                : header.column.id === 'system_title'
-                                ? 'sticky left-[70px] z-10 bg-gray-50'
-                                : header.column.id === 'more-actions'
-                                ? 'sticky right-0 z-10 bg-gray-50'
-                                : 'relative'
-                            } ${
-                              header.column.getCanSort() && header.column.id !== 'edit-action' && header.column.id !== 'more-actions'
-                                ? 'cursor-pointer hover:bg-gray-100'
-                                : ''
-                            }`}
-                            style={{
-                              width: header.getSize(),
-                              minWidth: header.getSize(),
-                              maxWidth: header.getSize(),
-                            }}
-                            onClick={header.column.getCanSort() && header.column.id !== 'edit-action' && header.column.id !== 'more-actions' ? header.column.getToggleSortingHandler() : undefined}
-                          >
-                            <div className="flex items-center gap-2 px-6 py-2 text-[11px] text-nowrap overflow-hidden">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
+                          }
+                          
+                          // Render non-draggable headers (sticky columns)
+                          return (
+                            <th
+                              key={header.id}
+                              className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible ${
+                                isSticky ? 'sticky z-10 bg-gray-50' : ''
+                              } ${
+                                header.id === 'more-actions' ? 'right-0' : (header.id === 'system_title' ? 'left-[70px]' : (header.id === 'edit-action' ? 'left-0' : ''))
+                              } ${header.column.getCanSort() && header.id !== 'edit-action' && header.id !== 'more-actions' ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                              style={{ width: header.getSize(), minWidth: header.getSize(), maxWidth: header.getSize() }}
+                              onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
+                            >
+                              <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-nowrap overflow-hidden">
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                                {header.column.getIsSorted() && (
+                                  <span className="ml-2">
+                                    {header.column.getIsSorted() === 'asc' ? '↑' : '↓'}
+                                  </span>
+                                )}
+                              </div>
+                              {header.column.getCanResize() && (
+                                <div
+                                  onMouseDown={header.getResizeHandler()}
+                                  onTouchStart={header.getResizeHandler()}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDoubleClick={() => header.column.resetSize()}
+                                  className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
+                                />
                               )}
-                              {header.column.getIsSorted() && (
-                                <span>
-                                  {header.column.getIsSorted() === 'asc' ? '↑' : '↓'}
-                                </span>
-                              )}
-                            </div>
-                            {header.column.getCanResize() && (
-                              <div
-                                onMouseDown={header.getResizeHandler()}
-                                onTouchStart={header.getResizeHandler()}
-                                onClick={(e) => e.stopPropagation()}
-                                onDoubleClick={() => header.column.resetSize()}
-                                className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
-                              />
-                            )}
-                          </th>
-                        ))
-                      )}
+                            </th>
+                          );
+                        })}
+                      </SortableContext>
                     </tr>
                   ))}
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {table.getRowModel().rows.map(row => (
-                    <tr 
-                      key={row.id} 
-                      className={`hover:bg-gray-50 group ${
-                        editingCell && editingCell.rowId === row.original.id ? 'relative z-20' : ''
-                      }`}
-                    >
-                      {row.getVisibleCells().map(cell => (
-                        <td
-                          key={cell.id}
-                          className={`relative text-sm text-gray-900 ${
-                            cell.column.id === 'edit-action'
-                              ? 'sticky left-0 z-10 bg-white group-hover:bg-gray-50'
-                              : cell.column.id === 'system_title'
-                              ? 'sticky left-[70px] z-10 bg-white group-hover:bg-gray-50' // Make title cells sticky
-                              : cell.column.id === 'more-actions'
-                              ? 'sticky right-0 z-10 bg-white group-hover:bg-gray-50'
-                              : ''
-                          }`}
-                          style={{
-                            width: cell.column.getSize(),
-                            minWidth: cell.column.getSize(),
-                            maxWidth: cell.column.getSize(),
-                          }}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
+                    <tr key={row.id} className="hover:bg-gray-50 group">
+                      {row.getVisibleCells().map(cell => {
+                         const isActionsColumn = cell.column.id === 'more-actions';
+                         const isEditColumn = cell.column.id === 'edit-action';
+                         const isTitleColumn = cell.column.id === 'system_title';
+
+                        return (
+                          <td
+                            key={cell.id}
+                            className={`relative text-sm text-gray-900 ${
+                              isActionsColumn || isEditColumn || isTitleColumn ? 'sticky z-10 bg-white group-hover:bg-gray-50' : ''
+                            }`}
+                            style={{
+                              width: cell.column.getSize(),
+                              minWidth: cell.column.getSize(),
+                              maxWidth: cell.column.getSize(),
+                              right: isActionsColumn ? 0 : undefined,
+                              left: isEditColumn ? 0 : (isTitleColumn ? '70px' : undefined),
+                            }}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>

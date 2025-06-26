@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,14 +37,47 @@ const CARD_ELEMENT_OPTIONS = {
 
 function SignUpForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const inviteId = searchParams.get('invite')
+  
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isCardComplete, setIsCardComplete] = useState(false); 
+  const [invitationData, setInvitationData] = useState<any>(null)
   
   const stripe = useStripe();
   const elements = useElements();
+
+  // Load invitation data if invite ID is present
+  useEffect(() => {
+    if (inviteId) {
+      fetchInvitationData();
+    }
+  }, [inviteId]);
+
+  const fetchInvitationData = async () => {
+    try {
+      const supabase = createClient()
+      const { data: invitation, error } = await supabase
+        .from('site_collaborators')
+        .select(`
+          id,
+          role,
+          site:sites!inner(name)
+        `)
+        .eq('id', inviteId!)
+        .is('accepted_at', null)
+        .single();
+
+      if (!error && invitation) {
+        setInvitationData(invitation);
+      }
+    } catch (error) {
+      console.error('Error fetching invitation:', error);
+    }
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -188,13 +221,32 @@ function SignUpForm() {
           throw new Error('User not found after successful signup.');
       }
       
-      // 5. Success
-      toast.dismiss() // Dismiss loading toast
-      toast.success("Account created & trial started! Signing in now.") 
+      // 5. Accept invitation if present
+      if (inviteId && authData.user) {
+        try {
+          await supabase
+            .from('site_collaborators')
+            .update({
+              user_id: authData.user.id,
+              accepted_at: new Date().toISOString()
+            })
+            .eq('id', inviteId);
+        } catch (inviteError) {
+          console.error('Error accepting invitation:', inviteError);
+          // Don't fail the whole signup for invite errors
+        }
+      }
       
-      // Redirect to sign-in page
+      // 6. Success
+      toast.dismiss() // Dismiss loading toast
+      const successMessage = invitationData 
+        ? `Account created! Welcome to ${invitationData.site.name}!`
+        : "Account created & trial started! Welcome to Spool!";
+      toast.success(successMessage) 
+      
+      // Redirect to dashboard - user is already authenticated
       setTimeout(() => {
-        window.location.href = "/sign-in"
+        router.push(invitationData ? "/admin" : "/")
       }, 1500)
       
     } catch (error: any) {
@@ -218,10 +270,21 @@ function SignUpForm() {
           <Link href="/">
             <Logo size={66} className="mb-8" />
           </Link>
-          <CardTitle className="text-[26px] font-bold">Start a free 7 day trial</CardTitle>
-          <CardDescription className="text-base text-gray-600">
-             If your mind isn't blown, cancel easily within the next seven days at no charge.
-          </CardDescription>
+          {invitationData ? (
+            <>
+              <CardTitle className="text-[26px] font-bold">Join {invitationData.site.name}</CardTitle>
+              <CardDescription className="text-base text-gray-600">
+                You've been invited to collaborate as a <strong>{invitationData.role}</strong>. Create your account to get started.
+              </CardDescription>
+            </>
+          ) : (
+            <>
+              <CardTitle className="text-[26px] font-bold">Start a free 7 day trial</CardTitle>
+              <CardDescription className="text-base text-gray-600">
+                If your mind isn't blown, cancel easily within the next seven days at no charge.
+              </CardDescription>
+            </>
+          )}
         </CardHeader>
         <form onSubmit={handleSignUp}>
           <CardContent className="space-y-4">

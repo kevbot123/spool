@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ContentItem, CollectionConfig } from '@/types/cms';
 import { useForm } from 'react-hook-form';
 import TipTapEditor from './TipTapEditor';
+import { SEOPreview } from './SEOPreview';
 import { debounce } from 'lodash';
 import {
   Accordion,
@@ -114,8 +115,8 @@ export function DetailPanel({
               {/* Title Field - always at top */}
               {collection.fields
                 .filter(field => field.name === 'title')
-                .map(field => (
-                  <div key={field.name}>
+                .map((field, index) => (
+                  <div key={`title-${index}`}>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {field.label}
                     </label>
@@ -125,7 +126,7 @@ export function DetailPanel({
               }
 
               {/* Body Field - Tiptap Editor */}
-              {collection.fields.some(f => f.type === 'body') && (
+              {collection.fields.some(f => f.name === 'body' && (f.type === 'markdown' || f.type === 'body')) && (
                 <TipTapEditor
                   content={watch('body')}
                   onChange={handleBodyChange}
@@ -142,14 +143,32 @@ export function DetailPanel({
                     <div className="space-y-4 pt-2 pl-6 pb-6">
                       {collection.fields
                         .filter(field => ['slug', 'seoTitle', 'seoDescription', 'ogImage'].includes(field.name))
-                        .map(field => (
-                          <div key={field.name}>
+                        .map((field, index) => (
+                          <div key={`seo-${field.name}-${index}`}>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label}
                             </label>
                             {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
                           </div>
                         ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* SEO Preview */}
+                <AccordionItem value="seo-preview">
+                  <AccordionTrigger className="text-base !pl-0 h-[60px] items-center">SEO Preview</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="pt-2 pl-6 pb-6">
+                      <SEOPreview
+                        title={watch('title')}
+                        seoTitle={watch('seoTitle')}
+                        description={watch('body')?.substring(0, 200) || ''}
+                        seoDescription={watch('seoDescription')}
+                        ogImage={watch('ogImage')}
+                        slug={watch('slug')}
+                        domain="yoursite.com"
+                      />
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -163,8 +182,8 @@ export function DetailPanel({
                         .filter(field => 
                           !['title', 'body', 'slug', 'seoTitle', 'seoDescription', 'ogImage'].includes(field.name)
                         )
-                        .map(field => (
-                          <div key={field.name}>
+                        .map((field, index) => (
+                          <div key={`additional-${field.name}-${index}`}>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label}
                             </label>

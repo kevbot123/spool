@@ -65,25 +65,16 @@ export async function middleware(req: NextRequest) {
       cookiesPresent: req.cookies.size > 0 ? 'yes' : 'no'
     });
     
-    // Admin route protection
+    // CMS route protection (formerly admin routes)
     if (req.nextUrl.pathname.startsWith('/admin')) {
       if (!user) {
-        console.log('Redirecting unauthenticated user from admin route to sign-in:', req.nextUrl.pathname);
+        console.log('Redirecting unauthenticated user from CMS route to sign-in:', req.nextUrl.pathname);
         const redirectUrl = new URL('/sign-in', req.url);
         redirectUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
         return NextResponse.redirect(redirectUrl);
       }
-      // Check for admin role (e.g., in app_metadata)
-      console.log('🎯 Middleware sees user.app_metadata:', JSON.stringify(user.app_metadata));
-      const isAdmin = user.app_metadata?.role === 'admin';
-      console.log('🎯 isAdmin?:', isAdmin);
-      if (!isAdmin) {
-        console.log('Redirecting non-admin user from admin route to home:', req.nextUrl.pathname);
-        // Redirect to home or an unauthorized page
-        return NextResponse.redirect(new URL('/', req.url)); 
-      }
-      // Admin user, allow access
-      console.log('Admin user accessing admin route:', req.nextUrl.pathname);
+      // Any authenticated user can access CMS routes
+      console.log('Authenticated user accessing CMS route:', req.nextUrl.pathname);
       return res; 
     }
 
@@ -116,11 +107,9 @@ export async function middleware(req: NextRequest) {
 
     // Define protected routes that require authentication
     const isProtectedRoute = [
-      '/playground',
-      '/activity',
-      '/sources',
       '/settings',
-      '/account', // Add account route
+      '/account',
+      '/admin', // CMS routes
     ].some(path => req.nextUrl.pathname.startsWith(path))
 
     // If accessing a protected route and not signed in, redirect to sign-in page
@@ -131,10 +120,10 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // If accessing auth pages while signed in, redirect to dashboard
+    // If accessing auth pages while signed in, redirect to CMS
     if ((req.nextUrl.pathname.startsWith('/sign-in') || req.nextUrl.pathname.startsWith('/sign-up')) && user) {
-      console.log('Redirecting authenticated user to playground from:', req.nextUrl.pathname)
-      return NextResponse.redirect(new URL('/playground', req.url))
+      console.log('Redirecting authenticated user to CMS from:', req.nextUrl.pathname)
+      return NextResponse.redirect(new URL('/admin', req.url))
     }
   } catch (error) {
     console.error('Error in middleware:', error)
@@ -147,17 +136,12 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/playground/:path*',
     '/account/:path*', // Add account route
-    '/activity/:path*',
-    '/sources/:path*',
     '/settings/:path*',
     '/sign-in/:path*',
     '/sign-up/:path*',
     '/auth/callback',
     '/auth-test',
-    '/api/chat-logs/:path*', // Add chat-logs API to ensure auth is handled
-    '/api/chat/:path*', // Add chat API to ensure auth is handled
     '/admin/:path*', // Add admin routes to matcher
   ],
 }

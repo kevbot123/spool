@@ -17,117 +17,95 @@ async function setupStripeProducts() {
   console.log('🚀 Setting up Stripe products for Spool CMS...\n');
 
   try {
-    // Create Pro Plan Product
-    const proProduct = await stripe.products.create({
-      name: 'Spool Pro',
-      description: 'Unlimited collections, AI features, and priority support',
+    // Create Hobby Plan Product
+    const hobbyProduct = await stripe.products.create({
+      name: 'Spool Hobby',
+      description: 'Advanced AI models, 3,000 AI credits, and unlimited content processing',
       metadata: {
-        plan: 'pro',
+        plan: 'hobby',
         features: JSON.stringify([
-          'Unlimited collections',
-          'Unlimited content items',
-          'AI-powered content suggestions',
-          'Advanced SEO tools',
-          'Priority support',
-          'Custom domains',
-          'Team collaboration'
+          'Advanced AI models for content generation',
+          '3,000 AI credits per month',
+          '35MB AI content data',
+          'Unlimited URLs for content processing',
+          'AI-powered content suggestions'
         ])
       }
     });
 
-    console.log('✅ Created Pro product:', proProduct.id);
+    console.log('✅ Created Hobby product:', hobbyProduct.id);
 
-    // Create Pro Plan Price (Monthly)
-    const proMonthlyPrice = await stripe.prices.create({
-      product: proProduct.id,
-      unit_amount: 2900, // $29.00
+    // Create Hobby Plan Price (Monthly)
+    const hobbyPrice = await stripe.prices.create({
+      product: hobbyProduct.id,
+      unit_amount: 3500, // $35.00
       currency: 'usd',
       recurring: {
         interval: 'month'
       },
       metadata: {
-        plan: 'pro',
+        plan: 'hobby',
         interval: 'monthly'
       }
     });
 
-    console.log('✅ Created Pro monthly price:', proMonthlyPrice.id);
+    console.log('✅ Created Hobby monthly price:', hobbyPrice.id);
 
-    // Create Pro Plan Price (Yearly - 20% discount)
-    const proYearlyPrice = await stripe.prices.create({
-      product: proProduct.id,
-      unit_amount: 27900, // $279.00 (20% discount)
-      currency: 'usd',
-      recurring: {
-        interval: 'year'
-      },
+    // Create Business Plan Product
+    const businessProduct = await stripe.products.create({
+      name: 'Spool Business',
+      description: 'Premium AI models, 10,000 AI credits, and advanced features for growing businesses',
       metadata: {
-        plan: 'pro',
-        interval: 'yearly'
-      }
-    });
-
-    console.log('✅ Created Pro yearly price:', proYearlyPrice.id);
-
-    // Create Enterprise Product (contact for pricing)
-    const enterpriseProduct = await stripe.products.create({
-      name: 'Spool Enterprise',
-      description: 'Custom pricing for large teams and organizations',
-      metadata: {
-        plan: 'enterprise',
+        plan: 'business',
         features: JSON.stringify([
-          'Everything in Pro',
-          'White-label CMS',
-          'Dedicated support',
-          'Custom integrations',
-          'SSO/SAML',
-          'Advanced analytics',
-          'Custom SLA'
+          'Premium AI models for content generation',
+          '10,000 AI credits per month',
+          '35MB AI content data',
+          'Unlimited URLs for content processing',
+          'AI-powered content optimization',
+          'Advanced content analytics',
+          'Remove Spool branding',
+          'Custom domain support',
+          'Additional credits $5 per 1,000 credits'
         ])
       }
     });
 
-    console.log('✅ Created Enterprise product:', enterpriseProduct.id);
+    console.log('✅ Created Business product:', businessProduct.id);
 
-    // Create One-time Setup Fee (optional)
-    const setupProduct = await stripe.products.create({
-      name: 'Spool Setup & Migration',
-      description: 'Professional setup and migration service',
-      metadata: {
-        type: 'setup'
-      }
-    });
-
-    const setupPrice = await stripe.prices.create({
-      product: setupProduct.id,
-      unit_amount: 49900, // $499.00
+    // Create Business Plan Price (Monthly)
+    const businessPrice = await stripe.prices.create({
+      product: businessProduct.id,
+      unit_amount: 9500, // $95.00
       currency: 'usd',
+      recurring: {
+        interval: 'month'
+      },
       metadata: {
-        type: 'setup'
+        plan: 'business',
+        interval: 'monthly'
       }
     });
 
-    console.log('✅ Created setup service:', setupPrice.id);
+    console.log('✅ Created Business monthly price:', businessPrice.id);
 
     console.log('\n🎉 Stripe products created successfully!');
     console.log('\n📋 Summary:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`Pro Monthly:    ${proMonthlyPrice.id} ($29/month)`);
-    console.log(`Pro Yearly:     ${proYearlyPrice.id} ($279/year)`);
-    console.log(`Setup Service:  ${setupPrice.id} ($499 one-time)`);
+    console.log(`Hobby Plan:     ${hobbyPrice.id} ($35/month)`);
+    console.log(`Business Plan:  ${businessPrice.id} ($95/month)`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     console.log('\n💡 Next steps:');
-    console.log('1. Update your pricing configuration with these price IDs');
+    console.log('1. Update your .env.local file with these price IDs');
     console.log('2. Test the checkout flow in your application');
     console.log('3. Configure your webhook endpoints');
     console.log('4. Set up billing portal settings in Stripe Dashboard');
 
     // Output environment variables to add
-    console.log('\n🔧 Add these to your environment variables:');
-    console.log(`STRIPE_PRO_MONTHLY_PRICE_ID=${proMonthlyPrice.id}`);
-    console.log(`STRIPE_PRO_YEARLY_PRICE_ID=${proYearlyPrice.id}`);
-    console.log(`STRIPE_SETUP_PRICE_ID=${setupPrice.id}`);
+    console.log('\n🔧 Add these to your .env.local file:');
+    console.log(`STRIPE_HOBBY_PRICE_ID=${hobbyPrice.id}`);
+    console.log(`STRIPE_BUSINESS_PRICE_ID=${businessPrice.id}`);
 
   } catch (error) {
     console.error('❌ Error setting up Stripe products:', error.message);

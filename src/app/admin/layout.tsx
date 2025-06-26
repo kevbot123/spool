@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
-import { getCollectionsManager } from '@/lib/cms/collections';
 import { Metadata } from 'next';
 import AdminLayoutClient from './AdminLayoutClient';
+import { SiteProvider } from '@/context/SiteContext';
 
 export const metadata: Metadata = {
   title: 'CMS Admin',
@@ -9,17 +9,16 @@ export const metadata: Metadata = {
   robots: 'noindex, nofollow'
 };
 
-export default async function AdminLayout({
+export default function AdminLayout({
   children
 }: {
   children: ReactNode;
 }) {
-  const collectionsManager = await getCollectionsManager();
-  const collections = collectionsManager.getAllCollections();
-
   return (
-    <AdminLayoutClient collections={collections}>
-      {children}
-    </AdminLayoutClient>
+    <SiteProvider>
+      <AdminLayoutClient>
+        {children}
+      </AdminLayoutClient>
+    </SiteProvider>
   );
 }

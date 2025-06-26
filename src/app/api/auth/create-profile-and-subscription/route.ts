@@ -17,7 +17,7 @@ function getStripe() {
   }
   
   stripeClient = new Stripe(stripeSecretKey, {
-    apiVersion: '2025-04-30.basil',
+    apiVersion: '2025-05-28.basil',
   });
   return stripeClient;
 }
@@ -114,61 +114,60 @@ export async function POST(request: Request) {
 
     // --- Supabase Operations --- 
 
-    // 4. Calculate trial end date
-    const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + trialDays);
-    const trialEndsAtISO = trialEndDate.toISOString();
-    console.log('Trial ends at:', trialEndsAtISO);
-
     // Initialize Supabase Admin client
     const supabaseAdmin = getSupabaseAdmin();
     
-    // Cleanup any stale user records with this email to avoid duplicate key errors
-    console.log('Cleaning up stale public.users entries for email:', email);
-    const { error: staleCleanupError } = await supabaseAdmin
-      .from('users')
-      .delete()
-      .eq('email', email);
-    if (staleCleanupError) {
-      console.error('Error cleaning stale users by email:', staleCleanupError);
+    // Note: User is already created in auth.users by Supabase Auth signup
+    console.log('User already exists in auth.users from Supabase signup process');
+
+    // Check if customer record already exists for this user
+    console.log('Checking for existing customer record...');
+    const { data: existingCustomer, error: checkError } = await supabaseAdmin
+      .from('customers')
+      .select('*')
+      .eq('user_id', id)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
+      console.error('Error checking for existing customer:', checkError);
+      throw new Error(`Failed to check for existing customer: ${checkError.message}`);
     }
 
-    console.log('Inserting into public.users table...');
-    const { error: userInsertError } = await supabaseAdmin
-      .from('users')
-      .insert({ id: id, email: email, name: name });
-    if (userInsertError) {
-      console.error('Supabase public.users insert error:', userInsertError);
-      throw new Error(`Failed to insert user record in public.users: ${userInsertError.message}`);
-    }
-    console.log('Record inserted into public.users successfully.');
+    if (existingCustomer) {
+      console.log('Customer record already exists, updating with new subscription...');
+      const { error: updateError } = await supabaseAdmin
+        .from('customers')
+        .update({
+          stripe_customer_id: customer.id,
+          stripe_subscription_id: subscription.id,
+          plan_id: PLANS.FREE,
+          status: 'trialing',
+        })
+        .eq('user_id', id);
 
-    // Continue with customer record upsert
-    console.log('Updating Supabase customer record...');
-    // We use upsert here. If a customer record already exists for the user_id 
-    // (e.g., from a previous failed attempt or different flow), update it. 
-    // Otherwise, create a new one.
-    const { error: customerError } = await supabaseAdmin
-      .from('customers') // Use the 'customers' table
-      .upsert({
-        user_id: id, // Ensure this matches the FK constraint to your users table
-        stripe_customer_id: customer.id,
-        stripe_subscription_id: subscription.id,
-        plan_id: PLANS.FREE, // Set plan to 'free' to indicate trial period based on pricing config
-        trial_ends_at: trialEndsAtISO, // Store the trial end date
-        status: 'trialing', // Explicitly set status to 'trialing'
-        // updated_at will likely be handled by DB trigger/default
-      }, {
-        onConflict: 'user_id' // Specify the column to check for conflicts
-      });
+      if (updateError) {
+        console.error('Supabase customer record update error:', updateError);
+        throw new Error(`Failed to update customer record: ${updateError.message}`);
+      }
+      console.log('Existing customer record updated successfully.');
+    } else {
+      console.log('Creating new Supabase customer record...');
+      const { error: customerError } = await supabaseAdmin
+        .from('customers')
+        .insert({
+          user_id: id,
+          stripe_customer_id: customer.id,
+          stripe_subscription_id: subscription.id,
+          plan_id: PLANS.FREE,
+          status: 'trialing',
+        });
 
-    if (customerError) {
-      console.error('Supabase customer record update/insert error:', customerError);
-      // Attempt to cancel the Stripe subscription if profile update fails?
-      // await stripe.subscriptions.cancel(subscription.id); // Consider cleanup logic
-      throw new Error(`Failed to update user customer record: ${customerError.message}`);
+      if (customerError) {
+        console.error('Supabase customer record insert error:', customerError);
+        throw new Error(`Failed to create customer record: ${customerError.message}`);
+      }
+      console.log('New customer record created successfully.');
     }
-    console.log('Supabase customer record updated/inserted successfully.');
 
     console.log('🎉 User signup complete with KV-first architecture!');
     // --- Success --- 

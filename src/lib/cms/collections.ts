@@ -1,57 +1,106 @@
 import { CollectionConfig, FieldConfig } from '@/types/cms';
-import fs from 'fs/promises';
-import path from 'path';
-
-const CONTENT_DIR = path.join(process.cwd(), 'content');
-const COLLECTIONS_DIR = path.join(CONTENT_DIR, 'collections');
-const SCHEMA_DIR = path.join(CONTENT_DIR, 'schemas');
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export class CollectionsManager {
   private collections: Map<string, CollectionConfig> = new Map();
-  private defaultFields: FieldConfig[] = [];
-
-  async initialize() {
-    // Load default fields
-    const fieldTypesPath = path.join(SCHEMA_DIR, 'field-types.json');
-    try {
-      const fieldTypesData = await fs.readFile(fieldTypesPath, 'utf-8');
-      const { defaultFields } = JSON.parse(fieldTypesData);
-      this.defaultFields = defaultFields;
-    } catch (error) {
-      console.error('Error loading field types:', error);
+  private defaultFields: FieldConfig[] = [
+    {
+      name: 'title',
+      label: 'Title',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter title...'
+    },
+    {
+      name: 'slug',
+      label: 'URL Slug',
+      type: 'text',
+      required: true,
+      placeholder: 'url-slug'
+    },
+    {
+      name: 'body',
+      label: 'Content',
+      type: 'markdown',
+      required: true
+    },
+    {
+      name: 'status',
+      label: 'Status',
+      type: 'select',
+      options: ['draft', 'published', 'archived'],
+      default: 'draft'
+    },
+    {
+      name: 'publishedAt',
+      label: 'Published Date',
+      type: 'datetime'
     }
+  ];
 
-    // Load all collection configs
-    await this.loadCollections();
+  private async getSupabase() {
+    return await createSupabaseServerClient();
   }
 
-  private async loadCollections() {
-    try {
-      const collections = await fs.readdir(COLLECTIONS_DIR);
-      
-      for (const collectionDir of collections) {
-        const configPath = path.join(COLLECTIONS_DIR, collectionDir, 'config.json');
-        
-        try {
-          const configData = await fs.readFile(configPath, 'utf-8');
-          const config: CollectionConfig = JSON.parse(configData);
-          
-          // Merge default fields with collection fields
-          const mergedFields = [...this.defaultFields, ...config.fields];
-          config.fields = mergedFields;
-          
-          this.collections.set(config.slug, config);
-        } catch (error) {
-          console.error(`Error loading collection config for ${collectionDir}:`, error);
-        }
-      }
-    } catch (error) {
+  async initialize(siteId?: string) {
+    // Load collections from database
+    await this.loadCollections(siteId);
+  }
+
+  private async loadCollections(siteId?: string) {
+    const supabase = await this.getSupabase();
+    
+    let query = supabase
+      .from('collections')
+      .select('*');
+
+    if (siteId) {
+      query = query.eq('site_id', siteId);
+    }
+
+    const { data: collections, error } = await query;
+
+    if (error) {
       console.error('Error loading collections:', error);
+      return;
+    }
+
+    this.collections.clear();
+
+         for (const collection of collections || []) {
+       const schema = collection.schema && typeof collection.schema === 'object' && collection.schema !== null
+         ? collection.schema as { fields?: FieldConfig[] }
+         : { fields: [] };
+       const config: CollectionConfig = {
+         name: collection.name,
+         slug: collection.slug,
+         description: collection.description || '',
+         contentPath: 'posts', // Default path for compatibility
+         urlPattern: collection.url_pattern || `/${collection.slug}/{slug}`,
+         fields: this.defaultFields.concat((schema?.fields as FieldConfig[]) || []),
+        settings: {
+          allowCreate: true,
+          allowEdit: true,
+          allowDelete: true,
+          sortField: 'updated_at',
+          sortOrder: 'desc',
+          ...(collection.settings && typeof collection.settings === 'object' && collection.settings !== null 
+             ? collection.settings as Record<string, any> 
+             : {})
+        },
+        seo: {
+          titleField: 'title',
+          descriptionField: 'seoDescription',
+          imageField: 'ogImage'
+        }
+      };
+
+      this.collections.set(collection.slug, config);
     }
   }
 
-  getCollection(slug: string): CollectionConfig | undefined {
-    return this.collections.get(slug);
+  getCollection(slug: string): CollectionConfig | null {
+    return this.collections.get(slug) || null;
   }
 
   getAllCollections(): CollectionConfig[] {
@@ -59,56 +108,241 @@ export class CollectionsManager {
   }
 
   getCollectionByUrlPattern(url: string): { collection: CollectionConfig; params: Record<string, string> } | null {
+    const urlParts = url.split('/').filter(Boolean);
+    
     for (const collection of this.collections.values()) {
-      const pattern = collection.urlPattern;
-      const regex = new RegExp('^' + pattern.replace(/{(\w+)}/g, '(?<$1>[^/]+)') + '$');
-      const match = url.match(regex);
+      const patternParts = collection.urlPattern.split('/').filter(Boolean);
       
-      if (match && match.groups) {
-        return {
-          collection,
-          params: match.groups as Record<string, string>
-        };
+      if (patternParts.length !== urlParts.length) continue;
+      
+      let match = true;
+      const params: Record<string, string> = {};
+      
+      for (let i = 0; i < patternParts.length; i++) {
+        const patternPart = patternParts[i];
+        const urlPart = urlParts[i];
+        
+        if (patternPart.startsWith('{') && patternPart.endsWith('}')) {
+          // Dynamic parameter
+          const paramName = patternPart.slice(1, -1);
+          params[paramName] = urlPart;
+        } else if (patternPart !== urlPart) {
+          // Static part doesn't match
+          match = false;
+          break;
+        }
+      }
+      
+      if (match) {
+        return { collection, params };
       }
     }
     
     return null;
   }
 
-  async saveCollection(slug: string, config: CollectionConfig) {
-    const configPath = path.join(COLLECTIONS_DIR, slug, 'config.json');
+  async createCollection(siteId: string, config: Partial<CollectionConfig>): Promise<CollectionConfig> {
+    const supabase = await this.getSupabase();
     
-    // Remove default fields before saving
-    const configToSave = {
-      ...config,
-      fields: config.fields.filter(field => 
-        !this.defaultFields.some(df => df.name === field.name)
-      )
+    const { data, error } = await supabase
+      .from('collections')
+      .insert({
+        site_id: siteId,
+        name: config.name || 'Untitled Collection',
+        slug: config.slug || this.generateSlug(config.name || 'untitled'),
+        description: config.description,
+        url_pattern: config.urlPattern || `/${config.slug || this.generateSlug(config.name || 'untitled')}/{slug}`,
+        schema: JSON.parse(JSON.stringify({
+          fields: config.fields || []
+        })),
+        settings: config.settings || {}
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create collection: ${error.message}`);
+    }
+
+         // Add to local cache
+     const schema = data.schema && typeof data.schema === 'object' && data.schema !== null
+       ? data.schema as { fields?: FieldConfig[] }
+       : { fields: [] };
+     const newCollection: CollectionConfig = {
+       name: data.name,
+       slug: data.slug,
+       description: data.description || '',
+       contentPath: 'posts',
+       urlPattern: data.url_pattern || `/${data.slug}/{slug}`,
+       fields: this.defaultFields.concat((schema?.fields as FieldConfig[]) || []),
+      settings: {
+        allowCreate: true,
+        allowEdit: true,
+        allowDelete: true,
+        sortField: 'updated_at',
+        sortOrder: 'desc',
+        ...(data.settings && typeof data.settings === 'object' && data.settings !== null 
+           ? data.settings as Record<string, any> 
+           : {})
+      },
+      seo: {
+        titleField: 'title',
+        descriptionField: 'seoDescription',
+        imageField: 'ogImage'
+      }
     };
-    
-    await fs.writeFile(configPath, JSON.stringify(configToSave, null, 2));
-    this.collections.set(slug, config);
+
+    this.collections.set(data.slug, newCollection);
+    return newCollection;
   }
 
-  async createCollection(config: CollectionConfig) {
-    const collectionDir = path.join(COLLECTIONS_DIR, config.slug);
-    const contentDir = path.join(collectionDir, config.contentPath);
+  async updateCollection(slug: string, updates: Partial<CollectionConfig>): Promise<CollectionConfig | null> {
+    const supabase = await this.getSupabase();
     
-    // Create directories
-    await fs.mkdir(contentDir, { recursive: true });
+    const updateData: any = {};
+    if (updates.name) updateData.name = updates.name;
+    if (updates.description) updateData.description = updates.description;
+    if (updates.urlPattern) updateData.url_pattern = updates.urlPattern;
+    if (updates.fields) {
+      updateData.schema = JSON.parse(JSON.stringify({
+        fields: updates.fields
+      }));
+    }
+    if (updates.settings) updateData.settings = updates.settings;
+
+    const { data, error } = await supabase
+      .from('collections')
+      .update(updateData)
+      .eq('slug', slug)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating collection:', error);
+      return null;
+    }
+
+    // Update local cache
+    const schema = data.schema && typeof data.schema === 'object' && data.schema !== null
+      ? data.schema as { fields?: FieldConfig[] }
+      : { fields: [] };
+    const updatedCollection: CollectionConfig = {
+      name: data.name,
+      slug: data.slug,
+      description: data.description || '',
+      contentPath: 'posts',
+      urlPattern: data.url_pattern || `/${data.slug}/{slug}`,
+      fields: [
+        ...this.defaultFields,
+        ...(schema?.fields || [])
+      ],
+      settings: {
+        allowCreate: true,
+        allowEdit: true,
+        allowDelete: true,
+        sortField: 'updated_at',
+        sortOrder: 'desc',
+        ...(data.settings && typeof data.settings === 'object' && data.settings !== null 
+           ? data.settings as Record<string, any> 
+           : {})
+      },
+      seo: {
+        titleField: 'title',
+        descriptionField: 'seoDescription',
+        imageField: 'ogImage'
+      }
+    };
+
+    this.collections.set(data.slug, updatedCollection);
+    return updatedCollection;
+  }
+
+  async deleteCollection(slug: string): Promise<void> {
+    const supabase = await this.getSupabase();
     
-    // Save config
-    await this.saveCollection(config.slug, config);
+    const { error } = await supabase
+      .from('collections')
+      .delete()
+      .eq('slug', slug);
+
+    if (error) {
+      throw new Error(`Failed to delete collection: ${error.message}`);
+    }
+
+    this.collections.delete(slug);
+  }
+
+  private generateSlug(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  // Default collections for new sites
+  async createDefaultCollections(siteId: string): Promise<void> {
+    const defaultCollections: Array<Partial<CollectionConfig>> = [
+      {
+        name: 'Blog',
+        slug: 'blog',
+        description: 'Blog posts and articles',
+        fields: [
+          {
+            name: 'excerpt',
+            label: 'Excerpt',
+            type: 'textarea' as const,
+            placeholder: 'Brief description...'
+          },
+          {
+            name: 'featured',
+            label: 'Featured Post',
+            type: 'boolean' as const,
+            default: false
+          },
+          {
+            name: 'tags',
+            label: 'Tags',
+            type: 'text' as const,
+            placeholder: 'tag1, tag2, tag3'
+          }
+        ]
+      },
+      {
+        name: 'Pages',
+        slug: 'pages',
+        description: 'Static pages',
+        fields: [
+          {
+            name: 'description',
+            label: 'Description',
+            type: 'textarea' as const,
+            placeholder: 'Page description...'
+          }
+        ]
+      }
+    ];
+
+    for (const config of defaultCollections) {
+      try {
+        await this.createCollection(siteId, config);
+      } catch (error) {
+        console.error(`Failed to create default collection ${config.slug}:`, error);
+      }
+    }
   }
 }
 
-// Singleton instance
-let collectionsManager: CollectionsManager | null = null;
+// Singleton instance per site
+const collectionsManagers = new Map<string, CollectionsManager>();
 
-export async function getCollectionsManager(): Promise<CollectionsManager> {
-  if (!collectionsManager) {
-    collectionsManager = new CollectionsManager();
-    await collectionsManager.initialize();
+export async function getCollectionsManager(siteId?: string): Promise<CollectionsManager> {
+  const key = siteId || 'default';
+  
+  if (!collectionsManagers.has(key)) {
+    const manager = new CollectionsManager();
+    await manager.initialize(siteId);
+    collectionsManagers.set(key, manager);
   }
-  return collectionsManager;
+  
+  return collectionsManagers.get(key)!;
 } 

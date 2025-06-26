@@ -16,6 +16,7 @@ import { LuAlignJustify, LuAppWindow, LuAppWindowMac, LuBlocks, LuBolt, LuBook, 
 import { PiCube } from "react-icons/pi";
 import { PLANS } from '@/lib/config/pricing'
 import { AlertBanner } from "@/components/alert-banner"
+import { EmailVerificationBanner } from "@/components/email-verification-banner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isTrialExpired } from '@/lib/utils';
 import { useLoading } from '@/context/LoadingContext';
@@ -362,6 +363,9 @@ export default function DashboardLayout({
         <header className="top-0 z-10 border-b border-gray-200/60 bg-white">
           <div className="mx-auto">
             {/* Alert Banners */}
+            {/* Email verification banner */}
+            <EmailVerificationBanner />
+            
             {/* Removed block for 'cancelingPlan' for trial cancellation - relying on showExpiredTrialBanner logic below */}
             {/* This block now correctly handles showing the banner when status is 'canceled' */}
             {!isLoading && showExpiredTrialBanner && (
@@ -379,7 +383,7 @@ export default function DashboardLayout({
             )}
             {/* Top row: Logo, Upgrade, User */}
             <div className="flex items-center justify-between h-13 px-7 mb-2 border-b border-gray-200/60">
-              <Link href="/playground" className="flex items-center gap-2 font-semibold">
+              <Link href="/admin" className="flex items-center gap-2 font-semibold">
                 {/* <RiMessage3Fill size={32} color="var(--primary)" />  */}
                 <Logo size={55} color="#222" />
               </Link>
@@ -441,41 +445,14 @@ export default function DashboardLayout({
             {/* Bottom row: Navigation */}
             <nav className="flex items-center px-7 overflow-x-auto whitespace-nowrap">
               <Link 
-                href="/playground" 
-
+                href="/admin" 
                 className={`py-2.5 px-1 mr-2.5 text-[15px] font-medium flex items-center transition-colors rounded-t-lg border-b-2 hover:text-black hover:border-black ${
-                  pathname === "/playground" ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
+                  pathname === "/admin" || pathname.startsWith("/admin/") ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
                 }`}
               >
-                Sandbox
+                Content
               </Link>
-              <Link 
-                href="/activity" 
 
-                className={`py-2.5 px-1 mx-2.5 text-[15px] font-medium flex items-center transition-colors rounded-t-lg border-b-2 hover:text-black hover:border-black ${
-                  pathname === "/activity" ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
-                }`}
-              >
-                Chat logs
-              </Link>
-              <Link 
-                href="/sources" 
-
-                className={`py-2.5 px-1 mx-2.5 text-[15px] font-medium flex items-center transition-colors rounded-t-lg border-b-2 hover:text-black hover:border-black ${
-                  pathname === "/sources" ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
-                }`}
-              >
-                Data sources
-              </Link>
-              <Link 
-                href="/analytics" 
-
-                className={`py-2.5 px-1 mx-2.5 text-[15px] font-medium flex items-center transition-colors rounded-t-lg border-b-2 hover:text-black hover:border-black ${
-                  pathname === "/analytics" ? "border-b-2 border-black text-black hover:bg-white" : "text-gray-500 border-transparent hover:text-black"
-                }`}
-              >
-                Analytics
-              </Link>
               <Link 
                 href="/people" 
 

@@ -1,10 +1,10 @@
 
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/server-auth'; // Use the server client that reads cookies
+import { createSupabaseServerClient } from '@/lib/supabase/server'; // Use the server client that reads cookies
 
 export async function GET() {
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { session }, error } = await supabase.auth.getSession();
 
     if (error) {

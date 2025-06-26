@@ -1,93 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserIdFromRequest } from '@/lib/server-auth';
-import { getStripeCustomerId, getStripeDataFromKV } from '@/lib/stripe/sync';
+import { getAuthFromRequest } from '@/lib/server-auth';
+import { getUserSubscriptionData } from '@/lib/stripe/sync';
 
 /**
- * API endpoint to get subscription data from KV cache
- * This replaces the old complex subscription fetching logic
+ * Get subscription data endpoint - uses KV cache for fast access
+ * Following Theo's recommendation to have a simple endpoint that exposes sub data
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getUserIdFromRequest(req);
+    // Get auth token from request
+    const token = getAuthFromRequest(req);
     
-    if (!userId) {
+    if (!token) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
+    // Create Supabase client with the token
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+        auth: { persistSession: false },
+      }
+    );
+
+    // Get the user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
     console.log(`[Subscription Data] Getting data for user ${userId}`);
     
-    // Get the Stripe customer ID from KV
-    const stripeCustomerId = await getStripeCustomerId(userId);
+    // Get subscription data using our KV-first approach
+    const subscriptionData = await getUserSubscriptionData(userId);
     
-    if (!stripeCustomerId) {
-      console.log(`[Subscription Data] No Stripe customer ID found for user ${userId}`);
-      return NextResponse.json({
-        status: 'none',
-        subscriptionId: null,
-        customerId: null,
-        priceId: null,
-        currentPeriodEnd: null,
-        currentPeriodStart: null,
-        cancelAtPeriodEnd: false,
-        paymentMethod: null
-      });
+    if (!subscriptionData) {
+      return NextResponse.json({ status: "none" });
     }
 
-    // Get subscription data from KV cache
-    const subData = await getStripeDataFromKV(stripeCustomerId);
+    console.log(`[Subscription Data] Returning data for user ${userId}:`, subscriptionData.status);
+    return NextResponse.json(subscriptionData);
     
-    if (!subData) {
-      console.log(`[Subscription Data] No subscription data in KV for customer ${stripeCustomerId}`);
-      return NextResponse.json({
-        status: 'none',
-        subscriptionId: null,
-        customerId: stripeCustomerId,
-        priceId: null,
-        currentPeriodEnd: null,
-        currentPeriodStart: null,
-        cancelAtPeriodEnd: false,
-        paymentMethod: null
-      });
-    }
-
-    console.log(`[Subscription Data] Found subscription data for customer ${stripeCustomerId}`);
-    
-    // Return the cached subscription data
-    if (subData.status === 'none') {
-      return NextResponse.json({
-        status: 'none',
-        subscriptionId: null,
-        customerId: stripeCustomerId,
-        priceId: null,
-        currentPeriodEnd: null,
-        currentPeriodStart: null,
-        cancelAtPeriodEnd: false,
-        paymentMethod: null
-      });
-    }
-
-    return NextResponse.json({
-      status: subData.status,
-      subscriptionId: subData.subscriptionId,
-      customerId: stripeCustomerId,
-      priceId: subData.priceId,
-      currentPeriodEnd: subData.currentPeriodEnd 
-        ? new Date(subData.currentPeriodEnd * 1000).toISOString() 
-        : null,
-      currentPeriodStart: subData.currentPeriodStart 
-        ? new Date(subData.currentPeriodStart * 1000).toISOString() 
-        : null,
-      cancelAtPeriodEnd: subData.cancelAtPeriodEnd,
-      paymentMethod: subData.paymentMethod
-    });
-
   } catch (error) {
-    console.error('[Subscription Data] Error getting subscription data:', error);
+    console.error('Error getting subscription data:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to get subscription data' },
       { status: 500 }
     );
   }
