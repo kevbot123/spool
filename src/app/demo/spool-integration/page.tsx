@@ -15,7 +15,7 @@ async function getExampleContent() {
       slug: 'blog',
       schema: {
         title: { type: 'text', required: true },
-        excerpt: { type: 'textarea', required: true },
+        excerpt: { type: 'text', required: true },
         body: { type: 'markdown', required: true },
         publishedAt: { type: 'datetime', required: true },
         featured: { type: 'boolean', required: false }

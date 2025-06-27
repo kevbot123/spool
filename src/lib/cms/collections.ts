@@ -12,6 +12,13 @@ export class CollectionsManager {
       placeholder: 'Enter title...'
     },
     {
+      name: 'description',
+      label: 'Description',
+      type: 'text',
+      required: false,
+      placeholder: 'Brief description...'
+    },
+    {
       name: 'slug',
       label: 'URL Slug',
       type: 'text',
@@ -19,22 +26,80 @@ export class CollectionsManager {
       placeholder: 'url-slug'
     },
     {
-      name: 'body',
-      label: 'Content',
-      type: 'markdown',
-      required: true
+      name: 'seoTitle',
+      label: 'SEO Title',
+      type: 'text',
+      required: false,
+      placeholder: 'Falls back to Title if empty',
+      description: 'Custom title for search engines (falls back to Title if empty)'
+    },
+    {
+      name: 'seoDescription',
+      label: 'SEO Description',
+      type: 'text',
+      required: false,
+      placeholder: 'Falls back to Description if empty',
+      description: 'Meta description for search engines (falls back to Description if empty)',
+      validation: {
+        max: 160
+      }
+    },
+    {
+      name: 'ogTitle',
+      label: 'OG Title',
+      type: 'text',
+      required: false,
+      placeholder: 'Falls back to SEO Title or Title if empty',
+      description: 'Open Graph title for social media (falls back to SEO Title, then Title if empty)'
+    },
+    {
+      name: 'ogDescription',
+      label: 'OG Description',
+      type: 'text',
+      required: false,
+      placeholder: 'Falls back to SEO Description or Description if empty',
+      description: 'Open Graph description for social media (falls back to SEO Description, then Description if empty)',
+      validation: {
+        max: 200
+      }
+    },
+    {
+      name: 'ogImage',
+      label: 'OG Image',
+      type: 'image',
+      required: false,
+      description: 'Social media preview image'
     },
     {
       name: 'status',
       label: 'Status',
       type: 'select',
       options: ['draft', 'published', 'archived'],
-      default: 'draft'
+      default: 'draft',
+      required: true,
+      description: 'Content publication status'
     },
     {
-      name: 'publishedAt',
-      label: 'Published Date',
-      type: 'datetime'
+      name: 'dateLastModified',
+      label: 'Date Last Modified',
+      type: 'datetime',
+      required: false,
+      description: 'Automatically updated when content is modified',
+      meta: {
+        automatic: true,
+        readonly: true
+      }
+    },
+    {
+      name: 'datePublished',
+      label: 'Date Published',
+      type: 'datetime',
+      required: false,
+      description: 'Automatically set when content is first published',
+      meta: {
+        automatic: true,
+        readonly: true
+      }
     }
   ];
 
@@ -290,7 +355,7 @@ export class CollectionsManager {
           {
             name: 'excerpt',
             label: 'Excerpt',
-            type: 'textarea' as const,
+            type: 'text' as const,
             placeholder: 'Brief description...'
           },
           {
@@ -315,7 +380,7 @@ export class CollectionsManager {
           {
             name: 'description',
             label: 'Description',
-            type: 'textarea' as const,
+            type: 'text' as const,
             placeholder: 'Page description...'
           }
         ]

@@ -50,6 +50,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TbLayoutSidebarRightExpand } from 'react-icons/tb';
+import { getFieldTypeIcon } from '@/lib/field-type-icons';
 
 interface CollectionTableProps {
   collection: CollectionConfig;
@@ -76,9 +77,10 @@ interface DraggableHeaderProps {
   header: any;
   children: React.ReactNode;
   isLastHeader: boolean;
+  fieldType?: FieldConfig['type'];
 }
 
-function DraggableHeader({ header, children, isLastHeader }: DraggableHeaderProps) {
+function DraggableHeader({ header, children, isLastHeader, fieldType }: DraggableHeaderProps) {
   const { isDragging, setNodeRef, transform, transition, listeners, attributes } = useSortable({
     id: header.id,
   });
@@ -104,6 +106,10 @@ function DraggableHeader({ header, children, isLastHeader }: DraggableHeaderProp
     }
   };
 
+  // Get the icon for this field type
+  const FieldTypeIcon = fieldType ? getFieldTypeIcon(fieldType) : null;
+  const isDraggableColumn = header.column.id !== 'system_title' && header.column.id !== 'more-actions';
+
   return (
     <th
       ref={setNodeRef}
@@ -113,7 +119,7 @@ function DraggableHeader({ header, children, isLastHeader }: DraggableHeaderProp
         maxWidth: header.getSize(),
         ...style,
       }}
-      className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative ${
+      className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative group ${
         header.column.getCanSort() && header.column.id !== 'more-actions'
           ? 'cursor-pointer hover:bg-gray-100'
           : ''
@@ -121,18 +127,27 @@ function DraggableHeader({ header, children, isLastHeader }: DraggableHeaderProp
       onClick={handleHeaderClick}
     >
       <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-nowrap overflow-hidden">
-        {/* Drag handle - only show for draggable columns */}
-        {
-         header.column.id !== 'system_title' && 
-         header.column.id !== 'more-actions' && (
+        {/* Field type icon by default, drag handle on hover - only for draggable columns */}
+        {isDraggableColumn && (
           <div
-            className="drag-handle cursor-grab active:cursor-grabbing"
+            className="drag-handle cursor-grab active:cursor-grabbing relative"
             {...listeners}
             {...attributes}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
-            <GripVertical size={14} className="text-gray-400" />
+            {/* Field type icon - visible by default */}
+            {FieldTypeIcon && (
+              <FieldTypeIcon 
+                size={14} 
+                className="text-gray-400 group-hover:opacity-0 transition-opacity duration-200" 
+              />
+            )}
+            {/* Drag handle - visible on hover */}
+            <GripVertical 
+              size={14} 
+              className="text-gray-400 absolute top-0 left-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" 
+            />
           </div>
         )}
         {children}
@@ -950,11 +965,27 @@ export function CollectionTable({
                           const isLastHeader = index === headerGroup.headers.length - 1;
 
                           if (isDraggable) {
+                            // Get field type for this column
+                            let fieldType: FieldConfig['type'] | undefined;
+                            
+                            // For system fields
+                            if (header.id === 'system_slug') {
+                              fieldType = 'text';
+                            } else if (header.id === 'system_ogImage') {
+                              fieldType = 'image';
+                            } else if (header.id.startsWith('field_')) {
+                              // For dynamic fields, find the field config
+                              const fieldName = header.id.replace('field_', '');
+                              const field = collection.fields.find(f => f.name === fieldName);
+                              fieldType = field?.type;
+                            }
+
                             return (
                               <DraggableHeader 
                                 key={header.id} 
                                 header={header}
                                 isLastHeader={isLastHeader}
+                                fieldType={fieldType}
                               >
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                               </DraggableHeader>

@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, GripVertical, Trash2, Edit3, Type, Pilcrow, Heading1, Hash, ToggleRight, Calendar, Clock, ChevronDownSquare, Image as ImageIcon, Braces, LetterText, Text, Blocks } from 'lucide-react';
+import { Plus, GripVertical, Trash2, Edit3 } from 'lucide-react';
 import { CollectionConfig, FieldConfig } from '@/types/cms';
+import { FIELD_TYPES, getFieldTypeInfo } from '@/lib/field-type-icons';
 import {
   DndContext,
   closestCenter,
@@ -35,18 +36,7 @@ interface CollectionSetupModalProps {
   existingCollection?: CollectionConfig | null;
 }
 
-const FIELD_TYPES = [
-  { value: 'text', label: 'Text', description: 'Single line text input', icon: Text },
-  { value: 'textarea', label: 'Textarea', description: 'Multi-line text input', icon: LetterText },
-  { value: 'markdown', label: 'Body (Block Editor or Markdown)', description: 'Rich text editor with markdown', icon: Blocks },
-  { value: 'image', label: 'Image', description: 'Image upload', icon: ImageIcon },
-  { value: 'number', label: 'Number', description: 'Numeric input', icon: Hash },
-  { value: 'boolean', label: 'Boolean', description: 'True/false toggle', icon: ToggleRight },
-  { value: 'date', label: 'Date', description: 'Date picker', icon: Calendar },
-  { value: 'datetime', label: 'Date & Time', description: 'Date and time picker', icon: Clock },
-  { value: 'select', label: 'Select', description: 'Dropdown selection', icon: ChevronDownSquare },
-  { value: 'json', label: 'JSON', description: 'Raw JSON data', icon: Braces }
-];
+
 
 // Sortable Field Item component for drag and drop
 function SortableFieldItem({ id, field, onEdit, onDelete }: { id: string, field: FieldConfig, onEdit: (field: FieldConfig) => void, onDelete: (name: string) => void }) {
@@ -63,7 +53,7 @@ function SortableFieldItem({ id, field, onEdit, onDelete }: { id: string, field:
     transition,
   };
 
-  const fieldTypeInfo = FIELD_TYPES.find(ft => ft.value === field.type);
+  const fieldTypeInfo = getFieldTypeInfo(field.type);
   const Icon = fieldTypeInfo?.icon;
 
   return (
@@ -148,7 +138,7 @@ export default function CollectionSetupModal({
         setUrlPattern(existingCollection.urlPattern);
         // Filter out default fields when editing
         const customFields = existingCollection.fields.filter(field => 
-          !['title', 'slug', 'body', 'status', 'publishedAt'].includes(field.name)
+          !['title', 'description', 'slug', 'seoTitle', 'seoDescription', 'ogTitle', 'ogDescription', 'ogImage', 'status', 'dateLastModified', 'datePublished'].includes(field.name)
         );
         setFields(customFields);
       } else {
@@ -156,7 +146,16 @@ export default function CollectionSetupModal({
         setSlug('');
         setDescription('');
         setUrlPattern('');
-        setFields([]);
+        // Add default Body field for new collections
+        setFields([
+          {
+            name: 'body',
+            label: 'Body',
+            type: 'markdown',
+            required: false,
+            description: 'Main content of the item'
+          }
+        ]);
       }
       setEditingField(null);
       setShowFieldEditor(false);
@@ -268,10 +267,16 @@ export default function CollectionSetupModal({
               </p>
               <div className="flex flex-wrap gap-1">
                 <Badge variant="default">Title</Badge>
+                <Badge variant="default">Description</Badge>
                 <Badge variant="default">URL Slug</Badge>
-                <Badge variant="default">Content (Markdown)</Badge>
+                <Badge variant="default">SEO Title</Badge>
+                <Badge variant="default">SEO Description</Badge>
+                <Badge variant="default">OG Title</Badge>
+                <Badge variant="default">OG Description</Badge>
+                <Badge variant="default">OG Image</Badge>
                 <Badge variant="default">Status</Badge>
-                <Badge variant="default">Published Date</Badge>
+                <Badge variant="default">Date Last Modified</Badge>
+                <Badge variant="default">Date Published</Badge>
               </div>
             </div>
 
@@ -362,7 +367,7 @@ function FieldEditorModal({
 }: FieldEditorModalProps) {
   const [name, setName] = useState('');
   const [label, setLabel] = useState('');
-  const [type, setType] = useState<FieldConfig['type']>('text');
+  const [type, setType] = useState<FieldConfig['type']>('markdown');
   const [required, setRequired] = useState(false);
   const [placeholder, setPlaceholder] = useState('');
   const [description, setDescription] = useState('');
@@ -380,7 +385,7 @@ function FieldEditorModal({
     } else {
       setName('');
       setLabel('');
-      setType('text');
+      setType('markdown');
       setRequired(false);
       setPlaceholder('');
       setDescription('');
@@ -415,7 +420,7 @@ function FieldEditorModal({
     onSave(fieldConfig);
   };
 
-  const selectedFieldType = FIELD_TYPES.find(ft => ft.value === type);
+  const selectedFieldType = getFieldTypeInfo(type);
   const isNameTaken = existingFieldNames.includes(name) && (!field || field.name !== name);
   const isValid = name.trim() && label.trim() && !isNameTaken;
 

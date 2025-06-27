@@ -1,7 +1,7 @@
 export interface FieldConfig {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'markdown' | 'body' | 'number' | 'boolean' | 'date' | 'datetime' | 'select' | 'image' | 'json';
+  type: 'text' | 'markdown' | 'body' | 'number' | 'boolean' | 'date' | 'datetime' | 'select' | 'image' | 'json';
   required?: boolean;
   inTable?: boolean;
   placeholder?: string;

@@ -143,7 +143,7 @@ export function NavFavorites() {
           const resp = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify({ ...data, siteId: currentSite.id }),
           });
           if (!resp.ok) throw new Error('Failed to save');
           await loadCollections();

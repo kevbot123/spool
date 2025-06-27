@@ -198,35 +198,7 @@ export function FieldEditor({
                   />
               </div>
             )
-          case 'multi-select':
-            const selectedValues = new Set(editValue || []);
-            const handleMultiSelectChange = (option: string) => {
-              const newSelectedValues = new Set(selectedValues);
-              if (newSelectedValues.has(option)) {
-                newSelectedValues.delete(option);
-              } else {
-                newSelectedValues.add(option);
-              }
-              setEditValue(Array.from(newSelectedValues));
-            };
-            return (
-              <div className="absolute left-0 top-0 z-50 p-2 bg-white rounded-md shadow-lg border border-gray-200" style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset }}>
-                <div className="space-y-2">
-                  {field.options?.map((option: string) => (
-                    <label key={option} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="form-checkbox h-4 w-4 text-indigo-600 transition duration-150 ease-in-out"
-                        checked={selectedValues.has(option)}
-                        onChange={() => handleMultiSelectChange(option)}
-                      />
-                      <span className="text-sm">{option}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            );
-          case 'textarea':
+
           case 'text':
           default:
             return (
@@ -293,21 +265,7 @@ function renderValue(field: FieldConfig, value: any): React.ReactNode {
         />
       );
 
-    case 'multi-select':
-      return Array.isArray(value) && value.length > 0 ? (
-        <div className="w-full flex flex-nowrap gap-1 overflow-hidden">
-          {value.map((v: string) => (
-            <span
-              key={v}
-              className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs text-nowrap"
-            >
-              {v}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <span className="text-gray-400">—</span>
-      );
+
 
     case 'image':
       return (
