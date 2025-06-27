@@ -579,26 +579,29 @@ export function CollectionTable({
     await onDelete(itemId);
   };
 
-  const handleBulkAction = async (action: 'publish' | 'unpublish') => {
+  const handleBulkAction = useCallback(async (action: 'publish' | 'unpublish') => {
     const currentDate = new Date().toISOString();
     const updatedItems = localItems.map(item => ({
       ...item,
-      publishedAt: action === 'publish' ? (item.publishedAt || currentDate) : null
+      publishedAt: action === 'publish' ? (item.publishedAt || currentDate) : null,
     }));
 
     try {
-      // Update the local state immediately for better UX
+      // Optimistically update UI
       setLocalItems(updatedItems);
-      
-      // Send all updates to the server
+
+      // Persist to server
       await onBatchUpdate(updatedItems);
-      
     } catch (error) {
       console.error(`Failed to ${action} all items:`, error);
-      // Revert local changes if the server update failed
+      // Revert if server call fails
       setLocalItems(localItems);
     }
-  };
+  }, [localItems, onBatchUpdate]);
+
+  // Stable callbacks so CollectionHeader's effect doesn't fire every render
+  const publishAll = useCallback(() => handleBulkAction('publish'), [handleBulkAction]);
+  const unpublishAll = useCallback(() => handleBulkAction('unpublish'), [handleBulkAction]);
 
   // Handle drag start
   function handleDragStart(event: DragStartEvent) {
@@ -901,8 +904,8 @@ export function CollectionTable({
         onGlobalFilterChange={setGlobalFilter}
         onSaveAll={pendingChanges.size > 0 ? saveAllChanges : undefined}
         onCreate={onCreate}
-        onPublishAll={() => handleBulkAction('publish')}
-        onUnpublishAll={() => handleBulkAction('unpublish')}
+        onPublishAll={publishAll}
+        onUnpublishAll={unpublishAll}
       />
       <style jsx>{`
         .resizer {

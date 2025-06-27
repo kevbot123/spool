@@ -8,8 +8,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, GripVertical, Trash2, Edit3 } from 'lucide-react';
+import { Plus, GripVertical, Trash2, Edit3, Type, Pilcrow, Heading1, Hash, ToggleRight, Calendar, Clock, ChevronDownSquare, Image as ImageIcon, Braces, LetterText, Text, Blocks } from 'lucide-react';
 import { CollectionConfig, FieldConfig } from '@/types/cms';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface CollectionSetupModalProps {
   isOpen: boolean;
@@ -19,17 +36,73 @@ interface CollectionSetupModalProps {
 }
 
 const FIELD_TYPES = [
-  { value: 'text', label: 'Text', description: 'Single line text input' },
-  { value: 'textarea', label: 'Textarea', description: 'Multi-line text input' },
-  { value: 'markdown', label: 'Markdown', description: 'Rich text editor with markdown' },
-  { value: 'number', label: 'Number', description: 'Numeric input' },
-  { value: 'boolean', label: 'Boolean', description: 'True/false toggle' },
-  { value: 'date', label: 'Date', description: 'Date picker' },
-  { value: 'datetime', label: 'Date & Time', description: 'Date and time picker' },
-  { value: 'select', label: 'Select', description: 'Dropdown selection' },
-  { value: 'image', label: 'Image', description: 'Image upload' },
-  { value: 'json', label: 'JSON', description: 'Raw JSON data' }
+  { value: 'text', label: 'Text', description: 'Single line text input', icon: Text },
+  { value: 'textarea', label: 'Textarea', description: 'Multi-line text input', icon: LetterText },
+  { value: 'markdown', label: 'Body (Block Editor or Markdown)', description: 'Rich text editor with markdown', icon: Blocks },
+  { value: 'image', label: 'Image', description: 'Image upload', icon: ImageIcon },
+  { value: 'number', label: 'Number', description: 'Numeric input', icon: Hash },
+  { value: 'boolean', label: 'Boolean', description: 'True/false toggle', icon: ToggleRight },
+  { value: 'date', label: 'Date', description: 'Date picker', icon: Calendar },
+  { value: 'datetime', label: 'Date & Time', description: 'Date and time picker', icon: Clock },
+  { value: 'select', label: 'Select', description: 'Dropdown selection', icon: ChevronDownSquare },
+  { value: 'json', label: 'JSON', description: 'Raw JSON data', icon: Braces }
 ];
+
+// Sortable Field Item component for drag and drop
+function SortableFieldItem({ id, field, onEdit, onDelete }: { id: string, field: FieldConfig, onEdit: (field: FieldConfig) => void, onDelete: (name: string) => void }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const fieldTypeInfo = FIELD_TYPES.find(ft => ft.value === field.type);
+  const Icon = fieldTypeInfo?.icon;
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <Card className="p-2 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div {...listeners} className="cursor-move p-1">
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
+            </div>
+            {Icon && <Icon className="w-4 h-4 text-muted-foreground" />}
+            <div>
+              <div className="font-medium text-sm">{field.label || field.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {fieldTypeInfo?.label} {field.required && '• Required'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onEdit(field)}
+            >
+              <Edit3 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(field.name)}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 export default function CollectionSetupModal({
   isOpen,
@@ -45,6 +118,25 @@ export default function CollectionSetupModal({
   const [editingField, setEditingField] = useState<FieldConfig | null>(null);
   const [showFieldEditor, setShowFieldEditor] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setFields((items) => {
+        const oldIndex = items.findIndex((item) => item.name === active.id);
+        const newIndex = items.findIndex((item) => item.name === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
 
   // Reset form when modal opens/closes or collection changes
   useEffect(() => {
@@ -131,12 +223,12 @@ export default function CollectionSetupModal({
     }
   };
 
-  const isValid = name.trim() && slug.trim();
+  const isValid = !!name.trim();
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {existingCollection ? 'Edit Collection' : 'Create New Collection'}
@@ -145,7 +237,7 @@ export default function CollectionSetupModal({
 
           <div className="space-y-6">
             {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Collection Name</Label>
                 <Input
@@ -156,99 +248,72 @@ export default function CollectionSetupModal({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
+                <Label htmlFor="urlPattern">URL Pattern</Label>
                 <Input
-                  id="slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  placeholder="e.g. blog-posts"
-                  disabled={!!existingCollection}
+                  id="urlPattern"
+                  value={urlPattern}
+                  onChange={(e) => setUrlPattern(e.target.value)}
+                  placeholder="e.g. /blog/{slug}"
                 />
+                <p className="text-sm text-muted-foreground">Use {`{slug}`} as a placeholder for the item's URL slug</p>
+              </div>
+
+            </div>
+
+
+            {/* Default fields info */}
+            <div className="p-3 bg-gray-100 rounded-md">
+              <p className="text-sm mb-2">
+                Default fields (included automatically):
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="default">Title</Badge>
+                <Badge variant="default">URL Slug</Badge>
+                <Badge variant="default">Content (Markdown)</Badge>
+                <Badge variant="default">Status</Badge>
+                <Badge variant="default">Published Date</Badge>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description (optional)</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe what this collection is for..."
-                rows={2}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="urlPattern">URL Pattern</Label>
-              <Input
-                id="urlPattern"
-                value={urlPattern}
-                onChange={(e) => setUrlPattern(e.target.value)}
-                placeholder="e.g. /blog/{slug}"
-              />
-              <p className="text-sm text-muted-foreground">
-                Use {`{slug}`} as a placeholder for the content item's URL slug
-              </p>
-            </div>
-
             {/* Fields Section */}
-            <div className="space-y-4">
+            <div className="space-y-4 pt-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Custom Fields</h3>
-                <Button onClick={handleAddField} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
+                <h3 className="text-lg font-semibold">Custom Fields</h3>
+                <Button onClick={handleAddField} size="sm" variant="outline" className="shadow">
+                  <Plus className="w-4 h-4" />
                   Add Field
                 </Button>
               </div>
 
-              {/* Default fields info */}
-              <div className="p-3 bg-muted rounded-md">
-                <p className="text-sm text-muted-foreground mb-2">
-                  <strong>Default fields (included automatically):</strong>
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  <Badge variant="secondary">Title</Badge>
-                  <Badge variant="secondary">URL Slug</Badge>
-                  <Badge variant="secondary">Content (Markdown)</Badge>
-                  <Badge variant="secondary">Status</Badge>
-                  <Badge variant="secondary">Published Date</Badge>
-                </div>
-              </div>
 
               {/* Custom fields list */}
-              {fields.length > 0 && (
-                <div className="space-y-2">
-                  {fields.map((field, index) => (
-                    <Card key={field.name} className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <GripVertical className="w-4 h-4 text-muted-foreground cursor-move" />
-                          <div>
-                            <div className="font-medium">{field.label || field.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {field.type} {field.required && '• Required'}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditField(field)}
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteField(field.name)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+              {fields.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={fields.map(f => f.name)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {fields.map((field) => (
+                        <SortableFieldItem
+                          key={field.name}
+                          id={field.name}
+                          field={field}
+                          onEdit={handleEditField}
+                          onDelete={handleDeleteField}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="text-center text-muted-foreground border-2 border-dashed rounded-lg text-sm p-8">
+                  <p>No custom fields yet.</p>
+                  <p>Click "Add Field" to get started.</p>
                 </div>
               )}
             </div>
@@ -356,14 +421,14 @@ function FieldEditorModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="!max-w-[464px]">
         <DialogHeader>
           <DialogTitle>
             {field ? 'Edit Field' : 'Add Field'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label htmlFor="field-label">Field Label</Label>
             <Input
@@ -375,7 +440,7 @@ function FieldEditorModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="field-name">Field Name</Label>
+            <Label htmlFor="field-name">Field Data Name</Label>
             <Input
               id="field-name"
               value={name}
@@ -387,29 +452,43 @@ function FieldEditorModal({
             )}
           </div>
 
+          {/* <div className="space-y-2">
+            <Label htmlFor="field-placeholder">Placeholder (optional)</Label>
+            <Input
+              id="field-placeholder"
+              value={placeholder}
+              onChange={(e) => setPlaceholder(e.target.value)}
+              placeholder="Hint text for users..."
+            />
+          </div> */}
+
           <div className="space-y-2">
             <Label htmlFor="field-type">Field Type</Label>
             <Select value={type} onValueChange={(value: FieldConfig['type']) => setType(value)}>
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger className="w-full">
+                <SelectValue asChild>
+                  <div className="flex items-center gap-2">
+                    {selectedFieldType?.icon && <selectedFieldType.icon className="w-4 h-4" />}
+                    <span>{selectedFieldType?.label}</span>
+                  </div>
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {FIELD_TYPES.map((fieldType) => (
                   <SelectItem key={fieldType.value} value={fieldType.value}>
-                    <div>
-                      <div className="font-medium">{fieldType.label}</div>
-                      <div className="text-xs text-muted-foreground">{fieldType.description}</div>
+                    <div className="flex items-center gap-3">
+                      <fieldType.icon className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{fieldType.label}</div>
+                      </div>
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {selectedFieldType && (
-              <p className="text-sm text-muted-foreground">{selectedFieldType.description}</p>
-            )}
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 pt-2">
             <Switch
               id="field-required"
               checked={required}
@@ -418,17 +497,9 @@ function FieldEditorModal({
             <Label htmlFor="field-required">Required field</Label>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="field-placeholder">Placeholder (optional)</Label>
-            <Input
-              id="field-placeholder"
-              value={placeholder}
-              onChange={(e) => setPlaceholder(e.target.value)}
-              placeholder="Hint text for users..."
-            />
-          </div>
 
-          <div className="space-y-2">
+
+          {/* <div className="space-y-2">
             <Label htmlFor="field-description">Description (optional)</Label>
             <Textarea
               id="field-description"
@@ -437,7 +508,7 @@ function FieldEditorModal({
               placeholder="Additional help text..."
               rows={2}
             />
-          </div>
+          </div> */}
 
           {type === 'select' && (
             <div className="space-y-2">

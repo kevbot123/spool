@@ -444,9 +444,9 @@ th:hover > .resizer {
 .rootcard {
   border: 1px solid rgba(0, 0, 0, 0.06);
 }
-label {
+/* label {
   padding-bottom: 5px;
-}
+} */
 
 /* globals.css */
 

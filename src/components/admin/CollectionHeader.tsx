@@ -13,14 +13,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CollectionConfig } from '@/types/cms';
 import { useAdminHeader } from '@/context/AdminHeaderContext';
+import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
+import { useSite } from '@/context/SiteContext';
 
 interface BulkActionsDropdownProps {
   onPublishAll: () => void;
   onUnpublishAll: () => void;
+  onEditCollection: () => void;
   collection: CollectionConfig;
 }
 
-function BulkActionsDropdown({ onPublishAll, onUnpublishAll, collection }: BulkActionsDropdownProps) {
+function BulkActionsDropdown({ onPublishAll, onUnpublishAll, onEditCollection, collection }: BulkActionsDropdownProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -35,6 +38,9 @@ function BulkActionsDropdown({ onPublishAll, onUnpublishAll, collection }: BulkA
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onUnpublishAll}>
           Unpublish All Items
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onEditCollection}>
+          Edit Collection
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -53,6 +59,7 @@ interface CollectionHeaderProps {
   onUnpublishAll?: () => void;
 }
 
+
 export function CollectionHeader({
   collection,
   itemCount,
@@ -65,6 +72,8 @@ export function CollectionHeader({
   onUnpublishAll
 }: CollectionHeaderProps) {
   const { setHeaderContent, setBreadcrumbs } = useAdminHeader();
+  const { currentSite } = useSite();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     // Set breadcrumbs
@@ -118,6 +127,7 @@ export function CollectionHeader({
             <BulkActionsDropdown
               onPublishAll={onPublishAll}
               onUnpublishAll={onUnpublishAll}
+              onEditCollection={() => setIsModalOpen(true)}
               collection={collection}
             />
           )}
@@ -144,5 +154,33 @@ export function CollectionHeader({
     onUnpublishAll
   ]);
 
-  return null; // This component only sets header content, doesn't render anything itself
+  return (
+    <>
+      {isModalOpen && (
+        <CollectionSetupModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          existingCollection={collection}
+          onSave={async (data: Partial<CollectionConfig>) => {
+            if (!currentSite) return;
+            try {
+              const resp = await fetch(`/api/admin/collections/${collection.slug}?siteId=${currentSite.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+              });
+              if (resp.ok) {
+                setIsModalOpen(false);
+                // Optionally reload page or trigger refetch
+              } else {
+                console.error('Failed to save collection');
+              }
+            } catch(err) {
+              console.error('Save collection error', err);
+            }
+          }}
+        />
+      )}
+    </>
+  );
 } 

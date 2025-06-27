@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
 import { Folder, Plus, MoreHorizontal } from 'lucide-react';
 import {
   SidebarGroup,
@@ -28,6 +29,8 @@ export function NavFavorites() {
   const pathname = usePathname();
   const { currentSite } = useSite();
   const [collections, setCollections] = useState<CollectionConfig[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCollection, setEditingCollection] = useState<CollectionConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -56,8 +59,8 @@ export function NavFavorites() {
   };
 
   const handleCreateCollection = () => {
-    // Trigger collection creation modal
-    window.dispatchEvent(new Event('openCollectionModal'));
+    setEditingCollection(null);
+    setIsModalOpen(true);
   };
 
   if (isLoading) {
@@ -81,7 +84,8 @@ export function NavFavorites() {
   }
 
   return (
-    <SidebarGroup>
+    <>
+      <SidebarGroup>
       <SidebarGroupLabel>Collections</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
@@ -108,14 +112,8 @@ export function NavFavorites() {
                   side="right"
                   align="start"
                 >
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setEditingCollection(collection); setIsModalOpen(true); }}>
                     <span>Edit Collection</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <span>Collection Settings</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <span>View Content</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -129,6 +127,33 @@ export function NavFavorites() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
-    </SidebarGroup>
+      </SidebarGroup>
+      {isModalOpen && (
+    <CollectionSetupModal
+      isOpen={isModalOpen}
+      onClose={() => setIsModalOpen(false)}
+      existingCollection={editingCollection || undefined}
+      onSave={async (data) => {
+        if (!currentSite) return;
+        try {
+          const method = editingCollection ? 'PUT' : 'POST';
+          const url = editingCollection
+            ? `/api/admin/collections/${editingCollection.slug}?siteId=${currentSite.id}`
+            : `/api/admin/collections?siteId=${currentSite.id}`;
+          const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          if (!resp.ok) throw new Error('Failed to save');
+          await loadCollections();
+          setIsModalOpen(false);
+        } catch (error) {
+          console.error('Save collection error', error);
+        }
+      }}
+    />
+  )}
+    </>
   );
 } 

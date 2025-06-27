@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Trash2, HelpCircle, FileText, MapPinned, UsersRound, UserRoundCog, Cog } from 'lucide-react';
+import { Calendar, Trash2, HelpCircle, FileText, MapPinned, UsersRound, UserRoundCog, Cog, UserPlus, UserRoundPlusIcon, UserRoundPlus } from 'lucide-react';
 import { LuRocket } from "react-icons/lu";
 import {
   SidebarGroup,
@@ -21,14 +21,14 @@ const items = [
 //     icon: Calendar,
 //   },
   {
-    title: 'Team members',
-    url: '/admin/team',
-    icon: UserRoundCog,
-  },
-  {
     title: 'Site settings',
     url: '/admin/settings',
     icon: Cog,
+  },
+  {
+    title: 'Team members',
+    url: '/admin/team',
+    icon: UserRoundPlus,
   },
   {
     title: 'Sitemap',
