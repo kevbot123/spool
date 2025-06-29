@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { ContentItem, CollectionConfig, FieldConfig } from '@/types/cms';
 import {
   useReactTable,
@@ -22,6 +22,8 @@ import {
   MoreHorizontal,
   Trash2,
   GripVertical,
+  MoreVertical,
+  RefreshCcw,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -51,6 +53,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { TbLayoutSidebarRightExpand } from 'react-icons/tb';
 import { getFieldTypeIcon } from '@/lib/field-type-icons';
+import clsx from 'clsx';
 
 interface CollectionTableProps {
   collection: CollectionConfig;
@@ -71,6 +74,8 @@ interface RowMenuProps {
   onTogglePublish: () => void;
   isPublished: boolean;
   viewUrl: string;
+  hasPendingChanges?: boolean;
+  onRepublish?: () => void;
 }
 
 interface DraggableHeaderProps {
@@ -130,7 +135,7 @@ function DraggableHeader({ header, children, isLastHeader, fieldType }: Draggabl
         {/* Field type icon by default, drag handle on hover - only for draggable columns */}
         {isDraggableColumn && (
           <div
-            className="drag-handle cursor-grab active:cursor-grabbing relative"
+            className="drag-handle cursor-move active:cursor-grabbing relative"
             {...listeners}
             {...attributes}
             onMouseDown={(e) => e.stopPropagation()}
@@ -173,33 +178,30 @@ function DraggableHeader({ header, children, isLastHeader, fieldType }: Draggabl
   );
 }
 
-function RowMenu({ onDelete, onTogglePublish, isPublished, viewUrl }: RowMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [menuRef]);
-
+function RowMenu({ onDelete, onTogglePublish, isPublished, viewUrl, hasPendingChanges, onRepublish }: RowMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="py-1 !px-2 text-gray-500 hover:text-gray-800 hover:bg-gray-200/80 rounded-md"
+          className="py-1 !px-1 text-gray-500 hover:text-gray-800 hover:bg-gray-200/80 rounded-md"
           title="More options"
         >
-          <MoreHorizontal size={16} />
+          <MoreVertical size={16} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {isPublished && hasPendingChanges && onRepublish && (
+          <>
+            <DropdownMenuItem
+              onClick={onRepublish}
+              className="flex items-center w-full px-4 py-1 text-sm cursor-pointer text-blue-600 hover:bg-blue-50"
+            >
+              <RefreshCcw size={14} className="mr-2" />
+              <span>Republish edits</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem asChild>
           <a
             href={viewUrl}
@@ -329,6 +331,31 @@ export function CollectionTable({
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   
+  const pendingCellEditsCount = useMemo(() => {
+    return Array.from(pendingChanges.values()).reduce((count, change) => {
+      const { changes } = change;
+      const topLevelKeys = Object.keys(changes).filter(key => key !== 'data');
+      const dataKeysCount = (changes.data && typeof changes.data === 'object') ? Object.keys(changes.data).length : 0;
+      return count + topLevelKeys.length + dataKeysCount;
+    }, 0);
+  }, [pendingChanges]);
+
+  const hasPendingChangeForCell = useCallback((itemId: string, fieldName: string): boolean => {
+    const pendingChange = pendingChanges.get(itemId);
+    if (!pendingChange) return false;
+
+    const { changes } = pendingChange;
+    // System fields are at the top level of the `changes` object
+    const isSystemField = ['title', 'slug', 'body', 'seoTitle', 'seoDescription', 'ogImage'].includes(fieldName);
+
+    if (isSystemField) {
+        return Object.prototype.hasOwnProperty.call(changes, fieldName);
+    } else {
+        // Custom fields are inside the `data` property
+        return Object.prototype.hasOwnProperty.call(changes.data || {}, fieldName);
+    }
+  }, [pendingChanges]);
+
   const storageKey = `table-column-sizing-${collection.name}`;
   const orderStorageKey = `table-column-order-${collection.name}`;
 
@@ -354,40 +381,58 @@ export function CollectionTable({
     }
   }, [storageKey]);
 
-  // Load column order from localStorage
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(orderStorageKey);
-      if (saved) {
-        const savedOrder = JSON.parse(saved);
-        // Merge with initial order to handle new fields
-        const mergedOrder = [
-          ...savedOrder.filter((id: string) => initialColumnOrder.includes(id)),
-          ...initialColumnOrder.filter(id => !savedOrder.includes(id))
-        ];
-        setColumnOrder(mergedOrder);
-      }
-    } catch (error) {
-      console.error('Error reading column order from localStorage', error);
-    }
-  }, [orderStorageKey]); // Only depend on the storage key, not initialColumnOrder
-
-  // Define column order, excluding the fixed "more-actions" column
-  const initialColumnOrder = [
+  // Define column order, excluding the fixed "more-actions" column - memoized to prevent infinite re-renders
+  const initialColumnOrder = useMemo(() => [
+    'system_status',
     'system_title',
     'system_slug',
     'system_ogImage',
     ...collection.fields
       .filter(field => !['body', 'title', 'slug', 'ogImage', 'seoTitle', 'seoDescription'].includes(field.name))
       .map(field => `field_${field.name}`)
-  ];
+  ], [collection.fields]);
 
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(initialColumnOrder);
+
+  // Load column order from localStorage
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(orderStorageKey);
+      if (saved) {
+        const savedOrder = JSON.parse(saved);
+        
+        // If saved order doesn't include system_status, reset to initial order
+        if (!savedOrder.includes('system_status')) {
+          setColumnOrder(initialColumnOrder);
+          return;
+        }
+        
+        // Merge with initial order to handle new fields, but ensure status and title are first
+        const mergedOrder = [
+          'system_status',  // Always first
+          'system_title',   // Always second
+          ...savedOrder.filter((id: string) => 
+            id !== 'system_status' && 
+            id !== 'system_title' && 
+            initialColumnOrder.includes(id)
+          ),
+          ...initialColumnOrder.filter((id: string) => 
+            id !== 'system_status' && 
+            id !== 'system_title' && 
+            !savedOrder.includes(id)
+          )
+        ];
+        setColumnOrder(mergedOrder);
+      }
+    } catch (error) {
+      console.error('Error reading column order from localStorage', error);
+    }
+  }, [orderStorageKey]); // Removed initialColumnOrder from dependencies
 
   // Get draggable column IDs (exclude fixed columns)
   const draggableColumnIds = columnOrder.filter(columnId => 
     columnId && 
-    
+    columnId !== 'system_status' &&
     columnId !== 'system_title' &&
     columnId !== 'more-actions'
   );
@@ -414,29 +459,28 @@ export function CollectionTable({
     }
   }, [columnOrder, orderStorageKey]);
 
-  // Debounced save for draft changes
-  const debouncedSaveDraft = useCallback(
-    debounce(async (itemId: string, changes: Partial<ContentItem>) => {
+  const debouncedSaveDraft = useMemo(
+    () => debounce(async (itemId: string, changes: Partial<ContentItem>, slug: string) => {
       try {
-        await fetch(`/api/admin/content/${collection.slug}/${itemId}/draft`, {
+        await fetch(`/api/admin/content/${slug}/${itemId}/draft`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(changes),
         });
-        // Maybe add some UI feedback for draft saving
       } catch (error) {
         console.error('Failed to save draft:', error);
       }
     }, 1000), // Debounce by 1 second
-    [collection.slug]
+    []
   );
 
-  // On initial load, reconstruct pendingChanges from draft data in items
+  // On initial load, reconstruct pendingChanges from draft data in items (only for published items)
   useEffect(() => {
     const initialPendingChanges = new Map<string, PendingChange>();
     if (items) {
       items.forEach(item => {
-        if (item.draft && Object.keys(item.draft).length > 0) {
+        // Only load draft data for published items
+        if (item.publishedAt && item.draft && Object.keys(item.draft).length > 0) {
           initialPendingChanges.set(item.id, {
             itemId: item.id,
             changes: item.draft,
@@ -453,26 +497,48 @@ export function CollectionTable({
 
   useEffect(() => {
     // Sync localItems whenever `items` from props change.
-    // The `items` prop now contains the merged draft data from the server.
-    setLocalItems(items);
+    // For published items with draft data, merge the draft into the displayed values
+    const itemsWithDraftMerged = items.map(item => {
+      // Only merge draft data for published items
+      if (item.publishedAt && item.draft && Object.keys(item.draft).length > 0) {
+        return {
+          ...item,
+          ...item.draft,
+          data: {
+            ...(item.data || {}),
+            ...((item.draft as any).data || {}),
+          },
+        };
+      }
+      return item;
+    });
+    
+    setLocalItems(itemsWithDraftMerged);
   }, [items]);
   
-  // When pending changes are updated, save them as a draft
+  // When pending changes are updated, save them as a draft (only for published items)
   useEffect(() => {
     pendingChanges.forEach((change, itemId) => {
-      debouncedSaveDraft(itemId, change.changes);
+      const item = localItems.find(i => i.id === itemId);
+      // Only save drafts for published items
+      if (item?.publishedAt) {
+        debouncedSaveDraft(itemId, change.changes, collection.slug);
+      }
     });
-  }, [pendingChanges, debouncedSaveDraft]);
+  }, [pendingChanges, debouncedSaveDraft, localItems, collection.slug]);
 
   const saveAllChanges = useCallback(async () => {
     if (pendingChanges.size === 0) return;
+
+    debouncedSaveDraft.cancel();
 
     const changesToSave = Array.from(pendingChanges.values());
     const itemsToUpdate: ContentItem[] = [];
 
     for (const change of changesToSave) {
       const item = localItems.find(i => i.id === change.itemId);
-      if (item) {
+      // Only process changes for published items (unpublished items are saved immediately)
+      if (item && item.publishedAt) {
         const updatedItem = {
           ...item,
           ...change.changes,
@@ -498,20 +564,82 @@ export function CollectionTable({
           for (const updatedItem of updatedItems) {
             const index = newItems.findIndex(item => item.id === updatedItem.id);
             if (index !== -1) {
+              // Only update the saved item, preserving any local edits to other items
               newItems[index] = updatedItem;
             }
           }
           return newItems;
         });
         
-        setPendingChanges(new Map());
+        // Only clear pending changes for the items that were actually saved (published items)
+        setPendingChanges(prev => {
+          const newMap = new Map(prev);
+          itemsToUpdate.forEach(item => {
+            newMap.delete(item.id);
+          });
+
+          return newMap;
+        });
       } catch (error) {
         console.error('Failed to save batch items:', error);
       } finally {
         setSavingItems(new Set());
       }
     }
-  }, [pendingChanges, localItems, onBatchUpdate]);
+  }, [pendingChanges, localItems, onBatchUpdate, debouncedSaveDraft]);
+
+  const handleRepublishSingleItem = useCallback(async (itemId: string) => {
+    debouncedSaveDraft.cancel();
+    const change = pendingChanges.get(itemId);
+    const item = localItems.find(i => i.id === itemId);
+
+    if (!change || !item) return;
+
+    // This item must be published to have pending changes that can be republished
+    if (!item.publishedAt) return;
+
+    const updatedItem = {
+      ...item,
+      ...change.changes,
+      data: {
+        ...(item.data || {}),
+        ...((change.changes as any).data || {}),
+      },
+    };
+
+    setSavingItems(prev => new Set(prev).add(itemId));
+
+    try {
+      // onBatchUpdate expects an array
+      const [republishedItem] = await onBatchUpdate([updatedItem]);
+      
+      setLocalItems(prev => {
+        const newItems = [...prev];
+        const index = newItems.findIndex(i => i.id === republishedItem.id);
+        if (index !== -1) {
+          // The republished item from server has draft cleared, so it's the new source of truth
+          newItems[index] = republishedItem;
+        }
+        return newItems;
+      });
+      
+      // Remove from pending changes
+      setPendingChanges(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(itemId);
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to republish single item:', error);
+      // Maybe add some UI to show error, for now just log
+    } finally {
+      setSavingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+    }
+  }, [pendingChanges, localItems, onBatchUpdate, debouncedSaveDraft]);
 
   // Handle publish/unpublish toggle
   const handleTogglePublish = useCallback(async (itemId: string) => {
@@ -520,12 +648,6 @@ export function CollectionTable({
 
     const isCurrentlyPublished = !!item.publishedAt;
     const newPublishedAt = isCurrentlyPublished ? null : new Date().toISOString();
-
-    console.log('--- Toggling Publish Status ---');
-    console.log('Item ID:', itemId);
-    console.log('Current title:', item.title);
-    console.log('Currently published:', isCurrentlyPublished);
-    console.log('New publishedAt:', newPublishedAt);
 
     try {
       const response = await fetch(`/api/admin/content/${collection.slug}/${itemId}`, {
@@ -539,20 +661,41 @@ export function CollectionTable({
       }
 
       const updatedItem = await response.json();
-      console.log('Updated item received:', updatedItem);
       
-      // Update local state
+      // Update local state - only update publishedAt to preserve local edits
       setLocalItems(prev => prev.map(i => 
-        i.id === itemId ? updatedItem : i
+        i.id === itemId ? { ...i, publishedAt: updatedItem.publishedAt } : i
       ));
+
+      // If item was unpublished and has pending changes, remove from pending changes
+      // since unpublished items save immediately
+      if (isCurrentlyPublished && !updatedItem.publishedAt) {
+        setPendingChanges(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(itemId);
+          return newMap;
+        });
+      }
     } catch (error) {
       console.error('Failed to toggle publish status:', error);
     }
   }, [localItems, collection.slug]);
 
   // Handle field updates
-  const handleFieldUpdate = useCallback((itemId: string, field: string, value: any) => {
+  const handleFieldUpdate = useCallback(async (itemId: string, field: string, value: any) => {
+    const item = localItems.find(i => i.id === itemId);
+    if (!item) return;
+
     const isSystemField = ['title', 'slug', 'body', 'seoTitle', 'seoDescription', 'ogImage'].includes(field);
+    const isPublished = !!item.publishedAt;
+
+    // Get the current value to check if it actually changed
+    const currentValue = isSystemField ? (item as any)[field] : item.data?.[field];
+    
+    // Don't do anything if the value hasn't actually changed
+    if (currentValue === value) {
+      return;
+    }
 
     // Update local state immediately
     setLocalItems(prev => prev.map(item => {
@@ -566,28 +709,77 @@ export function CollectionTable({
       return item;
     }));
 
-    // Add to pending changes
-    setPendingChanges(prev => {
-      const newChanges = new Map(prev);
-      const existing = newChanges.get(itemId) || { itemId, changes: {} };
-      
-      let updatedChanges;
-      if (isSystemField) {
-        updatedChanges = { ...existing.changes, [field]: value };
-      } else {
-        updatedChanges = { 
-          ...existing.changes, 
-          data: { 
-            ...((existing.changes as any).data || {}), 
-            [field]: value 
-          } 
-        };
+    if (isPublished) {
+      // For published items, use the draft mechanism
+      setPendingChanges(prev => {
+        const newChanges = new Map(prev);
+        const existing = newChanges.get(itemId) || { itemId, changes: {} };
+        
+        let updatedChanges;
+        if (isSystemField) {
+          updatedChanges = { ...existing.changes, [field]: value };
+        } else {
+          updatedChanges = { 
+            ...existing.changes, 
+            data: { 
+              ...((existing.changes as any).data || {}), 
+              [field]: value 
+            } 
+          };
+        }
+        
+        newChanges.set(itemId, { itemId, changes: updatedChanges });
+        return newChanges;
+      });
+    } else {
+      // For unpublished items, save immediately
+      try {
+        setSavingItems(prev => new Set(prev).add(itemId));
+        
+        const updatePayload = isSystemField 
+          ? { [field]: value }
+          : { data: { ...(item.data || {}), [field]: value } };
+
+        const response = await fetch(`/api/admin/content/${collection.slug}/${itemId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatePayload),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save changes');
+        }
+
+        const updatedItem = await response.json();
+        
+        // Update local state with server response
+        setLocalItems(prev => prev.map(i => 
+          i.id === itemId ? updatedItem : i
+        ));
+      } catch (error) {
+        console.error('Failed to save changes:', error);
+        // Revert the local change on error
+        setLocalItems(prev => prev.map(item => {
+          if (item.id === itemId) {
+            if (isSystemField) {
+              return { ...item, [field]: (item as any)[field] };
+            } else {
+              const originalData = { ...item.data };
+              delete originalData[field];
+              return { ...item, data: originalData };
+            }
+          }
+          return item;
+        }));
+      } finally {
+        setSavingItems(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(itemId);
+          return newSet;
+        });
       }
-      
-      newChanges.set(itemId, { itemId, changes: updatedChanges });
-      return newChanges;
-    });
-  }, []);
+    }
+  }, [localItems, collection.slug]);
 
   const handleDelete = async (itemId: string) => {
     // No need to manage pending changes here anymore, as the item will be deleted
@@ -602,8 +794,24 @@ export function CollectionTable({
     }));
 
     try {
-      // Optimistically update UI
-      setLocalItems(updatedItems);
+      // Optimistically update UI - only update publishedAt to preserve local edits
+      setLocalItems(prev => prev.map(item => ({
+        ...item,
+        publishedAt: action === 'publish' ? (item.publishedAt || currentDate) : null,
+      })));
+
+      // If unpublishing, clear pending changes for items that were previously published
+      if (action === 'unpublish') {
+        setPendingChanges(prev => {
+          const newMap = new Map(prev);
+          localItems.forEach(item => {
+            if (item.publishedAt) { // Was published, now being unpublished
+              newMap.delete(item.id);
+            }
+          });
+          return newMap;
+        });
+      }
 
       // Persist to server
       await onBatchUpdate(updatedItems);
@@ -633,17 +841,8 @@ export function CollectionTable({
         const oldIndex = items.indexOf(active.id as string);
         const newIndex = items.indexOf(over.id as string);
         
-        console.log('Reordering columns:', {
-          activeId: active.id,
-          overId: over.id,
-          oldIndex,
-          newIndex,
-          currentOrder: items
-        });
-        
         if (oldIndex !== -1 && newIndex !== -1) {
           const newOrder = arrayMove(items, oldIndex, newIndex);
-          console.log('New order:', newOrder);
           return newOrder;
         }
         return items;
@@ -654,7 +853,29 @@ export function CollectionTable({
   // Create columns from collection fields
   const columns: ColumnDef<ContentItem>[] = [
 
-    // Title column (always first and sticky)
+    // Status column (sticky with title)
+    {
+      id: 'system_status',
+      header: '',
+      size: 40, // Small width for just the status indicator
+      enableSorting: false,
+      enableResizing: false,
+      cell: ({ row }) => {
+        const isPublished = !!row.original.publishedAt;
+        return (
+          <div className="flex items-center justify-center">
+            <div
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                isPublished ? 'bg-green-400' : 'bg-gray-300'
+              }`}
+              title={isPublished ? 'Published' : 'Draft'}
+            />
+          </div>
+        );
+      },
+    },
+
+    // Title column (always second and sticky)
     {
       id: 'system_title', // Unique ID to avoid conflicts
       accessorKey: 'title',
@@ -663,17 +884,9 @@ export function CollectionTable({
       cell: ({ row, getValue, column }) => {
         const isEditing = editingCell?.rowId === row.original.id && editingCell?.field === 'title';
         const isSaving = savingItems.has(row.original.id);
-        const isPublished = !!row.original.publishedAt;
 
         return (
-          <div className="relative flex items-center pr-20 group">
-            {/* Status indicator */}
-            <div
-              className={`ml-4 mr-2 w-2 h-2 rounded-full flex-shrink-0 ${
-                isPublished ? 'bg-green-400' : 'bg-gray-300'
-              }`}
-              title={isPublished ? 'Published' : 'Draft'}
-            />
+          <>
             <FieldEditor
               field={{ name: 'title', type: 'text', required: true, label: 'Title' }}
               value={getValue() as string}
@@ -695,16 +908,7 @@ export function CollectionTable({
                 </svg>
               </div>
             )}
-            {/* Open button */}
-            <button
-              onClick={() => setSelectedItem(row.original)}
-              className="absolute right-1.5 top-1/2 gap-1 -translate-y-1/2 flex items-center border border-gray-300 bg-white text-gray-600 hover:text-gray-800 rounded-sm pl-1 pr-2 py-[2px] text-[11px] font-medium opacity-0 group-hover:opacity-100 transition shadow"
-              title="Open"
-            >
-              <TbLayoutSidebarRightExpand size={16} />
-              OPEN
-            </button>
-          </div>
+          </>
         );
       },
     },
@@ -840,7 +1044,7 @@ export function CollectionTable({
                 width={column.getSize()}
                 authToken={authToken}
               />
-              {isSaving && pendingChanges.has(row.original.id) && (
+              {isSaving && (
                 <div className="absolute -right-6 top-1/2 -translate-y-1/2">
                   <svg className="animate-spin h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -854,32 +1058,49 @@ export function CollectionTable({
       })),
   ];
 
-  // Add the "more actions" column to the columns array
-  const allColumns = [
-    ...columns,
-    // Fixed "more actions" column on the right
-    {
-      id: 'more-actions',
-      header: '',
-      enableSorting: false,
-      enableResizing: false,
-      size: 50,
-      cell: ({ row }: { row: any }) => {
-        const isPublished = !!row.original.publishedAt;
-        const viewUrl = collection.urlPattern.replace('{slug}', row.original.slug);
-        
-        return (
-          <div className="flex items-center justify-center">
-            <RowMenu 
-              onDelete={() => handleDelete(row.original.id)} 
-              onTogglePublish={() => handleTogglePublish(row.original.id)}
-              isPublished={isPublished}
-              viewUrl={viewUrl}
-            />
-          </div>
-        );
-      },
-    },
+  // Manually order columns to ensure correct positioning
+  const statusColumn = columns.find(col => col.id === 'system_status')!;
+  const titleColumn = columns.find(col => col.id === 'system_title')!;
+  const otherColumns = columns.filter(col => col.id !== 'system_status' && col.id !== 'system_title');
+  
+  // Memoized row menu component to prevent re-renders
+  const MemoizedRowMenu = useMemo(() => {
+    return ({ row }: { row: any }) => {
+      const isPublished = !!row.original.publishedAt;
+      const viewUrl = collection.urlPattern.replace('{slug}', row.original.slug);
+      const hasPendingChanges = pendingChanges.has(row.original.id);
+      
+      return (
+        <div className="flex items-center justify-center">
+          <RowMenu 
+            onDelete={() => handleDelete(row.original.id)} 
+            onTogglePublish={() => handleTogglePublish(row.original.id)}
+            isPublished={isPublished}
+            viewUrl={viewUrl}
+            hasPendingChanges={hasPendingChanges}
+            onRepublish={() => handleRepublishSingleItem(row.original.id)}
+          />
+        </div>
+      );
+    };
+  }, [collection.urlPattern, handleDelete, handleTogglePublish, pendingChanges, handleRepublishSingleItem]);
+
+  // Add the "more actions" column
+  const moreActionsColumn: ColumnDef<ContentItem> = {
+    id: 'more-actions',
+    header: '',
+    enableSorting: false,
+    enableResizing: false,
+    size: 36,
+    cell: MemoizedRowMenu,
+  };
+
+  // Ensure columns are in the correct order: status, title, others, actions
+  const allColumns: ColumnDef<ContentItem>[] = [
+    statusColumn,
+    titleColumn,
+    ...otherColumns,
+    moreActionsColumn,
   ];
 
   const table = useReactTable({
@@ -888,15 +1109,14 @@ export function CollectionTable({
     state: {
       sorting,
       globalFilter,
-      columnSizing, // Added columnSizing state
-      columnOrder: [...columnOrder, 'more-actions'], // Ensure more-actions is always last
+      columnSizing,
+      columnOrder: [...columnOrder, 'more-actions'],
     },
-    enableColumnResizing: true, // Enable column resizing
-    columnResizeMode: 'onChange' as ColumnResizeMode, // Set resize mode
-    onColumnSizingChange: setColumnSizing, // Handler for column size changes
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange' as ColumnResizeMode,
+    onColumnSizingChange: setColumnSizing,
     onColumnOrderChange: (updater) => {
       const newOrder = typeof updater === 'function' ? updater([...columnOrder, 'more-actions']) : updater;
-      // Filter out more-actions from the new order since it should always be last
       setColumnOrder(newOrder.filter(id => id !== 'more-actions'));
     },
     onSortingChange: setSorting,
@@ -904,17 +1124,14 @@ export function CollectionTable({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    // debugTable: true, // Optional: for debugging
-    // debugHeaders: true,
-    // debugColumns: true,
   });
 
-                    return (
+  return (
     <div className="flex flex-col h-full min-w-0">
       <CollectionHeader
         collection={collection}
         itemCount={localItems.length}
-        pendingChangesCount={pendingChanges.size}
+        pendingChangesCount={pendingCellEditsCount}
         globalFilter={globalFilter}
         onGlobalFilterChange={setGlobalFilter}
         onSaveAll={pendingChanges.size > 0 ? saveAllChanges : undefined}
@@ -992,21 +1209,23 @@ export function CollectionTable({
                             );
                           }
                           
-                          const isSticky = header.id === 'system_title' || header.id === 'more-actions';
+                          const isSticky = header.id === 'system_status' || header.id === 'system_title' || header.id === 'more-actions';
+                          const isStatusColumn = header.id === 'system_status';
+                          const isTitleColumn = header.id === 'system_title';
+                          const isActionsColumn = header.id === 'more-actions';
+                          
                           return (
                             <th
                               key={header.id}
                               className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative ${
                                 isSticky ? 'sticky z-20 bg-gray-50' : ''
-                              } ${
-                                header.id === 'more-actions' ? 'right-0' : (header.id === 'system_title' ? 'left-0' : '')
-                              } ${header.column.getCanSort() && header.id !== 'more-actions' ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                              } ${header.column.getCanSort() && !isActionsColumn ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                               style={{ 
                                 width: header.getSize(), 
                                 minWidth: header.getSize(), 
                                 maxWidth: header.getSize(),
-                                left: header.id === 'system_title' ? 0 : undefined,
-                                right: header.id === 'more-actions' ? 0 : undefined,
+                                left: isStatusColumn ? 0 : (isTitleColumn ? 40 : undefined), // Title starts after 40px status column
+                                right: isActionsColumn ? 0 : undefined,
                               }}
                               onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
                             >
@@ -1027,10 +1246,10 @@ export function CollectionTable({
                                   className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
                                 />
                               )}
-                              {!isLastHeader && (
+                              {!isLastHeader && !isStatusColumn && (
                                 <div className="absolute top-0 right-0 h-full w-px bg-gray-200" />
                               )}
-                              {header.id === 'more-actions' && (
+                              {isActionsColumn && (
                                 <div className="absolute top-0 left-0 h-full w-px bg-gray-200" />
                               )}
                             </th>
@@ -1041,29 +1260,67 @@ export function CollectionTable({
                   ))}
                 </thead>
                 <tbody className="bg-white">
-                  {table.getRowModel().rows.map(row => (
-                    <tr key={row.id} className="hover:bg-gray-50 group border-b border-gray-200 last:border-b-0">
-                      {row.getVisibleCells().map((cell, index) => {
+                  {table.getRowModel().rows.map(row => {
+                    const isRowBeingEdited = editingCell?.rowId === row.original.id;
+                    return (
+                      <tr 
+                        key={row.id} 
+                        className={`hover:bg-gray-50 group border-b border-gray-200 last:border-b-0 ${
+                          isRowBeingEdited ? 'relative z-50' : ''
+                        }`}
+                      >
+                        {row.getVisibleCells().map((cell, index) => {
                         const isActionsColumn = cell.column.id === 'more-actions';
                         const isTitleColumn = cell.column.id === 'system_title';
+                        const isStatusColumn = cell.column.id === 'system_status';
                         const isLastCell = index === row.getVisibleCells().length - 1;
+                        const isSticky = isStatusColumn || isTitleColumn || isActionsColumn;
+
+                        let fieldName = '';
+                        if (cell.column.id.startsWith('system_')) {
+                          fieldName = cell.column.id.replace('system_', '');
+                        } else if (cell.column.id.startsWith('field_')) {
+                          fieldName = cell.column.id.replace('field_', '');
+                        }
+
+                        const hasPendingChange = fieldName ? hasPendingChangeForCell(row.original.id, fieldName) : false;
+                        const isCellBeingEdited = editingCell?.rowId === row.original.id && editingCell?.field === fieldName;
+
+                        const cellClassName = clsx(
+                          'relative text-sm text-gray-900',
+                          {
+                            'sticky z-10': isSticky,
+                            'group': isTitleColumn,
+                            'bg-blue-50 group-hover:bg-blue-100': hasPendingChange && !isCellBeingEdited,
+                            'bg-white group-hover:bg-gray-50': isSticky && !hasPendingChange,
+                          }
+                        );
 
                         return (
                           <td
                             key={cell.id}
-                            className={`relative text-sm text-gray-900 ${
-                              isActionsColumn || isTitleColumn ? 'sticky z-10 bg-white group-hover:bg-gray-50' : ''
-                            }`}
+                            className={cellClassName}
                             style={{
                               width: cell.column.getSize(),
                               minWidth: cell.column.getSize(),
                               maxWidth: cell.column.getSize(),
-                              left: isTitleColumn ? 0 : undefined,
+                              left: isStatusColumn ? 0 : (isTitleColumn ? 40 : undefined), // Title starts after 40px status column
                               right: isActionsColumn ? 0 : undefined,
                             }}
                           >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            {!isLastCell && (
+                            {/* Open button for title column */}
+                            {isTitleColumn && (
+                              <button
+                                onClick={() => setSelectedItem(row.original)}
+                                className="absolute right-1.5 top-1/2 gap-1 -translate-y-1/2 flex items-center border border-gray-300 bg-white text-gray-600 hover:text-gray-800 rounded-sm pl-1 pr-2 py-[2px] text-[11px] font-medium opacity-0 group-hover:opacity-100 transition shadow z-10"
+                                title="Open"
+                              >
+                                <TbLayoutSidebarRightExpand size={16} />
+                                OPEN
+                              </button>
+                            )}
+                            {!isLastCell && !isStatusColumn && (
                               <div className="absolute top-0 right-0 h-full w-px bg-gray-200" />
                             )}
                             {isActionsColumn && (
@@ -1072,8 +1329,9 @@ export function CollectionTable({
                           </td>
                         )
                       })}
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <DragOverlay>

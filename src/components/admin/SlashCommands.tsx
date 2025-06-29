@@ -5,13 +5,13 @@ import { ReactRenderer } from '@tiptap/react';
 import Suggestion, { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
 import tippy, { Instance as TippyInstance, Props as TippyProps } from 'tippy.js';
 import {
-  IconH1, IconH2, IconH3, IconList, IconListNumbers, IconPhoto, IconQuote, IconCode, IconSeparator
-} from './EditorIcons'; // Assuming EditorIcons.tsx exports these
+  Heading1, Heading2, Heading3, List, ListOrdered, Image as ImageIcon, Quote, Code, Minus,
+} from 'lucide-react';
 
 interface CommandItem {
   title: string;
   description: string;
-  icon: JSX.Element;
+  icon: React.ReactElement;
   command: ({ editor, range }: { editor: Editor; range: Range }) => void;
 }
 
@@ -108,7 +108,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Heading 1',
     description: 'Large section heading',
-    icon: <IconH1 />,
+    icon: <Heading1 className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run();
     },
@@ -116,7 +116,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Heading 2',
     description: 'Medium section heading',
-    icon: <IconH2 />,
+    icon: <Heading2 className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run();
     },
@@ -124,7 +124,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Heading 3',
     description: 'Small section heading',
-    icon: <IconH3 />,
+    icon: <Heading3 className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
     },
@@ -132,7 +132,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Bullet List',
     description: 'Create a simple bullet list',
-    icon: <IconList />,
+    icon: <List className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
@@ -140,7 +140,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Numbered List',
     description: 'Create a numbered list',
-    icon: <IconListNumbers />,
+    icon: <ListOrdered className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleOrderedList().run();
     },
@@ -148,7 +148,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Image',
     description: 'Add an image from URL',
-    icon: <IconPhoto />,
+    icon: <ImageIcon className="w-4 h-4" />,
     command: ({ editor, range }) => {
       const url = window.prompt('Enter image URL');
       if (url) {
@@ -159,7 +159,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Blockquote',
     description: 'Capture a quote',
-    icon: <IconQuote />,
+    icon: <Quote className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBlockquote().run();
     },
@@ -167,7 +167,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Code Block',
     description: 'Capture a code snippet',
-    icon: <IconCode />,
+    icon: <Code className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
     },
@@ -175,7 +175,7 @@ const commandItems = (editor: Editor): CommandItem[] => [
   {
     title: 'Horizontal Rule',
     description: 'Insert a horizontal line',
-    icon: <IconSeparator />,
+    icon: <Minus className="w-4 h-4" />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setHorizontalRule().run();
     },

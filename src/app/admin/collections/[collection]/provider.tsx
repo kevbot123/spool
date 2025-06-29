@@ -18,30 +18,44 @@ export function AdminContentProvider({ collection, initialItems, authToken }: Ad
   const handleBatchUpdate = async (updatedItems: ContentItem[]) => {
     try {
       const results = await Promise.all(updatedItems.map(item => {
-        // Exclude properties from the 'data' object that are already top-level
-        const { 
-          slug: _slug, 
-          title: _title, 
-          body: _body, 
-          id: _id,
-          ...restOfData 
-        } = item.data || {};
         
+        // Correctly separate system fields from custom data fields
+        const {
+          // System fields that are not part of the update payload
+          id,
+          collection: itemCollection,
+          createdAt,
+          updatedAt,
+          status,
+          draft,
+
+          // System fields to include in the payload
+          title,
+          slug,
+          body,
+          seoTitle,
+          seoDescription,
+          ogImage,
+          publishedAt,
+          
+          // The rest is the 'data' object with custom fields
+          data,
+        } = item;
+
         const updatePayload: any = {
-          ...restOfData,
-          title: item.title,
-          slug: item.slug,
-          body: item.body,
-          seoTitle: item.seoTitle,
-          seoDescription: item.seoDescription,
-          ogImage: item.ogImage,
-          featured: item.data?.featured,
-          publishedAt: item.publishedAt, // This will be undefined for unpublished items
+          title,
+          slug,
+          body,
+          seoTitle,
+          seoDescription,
+          ogImage,
+          publishedAt,
+          data,
         };
         
         console.log(`🚀 Sending payload for ${item.id}:`, updatePayload);
         
-        return fetch(`/api/admin/content/${collection.slug}/${item.id}`, {
+        return fetch(`/api/admin/content/${itemCollection}/${item.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatePayload),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useEditor, EditorContent, BubbleMenu, FloatingMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -10,7 +10,13 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { lowlight } from 'lowlight';
 import { Markdown } from 'tiptap-markdown';
 import { SlashCommands } from './SlashCommands';
-import { IconBold, IconItalic, IconStrikethrough, IconH2, IconH3, IconList, IconListNumbers, IconPhoto, IconLink, IconQuote, IconSeparator, IconCode } from './EditorIcons';
+import { 
+  Bold, Italic, Strikethrough, Heading2, Heading3, List, ListOrdered, 
+  Image as ImageIcon, Link as LinkIcon, Quote, Minus, Code, 
+  TextQuote,
+  Heading4,
+  Link2
+} from 'lucide-react';
 
 interface TipTapEditorProps {
   content: string;
@@ -169,80 +175,129 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
 
   const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
+  const buttonGroups = [
+    [
+      {
+        name: 'bold',
+        title: 'Bold',
+        icon: <Bold className="w-3.5 h-3.5" />,
+        onClick: () => editor.chain().focus().toggleBold().run(),
+        isActive: editor.isActive('bold'),
+      },
+      {
+        name: 'italic',
+        title: 'Italic',
+        icon: <Italic className="w-3.5 h-3.5" />,
+        onClick: () => editor.chain().focus().toggleItalic().run(),
+        isActive: editor.isActive('italic'),
+      },
+      {
+        name: 'strike',
+        title: 'Strikethrough',
+        icon: <Strikethrough className="w-3.5 h-3.5" />,
+        onClick: () => editor.chain().focus().toggleStrike().run(),
+        isActive: editor.isActive('strike'),
+      },
+      {
+        name: 'link',
+        title: 'Link / Unlink',
+        icon: <Link2 className="w-4 h-4" />,
+        onClick: toggleLink,
+        isActive: editor.isActive('link'),
+      },
+    ],
+    [
+      {
+        name: 'heading2',
+        title: 'Heading 2',
+        icon: <Heading2 className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+        isActive: editor.isActive('heading', { level: 2 }),
+      },
+      {
+        name: 'heading3',
+        title: 'Heading 3',
+        icon: <Heading3 className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+        isActive: editor.isActive('heading', { level: 3 }),
+      },
+      {
+        name: 'heading4',
+        title: 'Heading 4',
+        icon: <Heading4 className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+        isActive: editor.isActive('heading', { level: 4 }),
+      },
+    ],
+    [
+      {
+        name: 'bulletList',
+        title: 'Bullet List',
+        icon: <List className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleBulletList().run(),
+        isActive: editor.isActive('bulletList'),
+      },
+      {
+        name: 'orderedList',
+        title: 'Ordered List',
+        icon: <ListOrdered className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleOrderedList().run(),
+        isActive: editor.isActive('orderedList'),
+      },
+      {
+        name: 'blockquote',
+        title: 'Blockquote',
+        icon: <TextQuote className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleBlockquote().run(),
+        isActive: editor.isActive('blockquote'),
+      },
+      {
+        name: 'codeBlock',
+        title: 'Code Block',
+        icon: <Code className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().toggleCodeBlock().run(),
+        isActive: editor.isActive('codeBlock'),
+      },
+    ],
+    [
+      { 
+        name: 'image', 
+        title: 'Insert Image', 
+        icon: <ImageIcon className="w-3.5 h-3.5" />, 
+        onClick: addImage, 
+        isActive: false 
+      },
+      {
+        name: 'horizontalRule',
+        title: 'Horizontal Rule',
+        icon: <Minus className="w-4 h-4" />,
+        onClick: () => editor.chain().focus().setHorizontalRule().run(),
+        isActive: false,
+      },
+    ],
+  ];
+
+  const bubbleMenuButtons = buttonGroups
+    .flat()
+    .filter(button => !['image', 'horizontalRule', 'codeBlock'].includes(button.name));
+
   return (
-    <div className="border border-gray-300 rounded-md relative flex flex-col overflow-hidden">
+    <div className="border border rounded-lg relative flex flex-col overflow-hidden">
       <div className="flex flex-wrap items-center gap-1 p-1 border-b border-gray-200 bg-gray-50">
-        <ToolbarButton
-          icon={<IconBold />}
-          onClick={() => editor?.chain().focus().toggleBold().run()}
-          isActive={editor?.isActive('bold')}
-          title="Bold"
-        />
-        <ToolbarButton
-          icon={<IconItalic />}
-          onClick={() => editor?.chain().focus().toggleItalic().run()}
-          isActive={editor?.isActive('italic')}
-          title="Italic"
-        />
-        <ToolbarButton
-          icon={<IconStrikethrough />}
-          onClick={() => editor?.chain().focus().toggleStrike().run()}
-          isActive={editor?.isActive('strike')}
-          title="Strikethrough"
-        />
-        <div className="w-px h-5 bg-gray-300 mx-1" />
-        <ToolbarButton
-          icon={<IconH2 />}
-          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-          isActive={editor?.isActive('heading', { level: 2 })}
-          title="Heading 2"
-        />
-        <ToolbarButton
-          icon={<IconH3 />}
-          onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
-          isActive={editor?.isActive('heading', { level: 3 })}
-          title="Heading 3"
-        />
-        <div className="w-px h-5 bg-gray-300 mx-1" /> {/* Separator after H2/H3 */}
-        <ToolbarButton
-          icon={<IconList />}
-          onClick={() => editor?.chain().focus().toggleBulletList().run()}
-          isActive={editor?.isActive('bulletList')}
-          title="Bullet List"
-        />
-        <ToolbarButton
-          icon={<IconListNumbers />}
-          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-          isActive={editor?.isActive('orderedList')}
-          title="Ordered List"
-        />
-        <div className="w-px h-5 bg-gray-300 mx-1" /> {/* Separator after Lists */}
-        <ToolbarButton
-          icon={<IconQuote />}
-          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-          isActive={editor?.isActive('blockquote')}
-          title="Blockquote"
-        />
-        <ToolbarButton
-          icon={<IconCode />}
-          onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-          isActive={editor?.isActive('codeBlock')}
-          title="Code Block"
-        />
-        <div className="w-px h-5 bg-gray-300 mx-1" /> {/* Separator before original IconPhoto */}
-        <ToolbarButton icon={<IconPhoto />} onClick={addImage} title="Insert Image" />
-        <ToolbarButton
-          icon={<IconLink />}
-          onClick={toggleLink}
-          isActive={editor?.isActive('link')}
-          title="Link / Unlink"
-        />
-        <div className="w-px h-5 bg-gray-300 mx-1" />
-        <ToolbarButton
-          icon={<IconSeparator />}
-          onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-          title="Horizontal Rule"
-        />
+        {buttonGroups.map((group, groupIndex) => (
+          <React.Fragment key={groupIndex}>
+            {group.map(button => (
+              <ToolbarButton
+                key={button.name}
+                icon={button.icon}
+                onClick={button.onClick}
+                isActive={button.isActive}
+                title={button.title}
+              />
+            ))}
+            {groupIndex < buttonGroups.length - 1 && <div className="w-px h-5 bg-gray-300 mx-1" />}
+          </React.Fragment>
+        ))}
       </div>
 
       <style jsx global>{`
@@ -262,76 +317,16 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
         }}
       >
         <div onClick={stopPropagation} className="bg-white border border-gray-200 shadow-lg rounded px-2 py-1 flex gap-1">
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('bold') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            title="Bold"
-          >
-            <IconBold />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('italic') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            title="Italic"
-          >
-            <IconItalic />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('strike') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            title="Strikethrough"
-          >
-            <IconStrikethrough />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            
-          >
-            <IconH2 />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('heading', { level: 3 }) ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            title="Heading 3"
-          >
-            <IconH3 />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('bulletList') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            
-          >
-            <IconList />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('orderedList') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            
-          >
-            <IconListNumbers />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('blockquote') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            
-          >
-            <IconQuote />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('codeBlock') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            
-          >
-            <IconCode />
-          </button>
-          <button
-            onClick={toggleLink}
-            className={`p-1 rounded hover:bg-gray-100 ${editor.isActive('link') ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
-            title="Link"
-          >
-            <IconLink />
-          </button>
+          {bubbleMenuButtons.map(button => (
+            <button
+              key={button.name}
+              onClick={button.onClick}
+              className={`p-1 rounded hover:bg-gray-100 ${button.isActive ? 'bg-gray-100 text-primary' : 'text-gray-600'}`}
+              title={button.title}
+            >
+              {button.icon}
+            </button>
+          ))}
         </div>
       </BubbleMenu>
 

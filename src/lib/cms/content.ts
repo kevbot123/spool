@@ -184,6 +184,13 @@ export class ContentManager {
     if (data.status !== undefined) updateData.status = data.status;
     if (data.publishedAt !== undefined) updateData.published_at = data.publishedAt;
 
+    // If this is a content update (not just a publish status change), clear draft data
+    // This happens when the "republish" button is clicked to publish draft changes
+    const isContentUpdate = data.data || data.body !== undefined || data.seoTitle !== undefined || data.seoDescription !== undefined || data.title !== undefined || data.slug !== undefined;
+    if (isContentUpdate) {
+      updateData.draft_data = null; // Clear draft data when publishing changes
+    }
+
     // Handle data object - merge with existing data
     if (data.data || data.body !== undefined || data.seoTitle !== undefined || data.seoDescription !== undefined) {
       const currentItem = await this.getContentItemById(collectionSlug, id);
@@ -269,9 +276,38 @@ export class ContentManager {
   }
 
   async updateDraftById(collectionSlug: string, id: string, draftData: Record<string, any>): Promise<ContentItem | null> {
-    // For now, treat draft updates the same as regular updates
-    // In the future, we could implement a separate drafts table
-    return this.updateContentById(collectionSlug, id, draftData);
+    const supabase = await this.getSupabase();
+    
+    // Get the current item to check if it's published
+    const currentItem = await this.getContentItemById(collectionSlug, id);
+    if (!currentItem) return null;
+    
+    // Only save draft data for published items
+    if (!currentItem.publishedAt) {
+      // For unpublished items, save changes directly
+      return this.updateContentById(collectionSlug, id, draftData);
+    }
+    
+    // For published items, save draft data separately
+    const { data: updated, error } = await supabase
+      .from('content_items')
+      .update({
+        draft_data: draftData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        collections!inner(slug, site_id)
+      `)
+      .single();
+
+    if (error) {
+      console.error('Error updating draft:', error);
+      return null;
+    }
+
+    return this.mapDatabaseToContentItem(updated);
   }
 
   private mapDatabaseToContentItem(dbItem: any): ContentItem {
@@ -279,14 +315,18 @@ export class ContentManager {
       id: dbItem.id,
       slug: dbItem.slug,
       collection: dbItem.collections.slug,
-      data: {
-        title: dbItem.title || '',
-        ...dbItem.data || {},
-      },
+      title: dbItem.title || '',
+      body: dbItem.data?.body || '',
+      data: dbItem.data || {},
       status: dbItem.status || 'draft',
       createdAt: dbItem.created_at,
       updatedAt: dbItem.updated_at,
       publishedAt: dbItem.published_at,
+      draft: dbItem.draft_data || undefined, // Include draft data for published items
+      // SEO fields
+      seoTitle: dbItem.data?.seoTitle,
+      seoDescription: dbItem.data?.seoDescription,
+      ogImage: dbItem.data?.ogImage,
       meta: {
         lastEditedBy: dbItem.author_id,
         version: 1, // TODO: Implement versioning

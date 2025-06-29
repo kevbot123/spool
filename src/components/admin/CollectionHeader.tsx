@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, MoreHorizontal } from 'lucide-react';
+import { Search, MoreHorizontal, Plus, MoreVertical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,8 +27,8 @@ function BulkActionsDropdown({ onPublishAll, onUnpublishAll, onEditCollection, c
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-          <MoreHorizontal className="h-4 w-4" />
+        <Button variant="ghost" size="sm" className="h-8 w-7 p-0">
+          <MoreVertical className="h-4 w-4" />
           <span className="sr-only">Open bulk actions menu</span>
         </Button>
       </DropdownMenuTrigger>
@@ -86,40 +86,42 @@ export function CollectionHeader({
       <div className="flex items-center gap-4 min-w-0">
         {/* Collection info */}
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="secondary" className="text-xs whitespace-nowrap">
+          {/* <Badge variant="secondary" className="text-xs whitespace-nowrap">
             {itemCount} items
-          </Badge>
+          </Badge> */}
           {pendingChangesCount > 0 && (
-            <Badge variant="secondary" className="text-xs whitespace-nowrap bg-red-100 text-red-700">
-              {pendingChangesCount} unsaved
+            <Badge variant="secondary" className="text-xs font-medium whitespace-nowrap bg-blue-50 text-blue-700">
+              {pendingChangesCount} pending edit{pendingChangesCount > 1 ? 's' : ''}
             </Badge>
           )}
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2 shrink-0">
+
+          {/* Save All Button */}
+          {pendingChangesCount > 0 && onSaveAll && (
+            <Button onClick={onSaveAll} size="sm" className="whitespace-nowrap">
+              Republish all ({pendingChangesCount})
+            </Button>
+          )}
+
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
               placeholder="Search..."
               value={globalFilter}
               onChange={(e) => onGlobalFilterChange(e.target.value)}
-              className="pl-9 w-40 md:w-48"
+              className="pl-8 w-40 md:w-48 max-h-[32px]"
             />
           </div>
 
-          {/* Save All Button */}
-          {pendingChangesCount > 0 && onSaveAll && (
-            <Button onClick={onSaveAll} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 whitespace-nowrap">
-              Save All ({pendingChangesCount})
-            </Button>
-          )}
-
           {/* Create Button */}
-          <Button onClick={onCreate} size="sm" className="whitespace-nowrap">
-            Add new
+          <Button onClick={onCreate} size="sm" className="whitespace-nowrap" variant="outline">
+            <Plus className="w-4 h-4" />
+            New item
           </Button>
 
           {/* Bulk Actions */}

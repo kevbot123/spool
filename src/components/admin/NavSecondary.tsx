@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Trash2, HelpCircle, FileText, MapPinned, UsersRound, UserRoundCog, Cog, UserPlus, UserRoundPlusIcon, UserRoundPlus } from 'lucide-react';
+import { Calendar, Trash2, HelpCircle, FileText, MapPinned, UsersRound, UserRoundCog, Cog, UserPlus, UserRoundPlusIcon, UserRoundPlus, FileJson } from 'lucide-react';
 import { LuRocket } from "react-icons/lu";
 import {
   SidebarGroup,
@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { PLANS } from '@/lib/config/pricing';
+import { usePathname } from 'next/navigation';
 
 const items = [
 //   {
@@ -36,6 +37,11 @@ const items = [
     icon: MapPinned,
   },
   {
+    title: 'Redirects',
+    url: '/admin/redirects',
+    icon: FileJson,
+  },
+  {
     title: 'Help',
     url: '/help',
     icon: HelpCircle,
@@ -52,6 +58,8 @@ export function NavSecondary() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  const pathname = usePathname();
 
   useEffect(() => {
     const getUser = async () => {
@@ -117,7 +125,7 @@ export function NavSecondary() {
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild>
+              <SidebarMenuButton asChild isActive={pathname === item.url}>
                 <Link href={item.url}>
                   <item.icon />
                   <span>{item.title}</span>
