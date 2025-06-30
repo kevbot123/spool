@@ -5,6 +5,8 @@ import TextareaAutosize from 'react-textarea-autosize';
 import { FieldConfig } from '@/types/cms';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
+import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
+import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
 
 interface FieldEditorProps {
   field: FieldConfig;
@@ -41,8 +43,6 @@ export function FieldEditor({
   useEffect(() => {
     setEditValue(value);
   }, [value]);
-
-
 
   const handleSave = () => {
     onSave(editValue);
@@ -131,6 +131,57 @@ export function FieldEditor({
     }
   };
 
+  // Handle select and multiselect fields specially - no editing state, direct interaction
+  if (field.type === 'select' || field.type === 'multiselect') {
+    return (
+      <div className="w-full h-full flex items-center px-0 py-0">
+        {field.type === 'select' ? (
+          <NotionSelect
+            options={field.options || []}
+            value={value || null}
+            onChange={(newValue) => {
+              onSave(newValue);
+            }}
+            placeholder="Select an option..."
+            className="w-full border-none shadow-none hover:bg-gray-50"
+          />
+        ) : (
+          <NotionMultiSelect
+            options={field.options || []}
+            value={value || []}
+            onChange={(newValue) => {
+              onSave(newValue);
+            }}
+            placeholder="Select options..."
+            className="w-full border-none shadow-none hover:bg-gray-50"
+          />
+        )}
+      </div>
+    );
+  }
+
+  // NEW: Handle datetime and date fields with direct inline DatePicker interaction
+  if (field.type === ('datetime' as any) || field.type === 'date') {
+    return (
+      <div className="w-full h-full flex items-center px-0 py-0">
+        <DatePicker
+          date={value ? new Date(value) : undefined}
+          setDate={(date) => {
+            if (date) {
+              onSave(date.toISOString());
+            } else {
+              onSave(null);
+            }
+          }}
+          disabled={() => false}
+          // Make the trigger look inline/notion-like
+          className="w-full h-8 px-2 border-0 shadow-none hover:bg-gray-50 justify-start text-left font-normal"
+          withTime={field.type === 'datetime'}
+        />
+      </div>
+    );
+  }
+
   // Handle image fields specially - no need for editing state
   if (field.type === 'image') {
     const highlight = isDragging ? 'ring-2 ring-indigo-400' : '';
@@ -181,6 +232,28 @@ export function FieldEditor({
         const adjustedWidth = width;
         
         switch (field.type) {
+          case 'number':
+            return (
+              <input
+                ref={inputRef as React.RefObject<HTMLInputElement>}
+                type="number"
+                value={editValue ?? ''}
+                onChange={(e) => {
+                  setEditValue(e.target.value);
+                }}
+                onBlur={() => {
+                  const num = Number(editValue);
+                  if (!isNaN(num)) {
+                    onSave(num);
+                  } else {
+                    setEditValue(value); // revert invalid
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                className="absolute block rounded-md border border-gray-200 bg-white px-2 py-1 text-sm shadow-lg focus:outline-none z-50"
+                style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset }}
+              />
+            );
           case 'datetime':
             return (
               <div className="absolute left-0 top-0 z-50" style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset }}>
@@ -201,12 +274,31 @@ export function FieldEditor({
 
           case 'text':
           default:
+            const isSlugField = field.name === 'slug';
             return (
               <TextareaAutosize
                 ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                 value={editValue || ''}
-                onChange={(e) => setEditValue(e.target.value)}
-                onBlur={handleSave}
+                onChange={(e) => {
+                  const inputValue = e.target.value;
+                  if (isSlugField) {
+                    // Apply real-time slug validation
+                    const cleanedValue = validateSlugInput(inputValue);
+                    setEditValue(cleanedValue);
+                  } else {
+                    setEditValue(inputValue);
+                  }
+                }}
+                onBlur={() => {
+                  if (isSlugField) {
+                    // On blur, create a fully valid slug
+                    const finalSlug = createUrlSafeSlug(editValue || '');
+                    setEditValue(finalSlug);
+                    onSave(finalSlug);
+                  } else {
+                    handleSave();
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 className="absolute block rounded-md border border-gray-200 bg-white px-4 py-2 text-sm shadow-lg focus:outline-none resize-none z-50"
                 style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset, backgroundColor: 'white' }}
@@ -215,32 +307,6 @@ export function FieldEditor({
                 cacheMeasurements
               />
             );
-          case 'select':
-            return (
-              <div className="absolute left-0 top-0 z-50" style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset }}>
-                <div className="bg-white rounded-md shadow-lg border border-gray-200">
-                  <select
-                    ref={inputRef as React.RefObject<HTMLSelectElement>}
-                    value={editValue || ''}
-                    onChange={(e) => {
-                      setEditValue(e.target.value);
-                      onSave(e.target.value);
-                    }}
-                    onBlur={onCancel}
-                    onKeyDown={handleKeyDown}
-                    className="w-full block px-4 py-2 text-sm focus:outline-none"
-                  >
-                    <option value="">Select...</option>
-                    {field.options?.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            );
-
         }
       })()}
     </>
@@ -265,7 +331,30 @@ function renderValue(field: FieldConfig, value: any): React.ReactNode {
         />
       );
 
+    case 'select':
+      return <div className="truncate">{value || '—'}</div>;
 
+    case 'multiselect':
+      if (Array.isArray(value) && value.length > 0) {
+        return (
+          <div className="flex flex-wrap gap-1">
+            {value.slice(0, 2).map((item: string, index: number) => (
+              <span
+                key={index}
+                className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200"
+              >
+                {item}
+              </span>
+            ))}
+            {value.length > 2 && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-50 text-gray-600 border border-gray-200">
+                +{value.length - 2}
+              </span>
+            )}
+          </div>
+        );
+      }
+      return <span className="text-gray-400">—</span>;
 
     case 'image':
       return (

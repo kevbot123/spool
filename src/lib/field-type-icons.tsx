@@ -6,7 +6,8 @@ import {
   ToggleRight, 
   Calendar, 
   Clock, 
-  ChevronDownSquare, 
+  ChevronDown, 
+  ListFilter,
   Braces,
   LucideIcon
 } from 'lucide-react';
@@ -27,7 +28,8 @@ export const FIELD_TYPES: FieldTypeInfo[] = [
   { value: 'boolean', label: 'Boolean', description: 'True/false toggle', icon: ToggleRight },
   { value: 'date', label: 'Date', description: 'Date picker', icon: Calendar },
   { value: 'datetime', label: 'Date & Time', description: 'Date and time picker', icon: Clock },
-  { value: 'select', label: 'Select', description: 'Dropdown selection', icon: ChevronDownSquare },
+  { value: 'select', label: 'Select', description: 'Single dropdown selection', icon: ChevronDown },
+  { value: 'multiselect', label: 'Multi-select', description: 'Multiple dropdown selections', icon: ListFilter },
   { value: 'json', label: 'JSON', description: 'Raw JSON data', icon: Braces }
 ];
 

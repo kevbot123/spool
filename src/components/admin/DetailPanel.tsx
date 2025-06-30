@@ -17,6 +17,9 @@ import { useSite } from '@/context/SiteContext';
 import { ChevronsRight, ExternalLink, Link2, SquareArrowOutUpRight, TableProperties, TextCursorInput } from 'lucide-react';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getFieldTypeIcon } from '@/lib/field-type-icons';
+import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
+import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
 
 const SYSTEM_DATE_FIELDS = [
   'createdAt', 'updatedAt', 'publishedAt', 'datePublished', 'lastModified',
@@ -38,7 +41,11 @@ interface DetailPanelProps {
   collection: CollectionConfig;
   onClose: () => void;
   onFieldUpdate: (itemId: string, field: string, value: any) => void;
+  onTogglePublish: (itemId: string) => Promise<void> | void;
   authToken: string; // Added to pass to TipTapEditor for media uploads
+  hasPendingChanges?: boolean; // Add this to track pending changes
+  onRepublish?: (itemId: string) => Promise<void>; // Add republish handler
+  onCollectionUpdate?: (updatedCollection: CollectionConfig) => void; // Add collection update handler
 }
 
 export function DetailPanel({
@@ -46,7 +53,11 @@ export function DetailPanel({
   collection,
   onClose,
   onFieldUpdate,
+  onTogglePublish,
   authToken, // Added authToken prop
+  hasPendingChanges = false,
+  onRepublish,
+  onCollectionUpdate,
 }: DetailPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { currentSite } = useSite();
@@ -61,35 +72,71 @@ export function DetailPanel({
   // Local copy of collection to allow live updates
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
 
-  const { register, handleSubmit, setValue, watch, formState: { defaultValues } } = useForm<any>({
-    defaultValues: {
-      title: item.title,
-      slug: item.slug,
-      seoTitle: item.seoTitle || '',
-      seoDescription: item.seoDescription || '',
-      ogImage: item.ogImage || '',
-      body: item.body || '',
-      description: (item.data as any)?.description || '',
-      status: item.status || (item.data as any)?.status || 'draft',
-      datePublished: (item as any).datePublished || (item.data as any)?.datePublished || item.publishedAt || '',
-      dateLastModified: (item as any).dateLastModified || (item.data as any)?.dateLastModified || item.updatedAt || '',
-      ...item.data
+  const { register, handleSubmit, setValue, watch, formState: { defaultValues }, reset } = useForm<any>();
+
+  // Set form values whenever item changes
+  useEffect(() => {
+    // For the title, check for draft data first, then item.title (don't fallback to data.title as it's outdated)
+    const title = (item.draft?.title !== undefined ? item.draft.title : item.title) || '';
+    setValue('title', title);
+    
+    const slug = (item.draft?.slug !== undefined ? item.draft.slug : item.slug) || '';
+    setValue('slug', slug);
+    
+    const seoTitle = (item.draft?.seoTitle !== undefined ? item.draft.seoTitle : item.seoTitle) || '';
+    setValue('seoTitle', seoTitle);
+    
+    const seoDescription = (item.draft?.seoDescription !== undefined ? item.draft.seoDescription : item.seoDescription) || '';
+    setValue('seoDescription', seoDescription);
+    
+    const ogImage = (item.draft?.ogImage !== undefined ? item.draft.ogImage : item.ogImage) || '';
+    setValue('ogImage', ogImage);
+    
+    const body = (item.draft?.body !== undefined ? item.draft.body : item.body) || '';
+    setValue('body', body);
+    
+    const description = (item.draft?.data?.description !== undefined ? item.draft.data.description : (item.data as any)?.description) || '';
+    setValue('description', description);
+    
+    const status = (item.draft?.status !== undefined ? item.draft.status : item.status) || (item.data as any)?.status || 'draft';
+    setValue('status', status);
+    
+    setValue('datePublished', (item as any).datePublished || (item.data as any)?.datePublished || item.publishedAt || '');
+    setValue('dateLastModified', (item as any).dateLastModified || (item.data as any)?.dateLastModified || item.updatedAt || '');
+    setValue('publishedAt', item.publishedAt || '');
+    
+    // Set any custom fields from item.data, preferring draft data
+    if (item.data) {
+      Object.keys(item.data).forEach(key => {
+        const draftValue = item.draft?.data?.[key];
+        const finalValue = draftValue !== undefined ? draftValue : (item.data as any)[key];
+        setValue(key, finalValue);
+      });
     }
-  });
+    
+    // Also set any draft-only data fields
+    if (item.draft?.data) {
+      Object.keys(item.draft.data).forEach(key => {
+        if (!item.data || !(key in item.data)) {
+          setValue(key, item.draft.data[key]);
+        }
+      });
+    }
+  }, [item, setValue]);
 
   const debouncedUpdate = useCallback(
-    debounce((field: string, value: any) => {
-      onFieldUpdate(item.id, field, value);
+    debounce((itemId: string, field: string, value: any) => {
+      onFieldUpdate(itemId, field, value);
     }, 500),
-    [onFieldUpdate, item.id]
+    [onFieldUpdate]
   );
 
   useEffect(() => {
     const subscription = watch((value: any, { name, type }: any) => {
-      if (type === 'change' && name) {
+      if (type === 'change' && name && name !== 'status' && name !== 'publishedAt') {
         // Check if value has actually changed from default
         if (value[name] !== (defaultValues as any)?.[name]) {
-          debouncedUpdate(name, value[name]);
+          debouncedUpdate(item.id, name, value[name]);
         }
       }
     });
@@ -98,7 +145,7 @@ export function DetailPanel({
   
   const handleBodyChange = (content: string) => {
     setValue('body', content);
-    debouncedUpdate('body', content);
+    debouncedUpdate(item.id, 'body', content);
   };
 
   useEffect(() => {
@@ -113,7 +160,7 @@ export function DetailPanel({
   // Helper function to handle direct field updates for the notion-like fields
   const handleDirectFieldUpdate = (fieldName: string, value: string) => {
     setValue(fieldName as any, value, { shouldDirty: true });
-    debouncedUpdate(fieldName, value);
+    debouncedUpdate(item.id, fieldName, value);
   };
 
   // Check if a field is a date field that should be read-only
@@ -168,8 +215,9 @@ export function DetailPanel({
   };
 
   // Extract key system info for display
-  const statusDisplay = (watch('status') || item.status || 'draft') as string;
-  const publishedAtDisplay = formatDate(watch('datePublished') || watch('publishedAt') || (item as any).datePublished || item.publishedAt);
+  const publishedAtVal = watch('publishedAt') || (item as any).publishedAt || item.publishedAt;
+  const isPublished = !!publishedAtVal;
+  const publishedAtDisplay = formatDate(watch('datePublished') || publishedAtVal);
   const lastModifiedDisplay = formatDate(watch('dateLastModified') || watch('lastModified') || (item as any).dateLastModified || item.updatedAt);
 
   // Construct a public preview URL for the item
@@ -266,23 +314,55 @@ export function DetailPanel({
               </button>
             </div>
 
-            {/* Right-aligned status */}
-            <Tabs 
-              value={statusDisplay.toLowerCase()} 
-              onValueChange={(newStatus) => setValue('status', newStatus, { shouldDirty: true })}
-              className="w-auto"
-            >
-              <TabsList className="grid w-full grid-cols-2 h-8 bg-gray-100">
-                <TabsTrigger value="draft" className="h-6 text-xs px-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-                  Draft
-                </TabsTrigger>
-                <TabsTrigger value="published" className="h-6 text-xs px-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                  Published
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {/* Right-aligned status and actions */}
+            <div className="flex items-center gap-3">
+              {/* Pending edits indicator and republish button */}
+              {isPublished && hasPendingChanges && onRepublish && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                    Pending edits
+                  </span>
+                  <button
+                    onClick={() => onRepublish(item.id)}
+                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Republish
+                  </button>
+                </div>
+              )}
+              
+              <Tabs 
+                value={isPublished ? 'published' : 'draft'} 
+                onValueChange={async (newStatus) => {
+                  if (newStatus === (isPublished ? 'published' : 'draft')) return; // no change
+
+                  // Optimistically update local form state
+                  const newPublishedAt = newStatus === 'published' ? new Date().toISOString() : null;
+                  setValue('publishedAt', newPublishedAt, { shouldDirty: false });
+
+                  // Call the shared toggle publish handler
+                  try {
+                    await onTogglePublish(item.id);
+                  } catch (err) {
+                    console.error('Toggle publish failed', err);
+                    // Revert optimistic update
+                    setValue('publishedAt', publishedAtVal, { shouldDirty: false });
+                  }
+                }}
+                className="w-auto"
+              >
+                <TabsList className="grid w-full grid-cols-2 h-8 bg-gray-100">
+                  <TabsTrigger value="draft" className="h-6 text-xs px-3 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                    Draft
+                  </TabsTrigger>
+                  <TabsTrigger value="published" className="h-6 text-xs px-3 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    Published
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
           
           {/* Content */}
@@ -315,7 +395,18 @@ export function DetailPanel({
                   <span className="text-gray-400">{buildDisplayUrl().path}</span>
                   <NotionLikeInput
                     value={watch('slug') || ''}
-                    onChange={(value) => handleDirectFieldUpdate('slug', value)}
+                    onChange={(value) => {
+                      // Validate and clean the slug input in real-time
+                      const cleanedSlug = validateSlugInput(value);
+                      handleDirectFieldUpdate('slug', cleanedSlug);
+                    }}
+                    onBlur={(value: string) => {
+                      // On blur, create a fully valid slug
+                      const finalSlug = createUrlSafeSlug(value);
+                      if (finalSlug !== value) {
+                        handleDirectFieldUpdate('slug', finalSlug);
+                      }
+                    }}
                     placeholder="url-slug"
                     className="text-sm text-foreground placeholder-gray-400 border-none outline-none bg-transparent flex-1 min-w-0"
                     multiline={false}
@@ -327,14 +418,22 @@ export function DetailPanel({
               <div className="space-y-6 pb-6">
                 {localCollection.fields
                   .filter(field => !ALL_NON_CUSTOM_FIELDS.includes(field.name))
-                  .map((field, index) => (
-                    <div key={`custom-${field.name}-${index}`}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {field.label}
-                      </label>
-                      {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
-                    </div>
-                  ))}
+                  .map((field, index) => {
+                    let type = field.type;
+                    if (type === 'body') {
+                      type = 'markdown';
+                    }
+                    const Icon = getFieldTypeIcon(type);
+                    return (
+                      <div key={`custom-${field.name}-${index}`}>
+                        <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                          {Icon && <Icon className="w-4 h-4 mr-2 text-gray-400" />}
+                          {field.label}
+                        </label>
+                        {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
+                      </div>
+                    );
+                  })}
 
                 {/* Add Field link */}
                 <div className="pt-2">
@@ -527,6 +626,10 @@ export function DetailPanel({
                 });
 
                 setIsCollectionModalOpen(false);
+
+                if (onCollectionUpdate) {
+                  onCollectionUpdate(updated);
+                }
               } else {
                 console.error('Failed to save collection');
               }
@@ -544,12 +647,14 @@ export function DetailPanel({
 function NotionLikeInput({ 
   value, 
   onChange, 
+  onBlur,
   placeholder, 
   className, 
   multiline = false 
 }: { 
   value: string; 
   onChange: (value: string) => void; 
+  onBlur?: (value: string) => void;
   placeholder: string; 
   className: string; 
   multiline?: boolean; 
@@ -558,6 +663,12 @@ function NotionLikeInput({
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     onChange(e.target.value);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    if (onBlur) {
+      onBlur(e.target.value);
+    }
   };
 
   // Auto-resize for multiline inputs
@@ -575,6 +686,7 @@ function NotionLikeInput({
         ref={ref as React.RefObject<HTMLTextAreaElement>}
         value={value}
         onChange={handleChange}
+        onBlur={handleBlur}
         placeholder={placeholder}
         className={className}
         rows={1}
@@ -589,6 +701,7 @@ function NotionLikeInput({
       type="text"
       value={value}
       onChange={handleChange}
+      onBlur={handleBlur}
       placeholder={placeholder}
       className={className}
       style={{
@@ -636,34 +749,30 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
       
     case 'select':
       return (
-        <select
-          {...register(field.name, { required: field.required })}
-          className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <option value="">Select...</option>
-          {field.options?.map((option: string) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <NotionSelect
+          options={field.options || []}
+          value={watch(field.name) || null}
+          onChange={(value) => {
+            setValue(field.name, value, { shouldDirty: true });
+            onFieldUpdate(itemId, field.name, value);
+          }}
+          placeholder={field.placeholder || "Select an option..."}
+          className="w-full"
+        />
       );
       
-    case 'multi-select':
+    case 'multiselect':
       return (
-        <div className="space-y-2">
-          {field.options?.map((option: string) => (
-            <label key={option} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                value={option}
-                {...register(field.name)}
-                className="rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <span className="text-sm">{option}</span>
-            </label>
-          ))}
-        </div>
+        <NotionMultiSelect
+          options={field.options || []}
+          value={watch(field.name) || []}
+          onChange={(value) => {
+            setValue(field.name, value, { shouldDirty: true });
+            onFieldUpdate(itemId, field.name, value);
+          }}
+          placeholder={field.placeholder || "Select options..."}
+          className="w-full"
+        />
       );
       
     case 'boolean':
@@ -692,6 +801,21 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
             setTimeout(() => onFieldUpdate(itemId, field.name, content), 500);
           }}
           authToken={authToken}
+        />
+      );
+      
+    case 'number':
+      return (
+        <input
+          type="number"
+          {...register(field.name, { valueAsNumber: true })}
+          className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          onBlur={(e) => {
+            const numVal = Number(e.target.value);
+            if (!isNaN(numVal)) {
+              onFieldUpdate(itemId, field.name, numVal);
+            }
+          }}
         />
       );
       

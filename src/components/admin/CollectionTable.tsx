@@ -54,6 +54,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { TbLayoutSidebarRightExpand } from 'react-icons/tb';
 import { getFieldTypeIcon } from '@/lib/field-type-icons';
 import clsx from 'clsx';
+import { toast } from 'sonner';
 
 interface CollectionTableProps {
   collection: CollectionConfig;
@@ -321,6 +322,7 @@ export function CollectionTable({
   onCreate,
   authToken
 }: CollectionTableProps) {
+  const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
   const [localItems, setLocalItems] = useState(items);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -346,7 +348,7 @@ export function CollectionTable({
 
     const { changes } = pendingChange;
     // System fields are at the top level of the `changes` object
-    const isSystemField = ['title', 'slug', 'body', 'seoTitle', 'seoDescription', 'ogImage'].includes(fieldName);
+    const isSystemField = ['title', 'slug', 'body', 'seoTitle', 'seoDescription', 'ogImage', 'status'].includes(fieldName);
 
     if (isSystemField) {
         return Object.prototype.hasOwnProperty.call(changes, fieldName);
@@ -387,10 +389,10 @@ export function CollectionTable({
     'system_title',
     'system_slug',
     'system_ogImage',
-    ...collection.fields
+    ...localCollection.fields
       .filter(field => !['body', 'title', 'slug', 'ogImage', 'seoTitle', 'seoDescription'].includes(field.name))
       .map(field => `field_${field.name}`)
-  ], [collection.fields]);
+  ], [localCollection.fields]);
 
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(initialColumnOrder);
 
@@ -479,12 +481,34 @@ export function CollectionTable({
     const initialPendingChanges = new Map<string, PendingChange>();
     if (items) {
       items.forEach(item => {
-        // Only load draft data for published items
-        if (item.publishedAt && item.draft && Object.keys(item.draft).length > 0) {
-          initialPendingChanges.set(item.id, {
-            itemId: item.id,
-            changes: item.draft,
+        if (!item.publishedAt || !item.draft || Object.keys(item.draft).length === 0) return;
+
+        const draft = item.draft as any;
+        const changes: any = {};
+
+        // Check top-level fields in draft
+        Object.keys(draft).forEach(key => {
+          if (key === 'data') return; // handle separately
+          if ((item as any)[key] !== draft[key]) {
+            changes[key] = draft[key];
+          }
+        });
+
+        // Check data-level fields
+        if (draft.data && typeof draft.data === 'object') {
+          const dataChanges: any = {};
+          Object.keys(draft.data).forEach(dataKey => {
+            if (item.data?.[dataKey] !== draft.data[dataKey]) {
+              dataChanges[dataKey] = draft.data[dataKey];
+            }
           });
+          if (Object.keys(dataChanges).length > 0) {
+            changes.data = dataChanges;
+          }
+        }
+
+        if (Object.keys(changes).length > 0) {
+          initialPendingChanges.set(item.id, { itemId: item.id, changes });
         }
       });
     }
@@ -522,10 +546,10 @@ export function CollectionTable({
       const item = localItems.find(i => i.id === itemId);
       // Only save drafts for published items
       if (item?.publishedAt) {
-        debouncedSaveDraft(itemId, change.changes, collection.slug);
+        debouncedSaveDraft(itemId, change.changes, localCollection.slug);
       }
     });
-  }, [pendingChanges, debouncedSaveDraft, localItems, collection.slug]);
+  }, [pendingChanges, debouncedSaveDraft, localItems, localCollection.slug]);
 
   const saveAllChanges = useCallback(async () => {
     if (pendingChanges.size === 0) return;
@@ -650,13 +674,14 @@ export function CollectionTable({
     const newPublishedAt = isCurrentlyPublished ? null : new Date().toISOString();
 
     try {
-      const response = await fetch(`/api/admin/content/${collection.slug}/${itemId}`, {
+      const response = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publishedAt: newPublishedAt }),
       });
 
       if (!response.ok) {
+        toast.error(`Failed to ${isCurrentlyPublished ? 'unpublish' : 'publish'} "${item.title}"`);
         throw new Error('Failed to update publish status');
       }
 
@@ -676,17 +701,19 @@ export function CollectionTable({
           return newMap;
         });
       }
+
+      toast.success(`${updatedItem.publishedAt ? 'Published' : 'Unpublished'} "${item.title || 'Item'}".`);
     } catch (error) {
       console.error('Failed to toggle publish status:', error);
     }
-  }, [localItems, collection.slug]);
+  }, [localItems, localCollection.slug]);
 
   // Handle field updates
   const handleFieldUpdate = useCallback(async (itemId: string, field: string, value: any) => {
     const item = localItems.find(i => i.id === itemId);
     if (!item) return;
 
-    const isSystemField = ['title', 'slug', 'body', 'seoTitle', 'seoDescription', 'ogImage'].includes(field);
+    const isSystemField = ['title', 'slug', 'body', 'seoTitle', 'seoDescription', 'ogImage', 'status'].includes(field);
     const isPublished = !!item.publishedAt;
 
     // Get the current value to check if it actually changed
@@ -740,7 +767,7 @@ export function CollectionTable({
           ? { [field]: value }
           : { data: { ...(item.data || {}), [field]: value } };
 
-        const response = await fetch(`/api/admin/content/${collection.slug}/${itemId}`, {
+        const response = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatePayload),
@@ -779,7 +806,7 @@ export function CollectionTable({
         });
       }
     }
-  }, [localItems, collection.slug]);
+  }, [localItems, localCollection.slug]);
 
   const handleDelete = async (itemId: string) => {
     // No need to manage pending changes here anymore, as the item will be deleted
@@ -987,12 +1014,12 @@ export function CollectionTable({
       },
     },
     // Dynamic columns from collection fields
-    ...collection.fields
+    ...localCollection.fields
       .filter(field => !['body', 'title', 'slug', 'ogImage', 'seoTitle', 'seoDescription'].includes(field.name)) // Exclude system fields handled separately
       .map((field, index): ColumnDef<ContentItem> => ({
         accessorFn: (row) => {
           // For system fields, access from top level, otherwise from data
-          const isSystemField = ['seoTitle', 'seoDescription', 'ogImage'].includes(field.name);
+          const isSystemField = ['seoTitle', 'seoDescription', 'ogImage', 'status'].includes(field.name);
           return isSystemField ? (row as any)[field.name] : row.data[field.name];
         },
         id: `field_${field.name}`, // Prefix to ensure uniqueness
@@ -1067,7 +1094,7 @@ export function CollectionTable({
   const MemoizedRowMenu = useMemo(() => {
     return ({ row }: { row: any }) => {
       const isPublished = !!row.original.publishedAt;
-      const viewUrl = collection.urlPattern.replace('{slug}', row.original.slug);
+      const viewUrl = localCollection.urlPattern.replace('{slug}', row.original.slug);
       const hasPendingChanges = pendingChanges.has(row.original.id);
       
       return (
@@ -1083,7 +1110,7 @@ export function CollectionTable({
         </div>
       );
     };
-  }, [collection.urlPattern, handleDelete, handleTogglePublish, pendingChanges, handleRepublishSingleItem]);
+  }, [localCollection.urlPattern, handleDelete, handleTogglePublish, pendingChanges, handleRepublishSingleItem]);
 
   // Add the "more actions" column
   const moreActionsColumn: ColumnDef<ContentItem> = {
@@ -1126,10 +1153,20 @@ export function CollectionTable({
     getSortedRowModel: getSortedRowModel(),
   });
 
+  // Update local collection when prop changes
+  useEffect(() => {
+    setLocalCollection(collection);
+  }, [collection]);
+
+  // Callback to handle collection updates from DetailPanel
+  const handleCollectionUpdate = useCallback((updatedCollection: CollectionConfig) => {
+    setLocalCollection(updatedCollection);
+  }, []);
+
   return (
     <div className="flex flex-col h-full min-w-0">
       <CollectionHeader
-        collection={collection}
+        collection={localCollection}
         itemCount={localItems.length}
         pendingChangesCount={pendingCellEditsCount}
         globalFilter={globalFilter}
@@ -1193,7 +1230,7 @@ export function CollectionTable({
                             } else if (header.id.startsWith('field_')) {
                               // For dynamic fields, find the field config
                               const fieldName = header.id.replace('field_', '');
-                              const field = collection.fields.find(f => f.name === fieldName);
+                              const field = localCollection.fields.find(f => f.name === fieldName);
                               fieldType = field?.type;
                             }
 
@@ -1312,7 +1349,24 @@ export function CollectionTable({
                             {/* Open button for title column */}
                             {isTitleColumn && (
                               <button
-                                onClick={() => setSelectedItem(row.original)}
+                                onClick={() => {
+                                  let latest = localItems.find(i => i.id === row.original.id) || row.original;
+                                  
+                                  // If there are pending changes for this item, merge them into the item
+                                  const pendingChange = pendingChanges.get(row.original.id);
+                                  if (pendingChange) {
+                                    latest = {
+                                      ...latest,
+                                      ...pendingChange.changes,
+                                      data: {
+                                        ...(latest.data || {}),
+                                        ...((pendingChange.changes as any).data || {}),
+                                      },
+                                    };
+                                  }
+                                  
+                                  setSelectedItem(latest);
+                                }}
                                 className="absolute right-1.5 top-1/2 gap-1 -translate-y-1/2 flex items-center border border-gray-300 bg-white text-gray-600 hover:text-gray-800 rounded-sm pl-1 pr-2 py-[2px] text-[11px] font-medium opacity-0 group-hover:opacity-100 transition shadow z-10"
                                 title="Open"
                               >
@@ -1351,7 +1405,7 @@ export function CollectionTable({
                 onClick={onCreate}
                 className="mt-4 text-primary hover:underline"
               >
-                Create your first {collection.name.slice(0, -1).toLowerCase()}
+                Create your first {localCollection.name.slice(0, -1).toLowerCase()}
               </button>
             </div>
           </div>
@@ -1360,11 +1414,15 @@ export function CollectionTable({
 
       {selectedItem && authToken && (
         <DetailPanel
-          collection={collection}
+          collection={localCollection}
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
           onFieldUpdate={handleFieldUpdate}
+          onTogglePublish={handleTogglePublish}
           authToken={authToken}
+          hasPendingChanges={pendingChanges.has(selectedItem.id)}
+          onRepublish={handleRepublishSingleItem}
+          onCollectionUpdate={handleCollectionUpdate}
         />
       )}
     </div>

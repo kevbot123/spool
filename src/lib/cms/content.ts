@@ -133,6 +133,9 @@ export class ContentManager {
     const slug = data.slug || slugify(data.title || 'untitled', { lower: true, strict: true });
     
     // Prepare content item data
+    // Separate system fields from custom data fields
+    const { title: dataTitle, slug: dataSlug, ...customData } = data;
+    
     const contentData = {
       id: uuidv4(),
       site_id: collection.site_id,
@@ -140,7 +143,7 @@ export class ContentManager {
       slug: slug,
       title: data.title || 'Untitled',
       data: {
-        ...data,
+        ...customData, // Only custom fields, no system fields
         body: data.body || '',
       },
       status: 'draft',
@@ -206,6 +209,11 @@ export class ContentManager {
       if (data.seoTitle !== undefined) newData.seoTitle = data.seoTitle;
       if (data.seoDescription !== undefined) newData.seoDescription = data.seoDescription;
       if (data.ogImage !== undefined) newData.ogImage = data.ogImage;
+
+      // Clean up system fields from data object to avoid conflicts with top-level fields
+      // These should only exist at the top level, not in the data object
+      if (data.title !== undefined) delete newData.title;
+      if (data.slug !== undefined) delete newData.slug;
 
       updateData.data = newData;
     }

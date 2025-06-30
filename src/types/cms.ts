@@ -1,12 +1,12 @@
 export interface FieldConfig {
   name: string;
   label: string;
-  type: 'text' | 'markdown' | 'body' | 'number' | 'boolean' | 'date' | 'datetime' | 'select' | 'image' | 'json';
+  type: 'text' | 'markdown' | 'body' | 'number' | 'boolean' | 'date' | 'datetime' | 'select' | 'multiselect' | 'image' | 'json';
   required?: boolean;
   inTable?: boolean;
   placeholder?: string;
   description?: string;
-  options?: string[]; // For select fields
+  options?: string[]; // For select and multiselect fields
   validation?: {
     min?: number;
     max?: number;

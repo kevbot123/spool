@@ -414,7 +414,7 @@ function FieldEditorModal({
       required,
       ...(placeholder && { placeholder }),
       ...(description && { description }),
-      ...(type === 'select' && options && { options: options.split('\n').filter(opt => opt.trim()) })
+      ...((type === 'select' || type === 'multiselect') && options && { options: options.split('\n').filter(opt => opt.trim()) })
     };
 
     onSave(fieldConfig);
@@ -515,7 +515,7 @@ function FieldEditorModal({
             />
           </div> */}
 
-          {type === 'select' && (
+          {(type === 'select' || type === 'multiselect') && (
             <div className="space-y-2">
               <Label htmlFor="field-options">Options (one per line)</Label>
               <Textarea

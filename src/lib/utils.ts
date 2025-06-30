@@ -50,4 +50,31 @@ export function isTrialExpired(trialEndsAt: string | Date | null): boolean {
   if (!trialEndsAt) return false
   const trialEndDate = new Date(trialEndsAt)
   return trialEndDate < new Date()
+}
+
+export function createUrlSafeSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    // Replace spaces and underscores with hyphens
+    .replace(/[\s_]+/g, '-')
+    // Remove special characters, keep only alphanumeric and hyphens
+    .replace(/[^a-z0-9-]/g, '')
+    // Remove multiple consecutive hyphens
+    .replace(/-+/g, '-')
+    // Remove leading/trailing hyphens
+    .replace(/^-+|-+$/g, '')
+    // Ensure it's not empty
+    || 'untitled';
+}
+
+export function validateSlugInput(input: string): string {
+  // For real-time input validation, be less aggressive
+  // Allow typing but guide towards valid format
+  return input
+    .toLowerCase()
+    // Replace spaces with hyphens as user types
+    .replace(/\s/g, '-')
+    // Remove clearly invalid characters but allow some during typing
+    .replace(/[^a-z0-9-]/g, '');
 } 
