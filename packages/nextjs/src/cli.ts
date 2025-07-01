@@ -21,30 +21,42 @@ async function createSpoolRoute() {
   const hasAppDir = await fs.access(join(cwd, 'app')).then(() => true).catch(() => false);
   const hasPagesDir = await fs.access(join(cwd, 'pages')).then(() => true).catch(() => false);
   
-  if (!hasAppDir && !hasPagesDir) {
-    console.error('❌ This doesn\'t appear to be a Next.js project. Make sure you\'re in the root directory.');
+  // Detect project structure (root or src/)
+  let baseDir: string | null = null;
+  if (hasAppDir) {
+    baseDir = 'app';
+  } else if (hasPagesDir) {
+    baseDir = 'pages';
+  } else {
+    // Check src/ variant
+    const hasSrcApp = await fs.access(join(cwd, 'src', 'app')).then(() => true).catch(() => false);
+    const hasSrcPages = await fs.access(join(cwd, 'src', 'pages')).then(() => true).catch(() => false);
+
+    if (hasSrcApp) baseDir = join('src', 'app');
+    else if (hasSrcPages) baseDir = join('src', 'pages');
+  }
+
+  if (!baseDir) {
+    console.error('❌ This doesn\'t appear to be a Next.js project. Make sure you\'re in the project root (app/ or pages/ folder not found).');
     process.exit(1);
   }
-  
-  if (hasAppDir) {
-    // App Router setup
-    const routeDir = join(cwd, 'app', 'api', 'spool', '[...route]');
-    await fs.mkdir(routeDir, { recursive: true });
-    
+
+  const isAppRouter = baseDir.endsWith('app');
+  const routeDir = isAppRouter
+    ? join(cwd, baseDir, 'api', 'spool', '[...route]')
+    : join(cwd, baseDir, 'api', 'spool');
+
+  await fs.mkdir(routeDir, { recursive: true });
+
+  if (isAppRouter) {
     const routeFile = join(routeDir, 'route.ts');
     await fs.writeFile(routeFile, ROUTE_TEMPLATE);
-    
-    console.log('✅ Created app/api/spool/[...route]/route.ts');
+    console.log(`✅ Created ${baseDir}/api/spool/[...route]/route.ts`);
   } else {
-    // Pages Router setup
-    const routeDir = join(cwd, 'pages', 'api', 'spool');
-    await fs.mkdir(routeDir, { recursive: true });
-    
     const routeFile = join(routeDir, '[...route].ts');
     const pagesTemplate = ROUTE_TEMPLATE.replace('export const { GET, POST, PUT, DELETE }', 'export default');
     await fs.writeFile(routeFile, pagesTemplate);
-    
-    console.log('✅ Created pages/api/spool/[...route].ts');
+    console.log(`✅ Created ${baseDir}/api/spool/[...route].ts`);
   }
   
   // Show environment setup

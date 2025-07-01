@@ -1,5 +1,5 @@
-node_modules/
-dist/
+# Keep build output (dist) committed so npm-pack from GitHub works
+# node_modules stays ignored
 *.log
 .env*
 .DS_Store 
