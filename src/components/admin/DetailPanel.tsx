@@ -14,12 +14,16 @@ import {
 } from "@/components/ui/accordion"
 import { DatePicker } from '@/components/ui/date-picker';
 import { useSite } from '@/context/SiteContext';
-import { ChevronsRight, ExternalLink, Link2, SquareArrowOutUpRight, TableProperties, TextCursorInput } from 'lucide-react';
+import { ChevronsRight, ExternalLink, Link2, SquareArrowOutUpRight, TableProperties, TextCursorInput, MoreVertical, RefreshCcw, X, Trash2 } from 'lucide-react';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { getFieldTypeIcon } from '@/lib/field-type-icons';
 import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
 import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
+import { getStatusColor } from '@/lib/status-colors';
 
 const SYSTEM_DATE_FIELDS = [
   'createdAt', 'updatedAt', 'publishedAt', 'datePublished', 'lastModified',
@@ -46,6 +50,8 @@ interface DetailPanelProps {
   hasPendingChanges?: boolean; // Add this to track pending changes
   onRepublish?: (itemId: string) => Promise<void>; // Add republish handler
   onCollectionUpdate?: (updatedCollection: CollectionConfig) => void; // Add collection update handler
+  onDelete?: (itemId: string) => Promise<void> | void; // Add delete handler
+  onClearPending?: (itemId: string) => Promise<void> | void; // Clear pending edits handler
 }
 
 export function DetailPanel({
@@ -53,11 +59,13 @@ export function DetailPanel({
   collection,
   onClose,
   onFieldUpdate,
-  onTogglePublish,
+  onTogglePublish: _onTogglePublish,
   authToken, // Added authToken prop
   hasPendingChanges = false,
   onRepublish,
   onCollectionUpdate,
+  onDelete,
+  onClearPending,
 }: DetailPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { currentSite } = useSite();
@@ -76,53 +84,44 @@ export function DetailPanel({
 
   // Set form values whenever item changes
   useEffect(() => {
-    // For the title, check for draft data first, then item.title (don't fallback to data.title as it's outdated)
-    const title = (item.draft?.title !== undefined ? item.draft.title : item.title) || '';
-    setValue('title', title);
-    
-    const slug = (item.draft?.slug !== undefined ? item.draft.slug : item.slug) || '';
-    setValue('slug', slug);
-    
-    const seoTitle = (item.draft?.seoTitle !== undefined ? item.draft.seoTitle : item.seoTitle) || '';
-    setValue('seoTitle', seoTitle);
-    
-    const seoDescription = (item.draft?.seoDescription !== undefined ? item.draft.seoDescription : item.seoDescription) || '';
-    setValue('seoDescription', seoDescription);
-    
-    const ogImage = (item.draft?.ogImage !== undefined ? item.draft.ogImage : item.ogImage) || '';
-    setValue('ogImage', ogImage);
-    
-    const body = (item.draft?.body !== undefined ? item.draft.body : item.body) || '';
-    setValue('body', body);
-    
-    const description = (item.draft?.data?.description !== undefined ? item.draft.data.description : (item.data as any)?.description) || '';
-    setValue('description', description);
-    
-    const status = (item.draft?.status !== undefined ? item.draft.status : item.status) || (item.data as any)?.status || 'draft';
-    setValue('status', status);
-    
-    setValue('datePublished', (item as any).datePublished || (item.data as any)?.datePublished || item.publishedAt || '');
-    setValue('dateLastModified', (item as any).dateLastModified || (item.data as any)?.dateLastModified || item.updatedAt || '');
-    setValue('publishedAt', item.publishedAt || '');
-    
+    // This effect now uses `reset` to update the form when the `item` prop changes.
+    // This is more robust for ensuring all fields, including the TipTap editor,
+    // are correctly updated with the new item's data, especially after an action
+    // like "clear pending edits" which fetches a fresh version of the item.
+    const newValues: { [key: string]: any } = {};
+
+    // Handle top-level fields, preferring draft versions if they exist
+    newValues.title = (item.draft?.title !== undefined ? item.draft.title : item.title) || '';
+    newValues.slug = (item.draft?.slug !== undefined ? item.draft.slug : item.slug) || '';
+    newValues.seoTitle = (item.draft?.seoTitle !== undefined ? item.draft.seoTitle : item.seoTitle) || '';
+    newValues.seoDescription = (item.draft?.seoDescription !== undefined ? item.draft.seoDescription : item.seoDescription) || '';
+    newValues.ogImage = (item.draft?.ogImage !== undefined ? item.draft.ogImage : item.ogImage) || '';
+
+    // Status, with fallbacks
+    newValues.status = (item.draft?.status !== undefined ? item.draft.status : item.status)
+      || (item.data as any)?.status
+      || (item.publishedAt ? 'published' : 'draft');
+
+    // Date fields
+    newValues.datePublished = (item as any).datePublished || (item.data as any)?.datePublished || item.publishedAt || '';
+    newValues.dateLastModified = (item as any).dateLastModified || (item.data as any)?.dateLastModified || item.updatedAt || '';
+    newValues.publishedAt = item.publishedAt || '';
+
     // Set any custom fields from item.data, preferring draft data
-    if (item.data) {
-      Object.keys(item.data).forEach(key => {
-        const draftValue = item.draft?.data?.[key];
-        const finalValue = draftValue !== undefined ? draftValue : (item.data as any)[key];
-        setValue(key, finalValue);
-      });
-    }
-    
-    // Also set any draft-only data fields
-    if (item.draft?.data) {
-      Object.keys(item.draft.data).forEach(key => {
-        if (!item.data || !(key in item.data)) {
-          setValue(key, item.draft.data[key]);
-        }
-      });
-    }
-  }, [item, setValue]);
+    const allDataKeys = new Set([
+      ...Object.keys(item.data || {}),
+      ...Object.keys(item.draft?.data || {})
+    ]);
+
+    allDataKeys.forEach(key => {
+      const draftValue = item.draft?.data?.[key];
+      const liveValue = (item.data as any)?.[key];
+      // Prefer draft value if it exists (even if it's null or an empty string)
+      newValues[key] = draftValue !== undefined ? draftValue : liveValue;
+    });
+
+    reset(newValues);
+  }, [item, reset]);
 
   const debouncedUpdate = useCallback(
     debounce((itemId: string, field: string, value: any) => {
@@ -141,16 +140,18 @@ export function DetailPanel({
       }
     });
     return () => subscription.unsubscribe();
-  }, [watch, debouncedUpdate, defaultValues]);
+  }, [watch, debouncedUpdate, defaultValues, item.id]);
   
-  const handleBodyChange = (content: string) => {
-    setValue('body', content);
-    debouncedUpdate(item.id, 'body', content);
-  };
-
   useEffect(() => {
     setIsOpen(true);
   }, []);
+
+  // Cancel any pending debounced updates when the item changes or on unmount
+  useEffect(() => {
+    return () => {
+      debouncedUpdate.cancel();
+    };
+  }, [item.id, debouncedUpdate]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -215,8 +216,9 @@ export function DetailPanel({
   };
 
   // Extract key system info for display
+  const statusVal = watch('status') as 'draft' | 'published' | undefined;
+  const isPublished = statusVal === 'published';
   const publishedAtVal = watch('publishedAt') || (item as any).publishedAt || item.publishedAt;
-  const isPublished = !!publishedAtVal;
   const publishedAtDisplay = formatDate(watch('datePublished') || publishedAtVal);
   const lastModifiedDisplay = formatDate(watch('dateLastModified') || watch('lastModified') || (item as any).dateLastModified || item.updatedAt);
 
@@ -286,13 +288,13 @@ export function DetailPanel({
       
       {/* Panel */}
       <div
-        className={`fixed right-0 top-0 h-full w-full max-w-[820px] bg-white shadow-2xl z-50 transform transition-transform ${
+        className={`fixed right-0 top-0 h-full w-full max-w-[820px] bg-white shadow-2xl z-50 m-[8px] rounded-t-xl outline-1 outline-gray-900/5 transform transition-transform ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="px-4 py-3 flex items-center justify-between max-h-[55px]">
+          <div className="px-4 py-3 flex items-center justify-between max-h-[60px]">
             {/* Left-aligned control icons (Notion style) */}
             <div className="flex items-center gap-3">
               {/* Collapse / close (double chevron) */}
@@ -315,128 +317,253 @@ export function DetailPanel({
             </div>
 
             {/* Right-aligned status and actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {/* Pending edits indicator and republish button */}
               {isPublished && hasPendingChanges && onRepublish && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                  <Badge variant="secondary" className="text-xs font-medium bg-blue-50 text-blue-700">
                     Pending edits
-                  </span>
-                  <button
-                    onClick={() => onRepublish(item.id)}
-                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors"
-                  >
+                  </Badge>
+                  <Button size="sm" onClick={() => onRepublish(item.id)} className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 py-0">
                     Republish
-                  </button>
+                  </Button>
                 </div>
               )}
               
-              <Tabs 
-                value={isPublished ? 'published' : 'draft'} 
-                onValueChange={async (newStatus) => {
-                  if (newStatus === (isPublished ? 'published' : 'draft')) return; // no change
+              {hasPendingChanges && onClearPending ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    debouncedUpdate.cancel();
+                    onClearPending(item.id);
+                  }}
+                  className="h-8 px-3 py-0"
+                >
+                  Clear
+                </Button>
+              ) : (
+                (() => {
+                  const explicitStatus = watch('status');
+                  const effectiveStatus: 'draft' | 'published' = (explicitStatus as any) || (isPublished ? 'published' : 'draft');
 
-                  // Optimistically update local form state
-                  const newPublishedAt = newStatus === 'published' ? new Date().toISOString() : null;
-                  setValue('publishedAt', newPublishedAt, { shouldDirty: false });
+                  return (
+                    <Select
+                      value={effectiveStatus}
+                      onValueChange={async (newStatus) => {
+                        const currentStatus = effectiveStatus;
+                        if (newStatus === currentStatus) return;
 
-                  // Call the shared toggle publish handler
-                  try {
-                    await onTogglePublish(item.id);
-                  } catch (err) {
-                    console.error('Toggle publish failed', err);
-                    // Revert optimistic update
-                    setValue('publishedAt', publishedAtVal, { shouldDirty: false });
-                  }
-                }}
-                className="w-auto"
-              >
-                <TabsList className="grid w-full grid-cols-2 h-8 bg-gray-100">
-                  <TabsTrigger value="draft" className="h-6 text-xs px-3 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-                    Draft
-                  </TabsTrigger>
-                  <TabsTrigger value="published" className="h-6 text-xs px-3 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Published
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+                        // Optimistically update status and publishedAt
+                        setValue('status', newStatus, { shouldDirty: false });
+                        const newPublishedAt = newStatus === 'published' ? new Date().toISOString() : null;
+                        setValue('publishedAt', newPublishedAt, { shouldDirty: false });
+
+                        try {
+                          await _onTogglePublish(item.id);
+                        } catch (err) {
+                          console.error('Toggle publish failed', err);
+                          // Revert optimistic update
+                          setValue('publishedAt', publishedAtVal, { shouldDirty: false });
+                        }
+                      }}
+                    >
+                      <SelectTrigger size="sm" className="capitalize">
+                        <SelectValue>
+                          <span className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${getStatusColor(effectiveStatus as any)}`} />
+                            {effectiveStatus}
+                          </span>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">
+                          <span className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${getStatusColor('draft')}`} />
+                            Draft
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="published">
+                          <span className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${getStatusColor('published')}`} />
+                            Published
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  );
+                })()
+              )}
+
+              {/* More actions dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-1 text-gray-500 hover:text-gray-800 hover:bg-gray-200/80 rounded-md"
+                    title="More options"
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {isPublished && hasPendingChanges && (
+                    <>
+                      {onRepublish && (
+                        <DropdownMenuItem
+                          onClick={() => onRepublish(item.id)}
+                          className="flex items-center w-full px-4 py-1 text-sm cursor-pointer hover:bg-blue-50"
+                        >
+                          <RefreshCcw size={14} className="mr-2" />
+                          <span>Republish edits</span>
+                        </DropdownMenuItem>
+                      )}
+                      {onClearPending && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            debouncedUpdate.cancel();
+                            onClearPending(item.id);
+                          }}
+                          className="flex items-center w-full px-4 py-1 text-sm cursor-pointer text-gray-700 hover:bg-gray-50"
+                        >
+                          <X size={14} className="mr-2" />
+                          <span>Clear pending edits</span>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <a
+                      href={publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center w-full px-4 py-1 text-sm cursor-pointer"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span>View Post</span>
+                    </a>
+                  </DropdownMenuItem>
+                  {onDelete && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (confirm('Are you sure you want to delete this item?')) {
+                          onDelete(item.id);
+                        }
+                      }}
+                      className="flex items-center w-full px-4 py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                    >
+                      <Trash2 size={14} className="mr-2" />
+                      <span>Delete</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           
           {/* Content */}
-          <div className="flex-1 overflow-y-auto pt-6 px-15 pb-20">
+          <div className="flex-1 overflow-y-auto pt-6 px-14 pb-20 detailbody">
             <div className="space-y-6">
-              {/* Notion-like Title */}
-              <div className="space-y-1 mb-6">
-
+              {/* Core Fields: Title (Notion style), Description, Slug */}
+              <div className="space-y-6 mb-8">
+                {/* Title - Notion-like */}
                 <NotionLikeInput
                   value={watch('title') || ''}
                   onChange={(value) => handleDirectFieldUpdate('title', value)}
                   placeholder="Untitled"
-                  className="text-2xl font-bold text-gray-900 placeholder-gray-400 border-none outline-none resize-none w-full bg-transparent leading-tight mb-2"
+                  className="text-[24px] font-semibold px-3 py-2 text-gray-900 placeholder-gray-400 border border-transparent hover:border-gray-200 hover:shadow-sm focus:shadow-sm focus:border-gray-200 rounded-md outline-none resize-none w-full bg-transparent leading-tight mb-2 cursor-text transition-colors"
                   multiline={false}
                 />
-                
-                {/* Description field if it exists */}
+
+                {/* Description */}
                 {collection.fields.find(f => f.name === 'description') && (
-                  <NotionLikeInput
-                    value={watch('description') || ''}
-                    onChange={(value) => handleDirectFieldUpdate('description', value)}
-                    placeholder="Add a description..."
-                    className="text-base text-gray-600 placeholder-gray-400 border-none outline-none resize-none w-full bg-transparent leading-relaxed"
-                    multiline={true}
-                  />
+                  <div className="md:flex md:items-start md:gap-6 pt-8">
+                    <label className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-38 gap-2">
+                      <TextCursorInput className="w-4 h-4 text-gray-400 shrink-0" />
+                      Description
+                    </label>
+                    <div className="flex-1">
+                      <textarea
+                        {...register('description')}
+                        rows={2}
+                        placeholder="Add a description..."
+                        className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
                 )}
-                {/* Slug field */}
-                <div className="flex items-center text-sm mb-2 mt-0 border-b pb-6">
-                  {/* <span className="text-gray-400">{buildDisplayUrl().domain}</span> */}
-                  <span className="text-gray-400">{buildDisplayUrl().path}</span>
-                  <NotionLikeInput
-                    value={watch('slug') || ''}
-                    onChange={(value) => {
-                      // Validate and clean the slug input in real-time
-                      const cleanedSlug = validateSlugInput(value);
-                      handleDirectFieldUpdate('slug', cleanedSlug);
-                    }}
-                    onBlur={(value: string) => {
-                      // On blur, create a fully valid slug
-                      const finalSlug = createUrlSafeSlug(value);
-                      if (finalSlug !== value) {
-                        handleDirectFieldUpdate('slug', finalSlug);
-                      }
-                    }}
-                    placeholder="url-slug"
-                    className="text-sm text-foreground placeholder-gray-400 border-none outline-none bg-transparent flex-1 min-w-0"
-                    multiline={false}
-                  />
+
+                {/* Slug */}
+                <div className="md:flex md:items-start md:gap-6">
+                  <label className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-38 gap-2">
+                    <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
+                    Slug
+                  </label>
+                  <div className="flex-1 flex items-center gap-1">
+                    <span className="text-gray-400 text-sm">{buildDisplayUrl().path}</span>
+                    <input
+                      value={watch('slug') || ''}
+                      onChange={(e) => {
+                        const cleaned = validateSlugInput(e.target.value);
+                        handleDirectFieldUpdate('slug', cleaned);
+                      }}
+                      onBlur={(e) => {
+                        const finalSlug = createUrlSafeSlug(e.target.value);
+                        if (finalSlug !== e.target.value) {
+                          handleDirectFieldUpdate('slug', finalSlug);
+                        }
+                      }}
+                      placeholder="url-slug"
+                      className="text-sm flex-1 min-w-0 px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Custom Fields - Following collection field order */}
-              <div className="space-y-6 pb-6">
+              <div className="space-y-8 pb-6">
                 {localCollection.fields
                   .filter(field => !ALL_NON_CUSTOM_FIELDS.includes(field.name))
                   .map((field, index) => {
-                    let type = field.type;
-                    if (type === 'body') {
-                      type = 'markdown';
-                    }
-                    const Icon = getFieldTypeIcon(type);
+                    const Icon = getFieldTypeIcon(field.type);
                     return (
-                      <div key={`custom-${field.name}-${index}`}>
-                        <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
-                          {Icon && <Icon className="w-4 h-4 mr-2 text-gray-400" />}
-                          {field.label}
+                      <div
+                        key={`custom-${field.name}-${index}`}
+                        className="md:flex md:items-start md:gap-6"
+                      >
+                        {/* Label (left column) */}
+                        <label
+                          className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-38 gap-2"
+                        >
+                          {Icon && (
+                            <Icon className="w-4 h-4 text-gray-400 shrink-0" />
+                          )}
+                          <span className="truncate block">
+                            {field.label}
+                          </span>
                         </label>
-                        {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
+
+                        {/* Field input (right column) */}
+                        <div className="flex-1">
+                          {renderField(
+                            field,
+                            register,
+                            setValue,
+                            watch,
+                            authToken,
+                            onFieldUpdate,
+                            debouncedUpdate,
+                            item.id
+                          )}
+                        </div>
                       </div>
                     );
                   })}
 
                 {/* Add Field link */}
-                <div className="pt-2">
+                <div className="text-right">
                   <button
                     type="button"
                     onClick={() => setIsCollectionModalOpen(true)}
@@ -473,7 +600,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Title'}
                             </label>
-                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
+                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, debouncedUpdate, item.id)}
                           </div>
                         ))}
 
@@ -485,7 +612,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Description'}
                             </label>
-                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
+                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, debouncedUpdate, item.id)}
                           </div>
                         ))}
 
@@ -555,7 +682,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Image'}
                             </label>
-                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, item.id)}
+                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, debouncedUpdate, item.id)}
                           </div>
                         ))}
 
@@ -590,7 +717,7 @@ export function DetailPanel({
 
               {/* Publish & Last Modified Dates */}
               {(publishedAtDisplay || lastModifiedDisplay) && (
-                <div className="flex items-center text-xs text-gray-500 gap-4 mt-6 border-t pt-4">
+                <div className="flex items-center text-xs text-gray-500 gap-4 mt-10 border-t pt-8">
                   {publishedAtDisplay && <span>Published: {publishedAtDisplay}</span>}
                   {lastModifiedDisplay && <span>Last modified: {lastModifiedDisplay}</span>}
                 </div>
@@ -711,7 +838,16 @@ function NotionLikeInput({
   );
 }
 
-function renderField(field: any, register: any, setValue: any, watch: any, authToken: string, onFieldUpdate: (itemId: string, field: string, value: any) => void, itemId: string) {
+function renderField(
+  field: any,
+  register: any,
+  setValue: any,
+  watch: any,
+  authToken: string,
+  onFieldUpdate: (itemId: string, field: string, value: any) => void,
+  debouncedUpdate: (itemId: string, field: string, value: any) => void,
+  itemId: string
+) {
   // Check if this is a date field that should be read-only
   const isReadOnlyDate = field.type === 'datetime' && SYSTEM_DATE_FIELDS.includes(field.name);
 
@@ -722,7 +858,7 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
       if (isReadOnlyDate) {
         // Display read-only date
         return (
-          <div className="text-sm px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-600">
+          <div className="w-100 text-sm px-3 py-2 bg-gray-50 border rounded-md text-gray-600">
             {date ? date.toLocaleString() : 'Not set'}
           </div>
         );
@@ -736,6 +872,7 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
           }}
           disabled={() => false}
           withTime={true}
+          className="w-full"
         />
       );
       
@@ -748,6 +885,7 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
             setValue(field.name, date ? date.toISOString() : null, { shouldDirty: true });
           }}
           disabled={() => false}
+          className='w-full'
         />
       );
       
@@ -756,7 +894,7 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
         <input
           {...register(field.name, { required: field.required })}
           placeholder={field.placeholder}
-          className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
       
@@ -790,28 +928,32 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
       
     case 'boolean':
       return (
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            {...register(field.name)}
-            className="rounded border-gray-300 text-primary focus:ring-primary"
-          />
-          <span className="text-sm">Enable</span>
-        </label>
+        <div className="w-full py-2 px-4 border rounded-lg">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              {...register(field.name)}
+              className="rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <span className="text-sm">Enable</span>
+          </label>
+        </div>
       );
       
     case 'image':
-      return <ImageUploadField field={field} value={watch(field.name)} setValue={setValue} authToken={authToken} register={register} onFieldUpdate={(field, value) => onFieldUpdate(itemId, field, value)} />;
-      
+      return (
+      <div className="w-full p-3 border rounded-lg">
+        <ImageUploadField field={field} value={watch(field.name)} setValue={setValue} authToken={authToken} register={register} onFieldUpdate={(field, value) => onFieldUpdate(itemId, field, value)} />
+      </div>
+    );
     case 'markdown':
-    case 'body':
       return (
         <TipTapEditor
+          key={`${itemId}-${field.name}-${watch(field.name)?.substring(0, 50) || 'empty'}`}
           content={watch(field.name)}
           onChange={(content) => {
             setValue(field.name, content, { shouldDirty: true });
-            // Use debounced update like other fields
-            setTimeout(() => onFieldUpdate(itemId, field.name, content), 500);
+            debouncedUpdate(itemId, field.name, content);
           }}
           authToken={authToken}
         />
@@ -822,7 +964,7 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
         <input
           type="number"
           {...register(field.name, { valueAsNumber: true })}
-          className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
           onBlur={(e) => {
             const numVal = Number(e.target.value);
             if (!isNaN(numVal)) {
@@ -835,15 +977,60 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
     case 'reference':
     case 'multi-reference': {
       const isMulti = field.type === 'multi-reference';
+      const [options, setOptions] = useState<any[]>(field.options || []);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        if (field.referenceCollection) {
+          const fetchOptions = async () => {
+            try {
+              setLoading(true);
+              const res = await fetch(`/api/admin/content/${field.referenceCollection}?limit=100`);
+              if (!res.ok) return;
+              const json = await res.json();
+              if (Array.isArray(json?.items)) {
+                const opts = json.items.map((item: any) => ({ label: item.title || item.slug || item.id, value: item.id }));
+                setOptions(opts);
+              }
+            } catch (err) {
+              console.error('Failed to fetch reference options', err);
+            } finally {
+              setLoading(false);
+            }
+          };
+          fetchOptions();
+        }
+      }, [field.referenceCollection]);
+
+      const displayValue = loading ? (isMulti ? [] : null) : watch(field.name);
+
+      if (isMulti) {
+        return (
+          <NotionMultiSelect
+            options={options}
+            value={displayValue as string[]}
+            onChange={(value) => {
+              setValue(field.name, value, { shouldDirty: true });
+              onFieldUpdate(itemId, field.name, value);
+            }}
+            placeholder={loading ? 'Loading...' : (field.placeholder || 'Select options...')}
+            disabled={loading}
+            className="w-full"
+          />
+        );
+      }
+
       return (
-        <ReferenceFieldInput
-          field={field}
-          value={watch(field.name)}
-          isMulti={isMulti}
-          onValueChange={(val) => {
-            setValue(field.name, val, { shouldDirty: true });
-            onFieldUpdate(itemId, field.name, val);
+        <NotionSelect
+          options={options}
+          value={displayValue as string | null}
+          onChange={(value) => {
+            setValue(field.name, value, { shouldDirty: true });
+            onFieldUpdate(itemId, field.name, value);
           }}
+          placeholder={loading ? 'Loading...' : (field.placeholder || 'Select an option...')}
+          disabled={loading}
+          className="w-full"
         />
       );
     }
@@ -853,7 +1040,7 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
         <textarea
           {...register(field.name, { required: field.required })}
           rows={3}
-          className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
   }
@@ -1003,68 +1190,6 @@ function ImageUploadField({ field, value, setValue, authToken, register, onField
       {/* Hidden input to store the URL value in the form */}
       <input type="hidden" {...register(field.name)} />
     </div>
-  );
-}
-
-// Helper component for reference fields to comply with React hooks rules
-function ReferenceFieldInput({
-  field,
-  value,
-  isMulti,
-  onValueChange,
-}: {
-  field: any;
-  value: any;
-  isMulti: boolean;
-  onValueChange: (val: any) => void;
-}) {
-  const [options, setOptions] = useState<any[]>(field.options || []);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (field.referenceCollection) {
-      const fetchOptions = async () => {
-        try {
-          setLoading(true);
-          const res = await fetch(`/api/admin/content/${field.referenceCollection}?limit=100`);
-          if (!res.ok) return;
-          const json = await res.json();
-          if (Array.isArray(json?.items)) {
-            const opts = json.items.map((item: any) => ({ label: item.title || item.slug || item.id, value: item.id }));
-            setOptions(opts);
-          }
-        } catch (err) {
-          console.error('Failed to fetch reference options', err);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchOptions();
-    }
-  }, [field.referenceCollection]);
-
-  if (isMulti) {
-    return (
-      <NotionMultiSelect
-        options={options}
-        value={value || []}
-        onChange={onValueChange}
-        placeholder={loading ? 'Loading...' : (field.placeholder || 'Select options...')}
-        disabled={loading}
-        className="w-full"
-      />
-    );
-  }
-
-  return (
-    <NotionSelect
-      options={options}
-      value={value || null}
-      onChange={onValueChange}
-      placeholder={loading ? 'Loading...' : (field.placeholder || 'Select an option...')}
-      disabled={loading}
-      className="w-full"
-    />
   );
 }
 

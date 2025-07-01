@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, Code2, Zap, Database, Search, CheckCircle } from 'lucide-react';
+import { ExternalLink, Code2, Zap, Database, Search, CheckCircle, Globe, BookOpen, ArrowRight } from 'lucide-react';
 
 // Simulate how users would fetch content from their Next.js site
 async function getExampleContent() {
@@ -199,78 +200,181 @@ export default async function BlogPost({ params }) {
     apiKey: process.env.SPOOL_API_KEY!,
     siteId: process.env.SPOOL_SITE_ID!
   };
-
-  // Fetch content from Spool CMS
-  const { item } = await getSpoolContent(config, 'blog', params.slug);
-
+  
+  const { item, collection } = await getSpoolContent(
+    config, 
+    'blog', 
+    params.slug
+  );
+  
   return (
     <article>
       <h1>{item.data.title}</h1>
-      <p>{item.data.excerpt}</p>
-      <div dangerouslySetInnerHTML={{ __html: item.data.body }} />
+      <div dangerouslySetInnerHTML={{ 
+        __html: item.data.body 
+      }} />
     </article>
   );
 }
 
-// Static generation with ISR
-export async function generateStaticParams() {
-  const { items } = await getSpoolContent(config, 'blog');
-  return items.map(item => ({ slug: item.slug }));
+// Generate SEO metadata
+export async function generateMetadata({ params }) {
+  const { item, collection } = await getSpoolContent(
+    config, 
+    'blog', 
+    params.slug
+  );
+  
+  return {
+    title: item.data.title,
+    description: item.data.excerpt,
+    openGraph: {
+      title: item.data.title,
+      description: item.data.excerpt,
+      type: 'article'
+    }
+  };
 }`}</code>
             </pre>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
 
-      {/* SEO Features */}
+// Demo Blog Section
+function DemoBlogSection() {
+  return (
+    <Card className="border-2 border-blue-200 bg-blue-50/50">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-blue-600" />
+          🆕 Live Demo Blog
+        </CardTitle>
+        <CardDescription>
+          See Spool CMS in action with a complete blog implementation
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-gray-600">
+          We've built a complete demo blog that showcases all Spool CMS features in a real-world scenario. 
+          This includes content management, SEO optimization, and the full Next.js integration.
+        </p>
+        
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="bg-white p-4 rounded-lg border">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Globe className="h-4 w-4 text-blue-500" />
+              Demo Features
+            </h4>
+            <ul className="text-sm space-y-1 text-gray-600">
+              <li>• Real blog with multiple posts</li>
+              <li>• SEO metadata & Open Graph</li>
+              <li>• Sitemap & robots.txt generation</li>
+              <li>• Responsive design</li>
+            </ul>
+          </div>
+          
+          <div className="bg-white p-4 rounded-lg border">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              Test Everything
+            </h4>
+            <ul className="text-sm space-y-1 text-gray-600">
+              <li>• Create content in admin</li>
+              <li>• See changes live on blog</li>
+              <li>• Test API integration</li>
+              <li>• Verify SEO features</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="flex gap-4 pt-4">
+          <Link href="/demo/blog">
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Visit Demo Blog
+            </Button>
+          </Link>
+          <Link href="/demo/blog/demo-setup">
+            <Button variant="outline">
+              Setup Guide
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CodeIntegrationSection() {
+  return (
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5 text-blue-500" />
-            Built-in SEO Features
-          </CardTitle>
+          <CardTitle>Installation & Setup</CardTitle>
           <CardDescription>
-            Automatic SEO optimization for better search rankings
+            Get started with Spool in your Next.js project
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Auto-generated meta tags</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Dynamic Open Graph images</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">JSON-LD structured data</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Real-time SEO preview in admin</span>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium mb-2">1. Install the package</h4>
+              <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
+                <code>npm install @spool/nextjs</code>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Automatic sitemap generation</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Smart robots.txt</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">SEO health checks</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Social media optimization</span>
+            
+            <div>
+              <h4 className="font-medium mb-2">2. Add environment variables</h4>
+              <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
+                <code>{`SPOOL_API_KEY=your_api_key
+SPOOL_SITE_ID=your_site_id`}</code>
               </div>
             </div>
+            
+            <div>
+              <h4 className="font-medium mb-2">3. Create API route</h4>
+              <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
+                <code>{`// app/api/spool/[...route]/route.ts
+import { createSpoolHandler } from '@spool/nextjs';
+
+const config = {
+  apiKey: process.env.SPOOL_API_KEY!,
+  siteId: process.env.SPOOL_SITE_ID!
+};
+
+const handler = createSpoolHandler(config);
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE };`}</code>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Fetching Content</CardTitle>
+          <CardDescription>
+            Use Spool's helper functions to get your content
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
+            <pre><code>{`// List all posts
+const { items } = await getSpoolContent(config, 'blog');
+
+// Get specific post
+const { item } = await getSpoolContent(config, 'blog', 'my-post-slug');
+
+// Get collections
+const { collections } = await getSpoolCollections(config);
+
+// Generate sitemap
+const sitemap = await getSpoolSitemap(config);`}</code></pre>
           </div>
         </CardContent>
       </Card>
@@ -282,56 +386,120 @@ export default async function SpoolIntegrationDemo() {
   const content = await getExampleContent();
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Spool CMS Integration Demo</h1>
-        <p className="text-xl text-gray-600">
-          See how Spool CMS works with your Next.js application
+    <div className="container mx-auto px-4 py-12">
+      {/* Header */}
+      <div className="text-center mb-12">
+        <Badge variant="secondary" className="mb-4">
+          Integration Demo
+        </Badge>
+        <h1 className="text-4xl font-bold text-gray-900 mb-6">
+          Spool CMS Next.js Integration
+        </h1>
+        <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          See how Spool CMS integrates seamlessly with Next.js to provide real-time content management, 
+          automatic SEO optimization, and lightning-fast performance.
         </p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Content Demo */}
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Live Content Example</h2>
-          <Suspense fallback={<div>Loading content...</div>}>
-            <ContentDemo content={content} />
-          </Suspense>
-        </div>
+      {/* Demo Blog Highlight */}
+      <div className="mb-12">
+        <DemoBlogSection />
+      </div>
 
-        {/* Integration Flow */}
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">How It Works</h2>
-          <IntegrationFlow />
+      {/* Integration Flow */}
+      <div className="mb-12">
+        <h2 className="text-3xl font-bold text-gray-900 mb-6">How It Works</h2>
+        <IntegrationFlow />
+      </div>
+
+      {/* Live Content Demo */}
+      <div className="mb-12">
+        <h2 className="text-3xl font-bold text-gray-900 mb-6">Live Content Example</h2>
+        <Suspense fallback={<div>Loading content...</div>}>
+          <ContentDemo content={content} />
+        </Suspense>
+      </div>
+
+      {/* Code Integration */}
+      <div className="mb-12">
+        <h2 className="text-3xl font-bold text-gray-900 mb-6">Code Integration</h2>
+        <CodeIntegrationSection />
+      </div>
+
+      {/* Feature Grid */}
+      <div className="mb-12">
+        <h2 className="text-3xl font-bold text-gray-900 mb-6">Key Features</h2>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                Real-time Updates
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-sm">
+                Content updates are pushed to your site instantly when published, 
+                with automatic page revalidation.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5 text-blue-500" />
+                SEO Optimized
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-sm">
+                Automatic meta tags, Open Graph images, sitemaps, and 
+                structured data for better search rankings.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code2 className="h-5 w-5 text-green-500" />
+                Developer Friendly
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 text-sm">
+                TypeScript support, beautiful APIs, and seamless integration 
+                with Next.js App Router and Server Components.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      {/* Call to Action */}
-      <div className="mt-12 text-center">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ready to Get Started?</CardTitle>
-            <CardDescription>
-              Set up your Next.js site with Spool CMS in under 30 seconds
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex justify-center gap-4">
-              <Button asChild size="lg">
-                <a href="/admin/setup" className="flex items-center gap-2">
-                  Connect Your Site
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <a href="/admin/collections" className="flex items-center gap-2">
-                  View Collections
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {/* CTA Section */}
+      <div className="text-center bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          Ready to build with Spool?
+        </h2>
+        <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+          Start creating content and see how easy it is to build fast, 
+          SEO-optimized websites with Spool CMS and Next.js.
+        </p>
+        <div className="flex items-center justify-center gap-4">
+          <Link href="/demo/blog">
+            <Button size="lg">
+              <BookOpen className="h-5 w-5 mr-2" />
+              Explore Demo Blog
+            </Button>
+          </Link>
+          <Link href="/admin">
+            <Button variant="outline" size="lg">
+              <ExternalLink className="h-5 w-5 mr-2" />
+              Open CMS Admin
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   );

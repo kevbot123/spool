@@ -9,7 +9,9 @@ import {
   ChevronDown, 
   ListFilter,
   Braces,
-  LucideIcon
+  LucideIcon,
+  LetterText,
+  Type
 } from 'lucide-react';
 import { FieldConfig } from '@/types/cms';
 
@@ -21,8 +23,8 @@ export interface FieldTypeInfo {
 }
 
 export const FIELD_TYPES: FieldTypeInfo[] = [
-  { value: 'markdown', label: 'Body (Block Editor or Markdown)', description: 'Rich text editor with markdown', icon: Blocks },
-  { value: 'text', label: 'Plain Text', description: 'Single line text input', icon: Text },
+  { value: 'markdown', label: 'Body (Block Editor or Markdown)', description: 'Rich text editor with markdown', icon: LetterText },
+  { value: 'text', label: 'Plain Text', description: 'Single line text input', icon: Type },
   { value: 'image', label: 'Image', description: 'Image upload', icon: ImageIcon },
   { value: 'number', label: 'Number', description: 'Numeric input', icon: Hash },
   { value: 'boolean', label: 'Boolean', description: 'True/false toggle', icon: ToggleRight },

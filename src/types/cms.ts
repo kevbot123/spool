@@ -54,7 +54,7 @@ export interface ContentItem {
   title: string;
   body: string;
   data: Record<string, any>;
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'published';
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;

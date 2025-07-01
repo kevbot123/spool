@@ -14,6 +14,7 @@ import { PLAN_DETAILS, PLANS } from '@/lib/config/pricing';
 import { Logo } from "@/components/ui/logo"
 import { validatePassword } from "@/lib/password-validation"
 import { PasswordStrengthIndicator } from "@/components/ui/password-strength-indicator"
+import { Suspense } from 'react';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -376,8 +377,10 @@ export default function SignUp() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 login-grid">
-      <Elements stripe={stripePromise}>
-        <SignUpForm />
+      <Elements stripe={stripePromise} options={{ fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" }] }}>
+        <Suspense fallback={null}>
+          <SignUpForm />
+        </Suspense>
       </Elements>
     </div>
   );

@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { NextRequest } from 'next/server'
 
 // Export the server client function for backward compatibility
@@ -75,5 +76,35 @@ export async function verifyApiKey(apiKey: string): Promise<boolean> {
   } catch (error) {
     console.error('API key verification error:', error)
     return false
+  }
+}
+
+// Add: createServiceClient to use service role key for privileged operations
+export function createServiceClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase environment variables are not set')
+  }
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: { persistSession: false },
+    }
+  )
+}
+
+// Helper to extract user id from an authenticated request (Bearer token or cookies)
+export async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
+  try {
+    const token = getAuthFromRequest(req)
+    if (!token) return null
+
+    const supabaseAdmin = createServiceClient()
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !user) return null
+    return user.id
+  } catch (error) {
+    console.error('getUserIdFromRequest error:', error)
+    return null
   }
 } 

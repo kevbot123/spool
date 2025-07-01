@@ -5,9 +5,11 @@ import TextareaAutosize from 'react-textarea-autosize';
 import { FieldConfig } from '@/types/cms';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
+import { getStatusColor } from '@/lib/status-colors';
 import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
 import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import TipTapEditor from './TipTapEditor';
 
 interface FieldEditorProps {
   field: FieldConfig;
@@ -210,7 +212,7 @@ export function FieldEditor({
     );
   }
 
-  // Text/number fields now use internal state like other fields
+  // Text, number, and markdown fields now use internal state like other fields
   return (
     <Popover open={internalPopoverOpen} onOpenChange={(open) => {
       setInternalPopoverOpen(open);
@@ -227,50 +229,83 @@ export function FieldEditor({
         </div>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 overflow-hidden"
-        style={{ width: `${width}px` }}
+        className={`p-0 overflow-hidden shadow-lg`}
+        style={{ 
+          width: field.type === 'markdown' ? '500px' : `${width}px`, 
+          maxWidth: '90vw', 
+          marginLeft: '-1px' 
+        }}
         side="bottom"
         align="start"
         sideOffset={-37}
         onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        {(() => {
-          switch (field.type) {
-            case 'number':
-              return (
-                <input
-                  ref={inputRef as React.RefObject<HTMLInputElement>}
-                  type="number"
-                  value={editValue ?? ''}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleSave}
-                  onKeyDown={handleKeyDown}
-                  className="block w-full bg-white px-2 py-1 text-sm focus:outline-none"
-                  autoFocus
-                />
-              );
-            case 'text':
-            default:
-              const isSlugField = field.name === 'slug';
-              return (
-                <TextareaAutosize
-                  ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-                  value={editValue || ''}
-                  onChange={(e) => {
-                    const inputValue = e.target.value;
-                    setEditValue(isSlugField ? validateSlugInput(inputValue) : inputValue);
-                  }}
-                  onBlur={handleSave}
-                  onKeyDown={handleKeyDown}
-                  className="block w-full bg-white px-2.5 py-2 text-sm focus:outline-none resize-none"
-                  minRows={1}
-                  maxRows={20}
-                  cacheMeasurements
-                  autoFocus
-                />
-              );
+        onPointerDownOutside={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-tippy-root]')) {
+            e.preventDefault();
           }
-        })()}
+        }}
+        onInteractOutside={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-tippy-root]')) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
+          {(() => {
+            switch (field.type) {
+              case 'number':
+                return (
+                  <input
+                    ref={inputRef as React.RefObject<HTMLInputElement>}
+                    type="number"
+                    value={editValue ?? ''}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={handleSave}
+                    onKeyDown={handleKeyDown}
+                    className="block w-full bg-white px-2 py-1 text-sm focus:outline-none"
+                    autoFocus
+                  />
+                );
+              case 'markdown':
+                return (
+                  <div className="max-h-[70vh] overflow-auto" onKeyDown={(e) => {
+                    // Stop propagation to prevent closing popover when pressing escape inside editor
+                    e.stopPropagation();
+                  }}>
+                    <TipTapEditor
+                      content={editValue || ''}
+                      onChange={(content) => setEditValue(content)}
+                      authToken={authToken || ''}
+                      showToolbar={false}
+                      autoFocus
+                    />
+                  </div>
+                );
+              case 'text':
+              default:
+                const isSlugField = field.name === 'slug';
+                return (
+                  <TextareaAutosize
+                    ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                    value={editValue || ''}
+                    onChange={(e) => {
+                      const inputValue = e.target.value;
+                      setEditValue(isSlugField ? validateSlugInput(inputValue) : inputValue);
+                    }}
+                    onBlur={handleSave}
+                    onKeyDown={handleKeyDown}
+                    className="block w-full bg-white px-2.5 py-2 text-sm focus:outline-none resize-none"
+                    minRows={1}
+                    maxRows={20}
+                    cacheMeasurements
+                    autoFocus
+                  />
+                );
+            }
+          })()}
+        </form>
       </PopoverContent>
     </Popover>
   );
@@ -309,8 +344,8 @@ function renderValue(field: FieldConfig, value: any, referenceOptions?: { label:
       );
 
     case 'select':
-      if (field.name === 'status' && ['draft', 'published', 'archived'].includes(value)) {
-        const color = value === 'published' ? 'bg-green-500' : value === 'draft' ? 'bg-gray-400' : 'bg-yellow-500';
+      if (field.name === 'status' && ['draft', 'published'].includes(value)) {
+        const color = getStatusColor(value as any);
         const label = value.charAt(0).toUpperCase() + value.slice(1);
         return (
           <div className="truncate flex items-center gap-2">
@@ -373,6 +408,13 @@ function renderValue(field: FieldConfig, value: any, referenceOptions?: { label:
           <img src={value} alt="image thumbnail" className="object-cover w-full h-full" loading="lazy" />
         </div>
       );
+
+    case 'markdown':
+    case 'body': {
+      const plain = typeof value === 'string' ? value.replace(/[#*_`>~\-\[\]!\(\)]+/g, '').replace(/\n+/g, ' ') : '';
+      const truncated = plain.length > 80 ? plain.slice(0, 80) + '…' : plain;
+      return <div className="truncate">{truncated}</div>;
+    }
 
     default:
       return <div className="truncate">{String(value)}</div>;

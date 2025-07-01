@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { Button } from '@/components/ui/button';
@@ -24,7 +26,7 @@ interface InvitationData {
   };
 }
 
-export default function AcceptInvitePage() {
+function AcceptInvitePageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const inviteId = searchParams.get('id');
@@ -304,5 +306,13 @@ export default function AcceptInvitePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <AcceptInvitePageInner />
+    </Suspense>
   );
 } 

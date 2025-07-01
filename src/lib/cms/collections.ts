@@ -74,7 +74,7 @@ export class CollectionsManager {
       name: 'status',
       label: 'Status',
       type: 'select',
-      options: ['draft', 'published', 'archived'],
+      options: ['draft', 'published'],
       default: 'draft',
       required: true,
       description: 'Content publication status'

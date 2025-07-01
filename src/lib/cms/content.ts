@@ -318,6 +318,34 @@ export class ContentManager {
     return this.mapDatabaseToContentItem(updated);
   }
 
+  /**
+   * Clears (deletes) the draft data for a published item. After this the live
+   * version remains untouched and the draft is removed.
+   */
+  async clearDraftById(collectionSlug: string, id: string): Promise<ContentItem | null> {
+    const supabase = await this.getSupabase();
+
+    const { data: updated, error } = await supabase
+      .from('content_items')
+      .update({
+        draft_data: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        collections!inner(slug, site_id)
+      `)
+      .single();
+
+    if (error) {
+      console.error('Error clearing draft:', error);
+      return null;
+    }
+
+    return this.mapDatabaseToContentItem(updated);
+  }
+
   private mapDatabaseToContentItem(dbItem: any): ContentItem {
     return {
       id: dbItem.id,

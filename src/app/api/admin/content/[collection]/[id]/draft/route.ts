@@ -31,4 +31,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
+}
+
+// DELETE - Clear the draft for a content item (revert to live version)
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { collection, id } = await params;
+    const contentManager = await getContentManager();
+
+    // The content manager should have a method to delete/reset the draft data.
+    // We'll assume `clearDraftById` returns the updated item (without draft).
+    const updatedItem = await contentManager.clearDraftById(collection, id);
+
+    return NextResponse.json(updatedItem, { status: 200 });
+  } catch (error) {
+    console.error('Error clearing draft:', error);
+    return NextResponse.json(
+      { error: 'Failed to clear draft' },
+      { status: 500 }
+    );
+  }
 } 

@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from "react"
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '@/lib/database.types';
 import type { User } from '@supabase/supabase-js';
@@ -59,9 +61,10 @@ interface SubscriptionWithPriceAndProduct {
 };
 
 export default function AccountPage() {
-  // Supabase client initialization
   return (
-    <AccountPageContent />
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <AccountPageContent />
+    </Suspense>
   );
 }
 

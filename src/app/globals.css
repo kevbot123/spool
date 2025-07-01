@@ -172,7 +172,7 @@
 }
 
 .markdown-content p {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
 }
 
 .markdown-content p:last-child {
@@ -200,7 +200,7 @@
 .markdown-content h3, 
 .markdown-content h4 {
   font-weight: 600;
-  margin-top: 1rem;
+  margin-top: .75rem;
   margin-bottom: 0.5rem;
 }
 
@@ -258,7 +258,7 @@
   scrollbar-width: none;  /* Firefox */
 }
 
-textarea, input, .cmdk-searchbg {
+.cmdk-searchbg {
   background-color: #f6f6f6;
 }
 .chatwindow-input {

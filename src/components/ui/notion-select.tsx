@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Check, X, ChevronDown, Plus } from "lucide-react"
+import { getStatusColor } from '@/lib/status-colors';
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -105,8 +106,8 @@ export function NotionSelect({
                         value === optValue ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    {['draft','published','archived'].includes(optValue) && (
-                      <span className={`mr-2 inline-block w-2 h-2 rounded-full ${optValue==='published' ? 'bg-green-500' : optValue==='draft' ? 'bg-gray-400' : 'bg-yellow-500'}`}/>
+                    {['draft','published'].includes(optValue) && (
+                      <span className={`mr-2 inline-block w-2 h-2 rounded-full ${getStatusColor(optValue as any)}`}/>
                     )}
                     {optLabel}
                   </CommandItem>
@@ -259,8 +260,8 @@ export function NotionMultiSelect({
                     )}>
                       {isSelected && <Check className="h-3 w-3" />}
                     </div>
-                    {['draft','published','archived'].includes(optValue) && (
-                      <span className={`mr-2 inline-block w-2 h-2 rounded-full ${optValue==='published' ? 'bg-green-500' : optValue==='draft' ? 'bg-gray-400' : 'bg-yellow-500'}`}/>
+                    {['draft','published'].includes(optValue) && (
+                      <span className={`mr-2 inline-block w-2 h-2 rounded-full ${getStatusColor(optValue as any)}`}/>
                     )}
                     {optLabel}
                   </CommandItem>

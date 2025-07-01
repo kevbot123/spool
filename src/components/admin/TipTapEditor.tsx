@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, BubbleMenu, FloatingMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -22,6 +22,17 @@ interface TipTapEditorProps {
   content: string;
   onChange: (content: string) => void;
   authToken: string; // Added for media uploads
+  /**
+   * Controls whether the fixed menubar (toolbar at the top of the editor) is shown.
+   * Defaults to true. When false, only the bubble menu will be displayed – useful for
+   * compact in-table editing contexts.
+   */
+  showToolbar?: boolean;
+  /**
+   * When true, the editor will automatically focus (cursor placed) once it mounts.
+   * Useful for inline editing scenarios where we want users to start typing immediately.
+   */
+  autoFocus?: boolean;
 }
 
 interface ToolbarButtonProps {
@@ -42,7 +53,7 @@ const ToolbarButton = ({ icon, onClick, isActive, title }: ToolbarButtonProps) =
   </button>
 );
 
-const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
+const TipTapEditor = ({ content, onChange, authToken, showToolbar = true, autoFocus = false }: TipTapEditorProps) => {
   
   
   
@@ -92,6 +103,26 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
       },
     },
   });
+
+  // Sync external content prop changes to editor
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.storage.markdown?.getMarkdown?.() ?? '';
+    if (content !== current) {
+      editor.commands.setContent(content || '');
+    }
+  }, [content, editor]);
+
+  // Automatically focus the editor when it is first ready, if requested.
+  useEffect(() => {
+    if (autoFocus && editor) {
+      // Timeout ensures focus after the element is added to the DOM.
+      setTimeout(() => {
+        if (editor?.isDestroyed) return;
+        editor.commands.focus('end');
+      }, 0);
+    }
+  }, [autoFocus, editor]);
 
   // Define callbacks and other state logic before any early returns
   
@@ -173,7 +204,10 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
     return null;
   }
 
-  const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+  const stopPropagation = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
 
   const buttonGroups = [
     [
@@ -277,28 +311,29 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
     ],
   ];
 
-  const bubbleMenuButtons = buttonGroups
-    .flat()
-    .filter(button => !['image', 'horizontalRule', 'codeBlock'].includes(button.name));
+  // Bubble menu should show the same tools as the toolbar.
+  const bubbleMenuButtons = buttonGroups.flat();
 
   return (
-    <div className="border border rounded-lg relative flex flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center gap-1 p-1 border-b border-gray-200 bg-gray-50">
-        {buttonGroups.map((group, groupIndex) => (
-          <React.Fragment key={groupIndex}>
-            {group.map(button => (
-              <ToolbarButton
-                key={button.name}
-                icon={button.icon}
-                onClick={button.onClick}
-                isActive={button.isActive}
-                title={button.title}
-              />
-            ))}
-            {groupIndex < buttonGroups.length - 1 && <div className="w-px h-5 bg-gray-300 mx-1" />}
-          </React.Fragment>
-        ))}
-      </div>
+    <div className={`${showToolbar ? 'border rounded-lg' : ''} relative flex flex-col overflow-hidden`}>
+      {showToolbar && (
+        <div className="flex flex-wrap items-center gap-1 p-1 border-b border-gray-200 bg-gray-50">
+          {buttonGroups.map((group, groupIndex) => (
+            <React.Fragment key={groupIndex}>
+              {group.map(button => (
+                <ToolbarButton
+                  key={button.name}
+                  icon={button.icon}
+                  onClick={button.onClick}
+                  isActive={button.isActive}
+                  title={button.title}
+                />
+              ))}
+              {groupIndex < buttonGroups.length - 1 && <div className="w-px h-5 bg-gray-300 mx-1" />}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
 
       <style jsx global>{`
         .ProseMirror:focus {
@@ -310,13 +345,21 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
 
       <BubbleMenu
         editor={editor}
-        tippyOptions={{ duration: 100, appendTo: () => document.body, interactive: true }}
+        tippyOptions={{ duration: 100, appendTo: () => document.body, interactive: true, maxWidth: 'none' }}
         pluginKey="bubbleMenu"
         shouldShow={({ editor, view, state, from, to }) => {
           return editor.isFocused && from !== to
         }}
       >
-        <div onClick={stopPropagation} className="bg-white border border-gray-200 shadow-lg rounded px-2 py-1 flex gap-1">
+        <div 
+          onClick={stopPropagation}
+          onMouseDown={stopPropagation}
+          onMouseDownCapture={stopPropagation}
+          onPointerDown={stopPropagation}
+          onPointerDownCapture={stopPropagation}
+          className="bg-white border border-gray-200 shadow-lg rounded px-2 py-1 flex gap-1 flex-wrap"
+          style={{ pointerEvents: 'auto' }}
+        >
           {bubbleMenuButtons.map(button => (
             <button
               key={button.name}
@@ -330,7 +373,7 @@ const TipTapEditor = ({ content, onChange, authToken }: TipTapEditorProps) => {
         </div>
       </BubbleMenu>
 
-      <EditorContent editor={editor} className="prose max-w-none p-4" />
+      <EditorContent editor={editor} className="prose max-w-none p-4 text-sm" />
     </div>
   );
 };

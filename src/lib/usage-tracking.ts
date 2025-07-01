@@ -80,4 +80,34 @@ export async function checkContentDataLimit(userId: string, dataSizeKb: number):
     console.error('Error checking content data limit:', error)
     return false
   }
+}
+
+export async function updateUserLimits(supabase: any, userId: string, planId: string) {
+  // Simple implementation: update user_limits table rows based on plan
+  try {
+    const limitsByPlan: Record<string, { message_credits: number; ai_content_data_size_kb: number }> = {
+      FREE: { message_credits: 1000, ai_content_data_size_kb: 1000 },
+      HOBBY: { message_credits: 10000, ai_content_data_size_kb: 10000 },
+      BUSINESS: { message_credits: 100000, ai_content_data_size_kb: 100000 },
+      POST_TRIAL: { message_credits: 0, ai_content_data_size_kb: 0 }
+    }
+
+    const newLimits = limitsByPlan[planId] || limitsByPlan['FREE']
+
+    await supabase
+      .from('user_limits')
+      .upsert({
+        user_id: userId,
+        plan_id: planId,
+        message_credits: newLimits.message_credits,
+        message_credits_used: 0,
+        ai_content_data_size_kb: newLimits.ai_content_data_size_kb,
+        ai_content_data_used_kb: 0,
+        updated_at: new Date().toISOString()
+      })
+    return true
+  } catch (error) {
+    console.error('updateUserLimits error:', error)
+    return false
+  }
 } 
