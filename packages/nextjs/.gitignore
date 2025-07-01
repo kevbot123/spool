@@ -1,5 +1,9 @@
 # Keep build output (dist) committed so npm-pack from GitHub works
 # node_modules stays ignored
+node_modules/
+# Ignore all dist files except CLI binary
+/dist/*
+!/dist/cli.js
 *.log
 .env*
 .DS_Store 
