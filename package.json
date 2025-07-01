@@ -37,8 +37,7 @@
     "db:generate-types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/lib/supabase/database.types.ts",
     "db:reset": "supabase db reset",
     "db:seed": "node scripts/seed-database.js",
-    "migrate": "supabase migration new",
-    "postinstall": "next build"
+    "migrate": "supabase migration new"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
