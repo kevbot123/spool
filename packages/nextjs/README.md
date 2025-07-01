@@ -10,7 +10,13 @@ npm install @spool/nextjs
 
 ## Quick Start
 
-### 1. Add the API route
+### 1. Run the setup command
+
+```bash
+npx spool-setup
+```
+
+This automatically creates the API route file for you! Or manually create it:
 
 ```typescript
 // app/api/spool/[...route]/route.ts
