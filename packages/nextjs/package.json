@@ -15,7 +15,8 @@
     "prepublishOnly": "npm run build"
   },
   "bin": {
-    "spool-setup": "dist/cli.js"
+    "spool-setup": "dist/cli.js",
+    "create-spool-route": "dist/cli.js"
   },
   "keywords": [
     "nextjs",

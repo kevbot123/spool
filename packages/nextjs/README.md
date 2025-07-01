@@ -13,11 +13,14 @@ npm install @spool/nextjs
 ### 1. Run the setup command
 
 ```bash
-# Option 1: Try the CLI command
-npx spool-setup
+# Option 1: After installing the package, run:
+npx create-spool-route
 
-# Option 2: If CLI doesn't work, use Node directly
+# Option 2: Or use Node directly
 node -e "require('@spool/nextjs').createSpoolRoute()"
+
+# Option 3: Direct CLI call
+node node_modules/@spool/nextjs/dist/cli.js
 ```
 
 This automatically creates the API route file for you! Or manually create it:
