@@ -258,7 +258,7 @@
   scrollbar-width: none;  /* Firefox */
 }
 
-textarea, input {
+textarea, input, .cmdk-searchbg {
   background-color: #f6f6f6;
 }
 .chatwindow-input {

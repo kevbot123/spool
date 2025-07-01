@@ -7,6 +7,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
 import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
 import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface FieldEditorProps {
   field: FieldConfig;
@@ -17,6 +18,8 @@ interface FieldEditorProps {
   onCancel: () => void;
   width: number;
   authToken?: string | null;
+  referenceOptions?: { label: string; value: string }[];
+  showPlaceholder?: boolean;
 }
 
 export function FieldEditor({
@@ -28,24 +31,41 @@ export function FieldEditor({
   onCancel,
   width,
   authToken,
+  referenceOptions,
+  showPlaceholder = true,
 }: FieldEditorProps) {
   const [editValue, setEditValue] = useState(value);
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Internal popover state for text/number fields to match other field types
+  const [internalPopoverOpen, setInternalPopoverOpen] = useState(false);
+
+  const isReferenceField = field.type === 'reference' || field.type === 'multi-reference';
+  const isSelectField = field.type === 'select' || field.type === 'reference';
+  const isMultiSelectField = field.type === 'multiselect' || field.type === 'multi-reference';
+
+  const loadingRefs = isReferenceField && !referenceOptions;
 
   useEffect(() => {
-    if (isEditing && inputRef.current) {
+    if (internalPopoverOpen && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isEditing]);
+  }, [internalPopoverOpen]);
 
   useEffect(() => {
     setEditValue(value);
   }, [value]);
 
   const handleSave = () => {
-    onSave(editValue);
+    if (field.name === 'slug') {
+      const finalSlug = createUrlSafeSlug(editValue || '');
+      onSave(finalSlug);
+    } else {
+      onSave(editValue);
+    }
+    setInternalPopoverOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -53,6 +73,8 @@ export function FieldEditor({
       e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
+      setEditValue(value); // revert
+      setInternalPopoverOpen(false);
       onCancel();
     }
   };
@@ -65,9 +87,7 @@ export function FieldEditor({
       return;
     }
 
-    // Create a temporary URL for immediate preview
     const tempUrl = URL.createObjectURL(file);
-    // Update local state for immediate feedback
     setEditValue(tempUrl);
     
     const formData = new FormData();
@@ -91,15 +111,12 @@ export function FieldEditor({
       }
 
       const result = await response.json();
-      // Update local state and notify parent only once with final URL
       setEditValue(result.url);
       onSave(result.url);
 
     } catch (error) {
       console.error('Failed to upload image:', error);
-      // Revert to original value on error
       setEditValue(value);
-      // Re-throw to allow parent to handle the error if needed
       throw error;
     }
   };
@@ -108,9 +125,8 @@ export function FieldEditor({
     try {
       await handleFiles(e.target.files);
     } catch (error) {
-      // Error is already logged in handleFiles
+      // Error is already logged
     }
-    // Reset the file input so the same file can be selected again if needed
     if (e.target) {
       e.target.value = '';
     }
@@ -131,64 +147,55 @@ export function FieldEditor({
     }
   };
 
-  // Handle select and multiselect fields specially - no editing state, direct interaction
-  if (field.type === 'select' || field.type === 'multiselect') {
+  if (isSelectField || isMultiSelectField) {
     return (
-      <div className="w-full h-full flex items-center px-0 py-0">
-        {field.type === 'select' ? (
+      <div data-cell-trigger="true" className="w-full h-full flex items-center px-0 py-0">
+        {isSelectField ? (
           <NotionSelect
-            options={field.options || []}
+            options={field.type === 'select' ? (field.options || []) : (referenceOptions || [])}
             value={value || null}
-            onChange={(newValue) => {
-              onSave(newValue);
-            }}
-            placeholder="Select an option..."
-            className="w-full border-none shadow-none hover:bg-gray-50"
+            onChange={(newValue) => onSave(newValue)}
+            placeholder={showPlaceholder ? (loadingRefs ? "Loading..." : "Select an option...") : ""}
+            disabled={loadingRefs}
+            className="w-full border-none shadow-none hover:bg-inherit"
+            allowClearSelection={field.name !== 'status'}
           />
         ) : (
           <NotionMultiSelect
-            options={field.options || []}
+            options={field.type === 'multiselect' ? (field.options || []) : (referenceOptions || [])}
             value={value || []}
-            onChange={(newValue) => {
-              onSave(newValue);
-            }}
-            placeholder="Select options..."
-            className="w-full border-none shadow-none hover:bg-gray-50"
+            onChange={(newValue) => onSave(newValue)}
+            placeholder={showPlaceholder ? (loadingRefs ? "Loading..." : "Select options...") : ""}
+            disabled={loadingRefs}
+            className="w-full border-none shadow-none hover:bg-inherit"
           />
         )}
       </div>
     );
   }
 
-  // NEW: Handle datetime and date fields with direct inline DatePicker interaction
-  if (field.type === ('datetime' as any) || field.type === 'date') {
+  if (field.type === 'datetime' || field.type === 'date') {
     return (
-      <div className="w-full h-full flex items-center px-0 py-0">
+      <div data-cell-trigger="true" className="w-full h-[36px] flex items-center px-0 py-0">
         <DatePicker
           date={value ? new Date(value) : undefined}
-          setDate={(date) => {
-            if (date) {
-              onSave(date.toISOString());
-            } else {
-              onSave(null);
-            }
-          }}
+          setDate={(date) => onSave(date ? date.toISOString() : null)}
           disabled={() => false}
-          // Make the trigger look inline/notion-like
-          className="w-full h-8 px-2 border-0 shadow-none hover:bg-gray-50 justify-start text-left font-normal"
+          className="w-full h-8 px-2 border-0 shadow-none hover:bg-inherit justify-start text-left font-normal truncate whitespace-nowrap"
+          hidePlaceholder={!showPlaceholder}
           withTime={field.type === 'datetime'}
         />
       </div>
     );
   }
 
-  // Handle image fields specially - no need for editing state
   if (field.type === 'image') {
     const highlight = isDragging ? 'ring-2 ring-indigo-400' : '';
     return (
       <div
+        data-cell-trigger="true"
         onClick={() => fileInputRef.current?.click()}
-        className={`cursor-pointer w-full h-full block text-left px-4 py-0 overflow-hidden ${highlight}`}
+        className={`cursor-pointer w-full h-[36px] block text-left px-2.5 py-0 overflow-hidden ${highlight}`}
         {...dragProps}
       >
         <input
@@ -198,129 +205,99 @@ export function FieldEditor({
           onChange={handleFileChange}
           className="hidden"
         />
-        {renderValue(field, editValue ?? value)}
+        {renderValue(field, editValue ?? value, referenceOptions)}
       </div>
     );
   }
 
-  if (!isEditing) {
-    const baseClasses = "cursor-pointer w-full h-full block text-left px-4 overflow-hidden py-2";
-    return (
-      <div
-        onClick={onEdit}
-        className={baseClasses}
-      >
-        {renderValue(field, editValue ?? value)}
-      </div>
-    );
-  }
-
+  // Text/number fields now use internal state like other fields
   return (
-    <>
-      {/* Backdrop to close on click outside */}
-      <div
-        className="fixed inset-0 z-40"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleSave();
-        }}
-        aria-hidden="true"
-      />
-      {(() => {
-        // Standard positioning for all fields
-        const leftOffset = '-1px';
-        const adjustedWidth = width;
-        
-        switch (field.type) {
-          case 'number':
-            return (
-              <input
-                ref={inputRef as React.RefObject<HTMLInputElement>}
-                type="number"
-                value={editValue ?? ''}
-                onChange={(e) => {
-                  setEditValue(e.target.value);
-                }}
-                onBlur={() => {
-                  const num = Number(editValue);
-                  if (!isNaN(num)) {
-                    onSave(num);
-                  } else {
-                    setEditValue(value); // revert invalid
-                  }
-                }}
-                onKeyDown={handleKeyDown}
-                className="absolute block rounded-md border border-gray-200 bg-white px-2 py-1 text-sm shadow-lg focus:outline-none z-50"
-                style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset }}
-              />
-            );
-          case 'datetime':
-            return (
-              <div className="absolute left-0 top-0 z-50" style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset }}>
-                 <DatePicker
-                    date={editValue ? new Date(editValue) : undefined}
-                    setDate={(date) => {
-                      if (date) {
-                        onSave(date.toISOString());
-                      } else {
-                        onSave(null);
-                      }
-                    }}
-                    disabled={() => false}
-                    className="w-full"
-                  />
-              </div>
-            )
-
-          case 'text':
-          default:
-            const isSlugField = field.name === 'slug';
-            return (
-              <TextareaAutosize
-                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-                value={editValue || ''}
-                onChange={(e) => {
-                  const inputValue = e.target.value;
-                  if (isSlugField) {
-                    // Apply real-time slug validation
-                    const cleanedValue = validateSlugInput(inputValue);
-                    setEditValue(cleanedValue);
-                  } else {
-                    setEditValue(inputValue);
-                  }
-                }}
-                onBlur={() => {
-                  if (isSlugField) {
-                    // On blur, create a fully valid slug
-                    const finalSlug = createUrlSafeSlug(editValue || '');
-                    setEditValue(finalSlug);
-                    onSave(finalSlug);
-                  } else {
-                    handleSave();
-                  }
-                }}
-                onKeyDown={handleKeyDown}
-                className="absolute block rounded-md border border-gray-200 bg-white px-4 py-2 text-sm shadow-lg focus:outline-none resize-none z-50"
-                style={{ width: `${adjustedWidth}px`, top: '-1px', left: leftOffset, backgroundColor: 'white' }}
-                minRows={1}
-                maxRows={20}
-                cacheMeasurements
-              />
-            );
-        }
-      })()}
-    </>
+    <Popover open={internalPopoverOpen} onOpenChange={(open) => {
+      setInternalPopoverOpen(open);
+      if (!open) {
+        handleSave();
+      }
+    }}>
+      <PopoverTrigger asChild>
+        <div 
+          data-cell-trigger="true"
+          className="cursor-pointer w-full h-[36px] flex items-center text-left px-2.5 overflow-hidden"
+        >
+          {renderValue(field, value, referenceOptions)}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 overflow-hidden"
+        style={{ width: `${width}px` }}
+        side="bottom"
+        align="start"
+        sideOffset={-37}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {(() => {
+          switch (field.type) {
+            case 'number':
+              return (
+                <input
+                  ref={inputRef as React.RefObject<HTMLInputElement>}
+                  type="number"
+                  value={editValue ?? ''}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleSave}
+                  onKeyDown={handleKeyDown}
+                  className="block w-full bg-white px-2 py-1 text-sm focus:outline-none"
+                  autoFocus
+                />
+              );
+            case 'text':
+            default:
+              const isSlugField = field.name === 'slug';
+              return (
+                <TextareaAutosize
+                  ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                  value={editValue || ''}
+                  onChange={(e) => {
+                    const inputValue = e.target.value;
+                    setEditValue(isSlugField ? validateSlugInput(inputValue) : inputValue);
+                  }}
+                  onBlur={handleSave}
+                  onKeyDown={handleKeyDown}
+                  className="block w-full bg-white px-2.5 py-2 text-sm focus:outline-none resize-none"
+                  minRows={1}
+                  maxRows={20}
+                  cacheMeasurements
+                  autoFocus
+                />
+              );
+          }
+        })()}
+      </PopoverContent>
+    </Popover>
   );
 }
 
-function renderValue(field: FieldConfig, value: any): React.ReactNode {
-  if (value === null || value === undefined || value === '') {
-    return <span className="text-gray-400">—</span>;
+function renderValue(field: FieldConfig, value: any, referenceOptions?: { label: string; value: string }[]): React.ReactNode {
+  const isEmpty =
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0);
+
+  if (isEmpty && field.type !== 'image') {
+    return <span className="opacity-0 select-none">&nbsp;</span>;
+  }
+  
+  if (isEmpty && field.type === 'image') {
+    return <span className="opacity-0 select-none">&nbsp;</span>;
   }
 
   switch (field.type) {
     case 'datetime':
-      return <div className="truncate">{value ? format(new Date(value), 'PPP') : '—'}</div>;
+      return (
+        <div className="truncate whitespace-nowrap">
+          {value ? format(new Date(value), 'PP p') : null}
+        </div>
+      );
     case 'boolean':
       return (
         <input
@@ -332,38 +309,68 @@ function renderValue(field: FieldConfig, value: any): React.ReactNode {
       );
 
     case 'select':
-      return <div className="truncate">{value || '—'}</div>;
-
-    case 'multiselect':
-      if (Array.isArray(value) && value.length > 0) {
+      if (field.name === 'status' && ['draft', 'published', 'archived'].includes(value)) {
+        const color = value === 'published' ? 'bg-green-500' : value === 'draft' ? 'bg-gray-400' : 'bg-yellow-500';
+        const label = value.charAt(0).toUpperCase() + value.slice(1);
         return (
-          <div className="flex flex-wrap gap-1">
-            {value.slice(0, 2).map((item: string, index: number) => (
-              <span
-                key={index}
-                className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200"
-              >
-                {item}
-              </span>
-            ))}
-            {value.length > 2 && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-50 text-gray-600 border border-gray-200">
-                +{value.length - 2}
-              </span>
-            )}
+          <div className="truncate flex items-center gap-2">
+            <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
+            <span>{label}</span>
           </div>
         );
       }
-      return <span className="text-gray-400">—</span>;
+      return <div className="truncate">{value}</div>;
+
+    case 'reference': {
+      if (!referenceOptions) {
+        return <div className="truncate text-gray-400">Loading...</div>;
+      }
+      const selectedOption = referenceOptions.find(opt => opt.value === value);
+      return <div className="truncate">{selectedOption?.label || value}</div>;
+    }
+
+    case 'multiselect':
+    case 'multi-reference': {
+      if (!Array.isArray(value) || value.length === 0) {
+        return <span />;
+      }
+
+      let items: string[] = [];
+      if (field.type === 'multi-reference') {
+        if (!referenceOptions) {
+          return <div className="truncate text-gray-400">Loading...</div>;
+        }
+        items = value.map(id => {
+          const option = referenceOptions.find(opt => opt.value === id);
+          return option?.label || id;
+        });
+      } else {
+        items = value;
+      }
+
+      return (
+        <div className="w-full flex flex-nowrap items-center gap-1 overflow-hidden">
+          {items.slice(0, 2).map((item: string, index: number) => (
+            <span
+              key={index}
+              className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200 truncate"
+            >
+              {item}
+            </span>
+          ))}
+          {items.length > 2 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-50 text-gray-600 border border-gray-200">
+              +{items.length - 2}
+            </span>
+          )}
+        </div>
+      );
+    }
 
     case 'image':
       return (
         <div className="w-[100px] h-[36px] overflow-hidden rounded border border-gray-200 bg-gray-50">
-          {value ? (
-            <img src={value} alt="image thumbnail" className="object-cover w-full h-full" loading="lazy" />
-          ) : (
-            <div className="flex items-center justify-center w-full h-full text-xs text-gray-400">No image</div>
-          )}
+          <img src={value} alt="image thumbnail" className="object-cover w-full h-full" loading="lazy" />
         </div>
       );
 

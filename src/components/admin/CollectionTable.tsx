@@ -125,14 +125,14 @@ function DraggableHeader({ header, children, isLastHeader, fieldType }: Draggabl
         maxWidth: header.getSize(),
         ...style,
       }}
-      className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative group ${
+      className={`text-left text-[12px] font-medium text-gray-500 tracking-wide overflow-visible relative group ${
         header.column.getCanSort() && header.column.id !== 'more-actions'
           ? 'cursor-pointer hover:bg-gray-100'
           : ''
       }`}
       onClick={handleHeaderClick}
     >
-      <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-nowrap overflow-hidden">
+      <div className="flex items-center gap-2 px-2.5 py-2 text-nowrap overflow-hidden">
         {/* Field type icon by default, drag handle on hover - only for draggable columns */}
         {isDraggableColumn && (
           <div
@@ -322,6 +322,7 @@ export function CollectionTable({
   onCreate,
   authToken
 }: CollectionTableProps) {
+  const tableRowClass = 'h-[37px]';
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
   const [localItems, setLocalItems] = useState(items);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -332,7 +333,31 @@ export function CollectionTable({
   const [savingItems, setSavingItems] = useState<Set<string>>(new Set());
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [referenceOptions, setReferenceOptions] = useState<Map<string, { label: string; value: string }[]>>(new Map());
   
+  // Global click handler to close editing when clicking outside
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Element;
+      
+      // Don't close if clicking inside a popover
+      if (target.closest('[data-radix-popover-content]')) {
+        return;
+      }
+      
+      // Don't close if clicking on a cell trigger
+      if (target.closest('[data-cell-trigger="true"]')) {
+        return;
+      }
+      
+      // Close any open editor
+      setEditingCell(null);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
   const pendingCellEditsCount = useMemo(() => {
     return Array.from(pendingChanges.values()).reduce((count, change) => {
       const { changes } = change;
@@ -361,12 +386,11 @@ export function CollectionTable({
   const storageKey = `table-column-sizing-${collection.name}`;
   const orderStorageKey = `table-column-order-${collection.name}`;
 
-  // Configure sensors for drag and drop
+  // Configure sensors for drag and drop – use distance instead of delay to avoid click lag
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        delay: 100,
-        tolerance: 5,
+        distance: 5, // start drag after cursor moves 5px, removing the 100ms hold delay
       },
     })
   );
@@ -551,6 +575,46 @@ export function CollectionTable({
     });
   }, [pendingChanges, debouncedSaveDraft, localItems, localCollection.slug]);
 
+  // Fetch options for all reference fields in the collection
+  useEffect(() => {
+    const fetchAllReferenceOptions = async () => {
+      const newOptions = new Map<string, { label: string; value: string }[]>();
+      const collectionsToFetch = new Set<string>();
+
+      // Find all unique reference collections
+      localCollection.fields.forEach(field => {
+        if ((field.type === 'reference' || field.type === 'multi-reference') && field.referenceCollection) {
+          collectionsToFetch.add(field.referenceCollection);
+        }
+      });
+
+      // Fetch options for each unique collection
+      for (const collectionSlug of collectionsToFetch) {
+        try {
+          const res = await fetch(`/api/admin/content/${collectionSlug}?limit=1000`); // High limit to get all items
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json?.items)) {
+              const opts = json.items.map((item: any) => ({ 
+                label: item.title || item.slug || item.id, 
+                value: item.id 
+              }));
+              newOptions.set(collectionSlug, opts);
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch reference options for ${collectionSlug}`, error);
+        }
+      }
+      
+      setReferenceOptions(newOptions);
+    };
+
+    if (localCollection.fields) {
+      fetchAllReferenceOptions();
+    }
+  }, [localCollection]);
+
   const saveAllChanges = useCallback(async () => {
     if (pendingChanges.size === 0) return;
 
@@ -717,17 +781,81 @@ export function CollectionTable({
     const isPublished = !!item.publishedAt;
 
     // Get the current value to check if it actually changed
-    const currentValue = isSystemField ? (item as any)[field] : item.data?.[field];
+    let currentValue;
+    if (field === 'status') {
+      const explicitStatus = (item as any).status || item.data?.status;
+      if (explicitStatus === 'archived') currentValue = 'archived';
+      else if (item.publishedAt) currentValue = 'published';
+      else currentValue = 'draft';
+    } else {
+      currentValue = isSystemField ? (item as any)[field] : item.data?.[field];
+    }
     
     // Don't do anything if the value hasn't actually changed
     if (currentValue === value) {
       return;
     }
 
+    // If unpublishing a published item, treat it as a special case.
+    // This discards pending changes and reverts the item to its last published state, but as a draft.
+    if (isPublished && field === 'status' && value !== 'published') {
+      // Clear pending changes for this item
+      setPendingChanges(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(itemId);
+        return newMap;
+      });
+
+      // Find the original state from before any local edits
+      const originalItemFromServer = items.find(i => i.id === itemId) || item;
+
+      // Optimistically revert item to its original state, but with the new status
+      setLocalItems(prev => prev.map(i => 
+        i.id === itemId 
+          ? { ...originalItemFromServer, status: value, publishedAt: null, draft: null }
+          : i
+      ));
+
+      // Update server in the background
+      (async () => {
+        try {
+          setSavingItems(prev => new Set(prev).add(itemId));
+          // 1. Delete the server-side draft
+          await fetch(`/api/admin/content/${localCollection.slug}/${itemId}/draft`, { method: 'DELETE' });
+          // 2. Unpublish the main item
+          const response = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: value, publishedAt: null }),
+          });
+          if (!response.ok) throw new Error('Failed to unpublish item');
+          
+          const updatedItem = await response.json();
+          setLocalItems(prev => prev.map(i => i.id === itemId ? updatedItem : i));
+
+        } catch (error) {
+          console.error('Failed to unpublish and clear draft:', error);
+          // Consider reverting UI on error
+        } finally {
+          setSavingItems(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(itemId);
+            return newSet;
+          });
+        }
+      })();
+
+      return; // Stop further execution in this handler
+    }
+
     // Update local state immediately
     setLocalItems(prev => prev.map(item => {
       if (item.id === itemId) {
         if (isSystemField) {
+          if (field === 'status') {
+            const newPublishedAt = value === 'published' ? (item.publishedAt || new Date().toISOString()) : null;
+            return { ...item, status: value, publishedAt: newPublishedAt };
+          }
           return { ...item, [field]: value };
         } else {
           return { ...item, data: { ...(item.data || {}), [field]: value } };
@@ -745,6 +873,9 @@ export function CollectionTable({
         let updatedChanges;
         if (isSystemField) {
           updatedChanges = { ...existing.changes, [field]: value };
+          if (field === 'status') {
+            updatedChanges.publishedAt = value === 'published' ? (item.publishedAt || new Date().toISOString()) : null;
+          }
         } else {
           updatedChanges = { 
             ...existing.changes, 
@@ -763,9 +894,18 @@ export function CollectionTable({
       try {
         setSavingItems(prev => new Set(prev).add(itemId));
         
-        const updatePayload = isSystemField 
-          ? { [field]: value }
-          : { data: { ...(item.data || {}), [field]: value } };
+        let updatePayload: any;
+        if (field === 'status') {
+          // keep status in data but sync publishedAt
+          updatePayload = {
+            status: value,
+            publishedAt: value === 'published' ? new Date().toISOString() : null,
+          };
+        } else if (isSystemField) {
+          updatePayload = { [field]: value };
+        } else {
+          updatePayload = { data: { ...(item.data || {}), [field]: value } };
+        }
 
         const response = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`, {
           method: 'PUT',
@@ -892,7 +1032,7 @@ export function CollectionTable({
         return (
           <div className="flex items-center justify-center">
             <div
-              className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              className={`w-2 h-2 ml-[10px] rounded-full flex-shrink-0 ${
                 isPublished ? 'bg-green-400' : 'bg-gray-300'
               }`}
               title={isPublished ? 'Published' : 'Draft'}
@@ -921,11 +1061,11 @@ export function CollectionTable({
               onEdit={() => setEditingCell({ rowId: row.original.id, field: 'title' })}
               onSave={(value: any) => {
                 handleFieldUpdate(row.original.id, 'title', value);
-                setEditingCell(null);
               }}
               onCancel={() => setEditingCell(null)}
               width={column.getSize()}
               authToken={authToken}
+              showPlaceholder={false}
             />
             {isSaving && (
               <div className="absolute -right-6 top-1/2 -translate-y-1/2">
@@ -958,11 +1098,11 @@ export function CollectionTable({
               onEdit={() => setEditingCell({ rowId: row.original.id, field: 'slug' })}
               onSave={(value: any) => {
                 handleFieldUpdate(row.original.id, 'slug', value);
-                setEditingCell(null);
               }}
               onCancel={() => setEditingCell(null)}
               width={column.getSize()}
               authToken={authToken}
+              showPlaceholder={false}
             />
             {isSaving && (
               <div className="absolute -right-6 top-1/2 -translate-y-1/2">
@@ -995,11 +1135,11 @@ export function CollectionTable({
               onEdit={() => setEditingCell({ rowId: row.original.id, field: 'ogImage' })}
               onSave={(value: any) => {
                 handleFieldUpdate(row.original.id, 'ogImage', value);
-                setEditingCell(null);
               }}
               onCancel={() => setEditingCell(null)}
               width={column.getSize()}
               authToken={authToken}
+              showPlaceholder={false}
             />
             {isSaving && (
               <div className="absolute -right-6 top-1/2 -translate-y-1/2">
@@ -1018,7 +1158,17 @@ export function CollectionTable({
       .filter(field => !['body', 'title', 'slug', 'ogImage', 'seoTitle', 'seoDescription'].includes(field.name)) // Exclude system fields handled separately
       .map((field, index): ColumnDef<ContentItem> => ({
         accessorFn: (row) => {
-          // For system fields, access from top level, otherwise from data
+          if (field.name === 'status') {
+            const explicitStatus = (row as any).status || row.data?.status;
+            // If item is archived we show archived regardless
+            if (explicitStatus === 'archived') return 'archived';
+
+            // Otherwise derive from publishedAt flag
+            if (row.publishedAt) return 'published';
+
+            // Fallback to draft if no publishedAt and not archived
+            return 'draft';
+          }
           const isSystemField = ['seoTitle', 'seoDescription', 'ogImage', 'status'].includes(field.name);
           return isSystemField ? (row as any)[field.name] : row.data[field.name];
         },
@@ -1032,7 +1182,7 @@ export function CollectionTable({
           if (field.type === 'boolean') {
             const currentValue = getValue() as boolean;
             return (
-              <div className="px-4 py-2 flex items-center">
+              <div className="px-2.5 py-2 flex items-center">
                 <input
                   type="checkbox"
                   checked={currentValue}
@@ -1065,11 +1215,16 @@ export function CollectionTable({
                 onEdit={() => setEditingCell({ rowId: row.original.id, field: field.name })}
                 onSave={(value: any) => {
                   handleFieldUpdate(row.original.id, field.name, value);
-                  setEditingCell(null);
                 }}
                 onCancel={() => setEditingCell(null)}
                 width={column.getSize()}
                 authToken={authToken}
+                referenceOptions={
+                  (field.type === 'reference' || field.type === 'multi-reference') && field.referenceCollection
+                    ? referenceOptions.get(field.referenceCollection)
+                    : undefined
+                }
+                showPlaceholder={false}
               />
               {isSaving && (
                 <div className="absolute -right-6 top-1/2 -translate-y-1/2">
@@ -1206,10 +1361,10 @@ export function CollectionTable({
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <table className="divide-y-0 divide-gray-200 table-fixed min-w-full" style={{ width: table.getTotalSize() }}>
-                <thead className="bg-gray-50">
+              <table className="divide-y-0 divide-gray-200 table-fixed min-w-full border-b" style={{ width: table.getTotalSize() }}>
+                <thead className="bg-gray-50 border-b border-gray-100">
                   {table.getHeaderGroups().map(headerGroup => (
-                    <tr key={headerGroup.id}>
+                    <tr key={headerGroup.id} className={tableRowClass}>
                       <SortableContext
                         items={draggableColumnIds}
                         strategy={horizontalListSortingStrategy}
@@ -1254,7 +1409,7 @@ export function CollectionTable({
                           return (
                             <th
                               key={header.id}
-                              className={`py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider overflow-visible relative ${
+                              className={`text-left text-[12px] font-medium text-gray-500 tracking-wide overflow-visible relative ${
                                 isSticky ? 'sticky z-20 bg-gray-50' : ''
                               } ${header.column.getCanSort() && !isActionsColumn ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                               style={{ 
@@ -1266,7 +1421,7 @@ export function CollectionTable({
                               }}
                               onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
                             >
-                              <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-nowrap overflow-hidden">
+                              <div className="flex items-center gap-2 px-2.5 py-2 text-nowrap overflow-hidden">
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                                 {header.column.getIsSorted() && (
                                   <span className="ml-2">
@@ -1297,12 +1452,12 @@ export function CollectionTable({
                   ))}
                 </thead>
                 <tbody className="bg-white">
-                  {table.getRowModel().rows.map(row => {
+                  {table.getRowModel().rows.filter(row => row.original).map(row => {
                     const isRowBeingEdited = editingCell?.rowId === row.original.id;
                     return (
                       <tr 
                         key={row.id} 
-                        className={`hover:bg-gray-50 group border-b border-gray-200 last:border-b-0 ${
+                        className={`${tableRowClass} hover:bg-gray-50 group border-b border-gray-200 last:border-b-0 ${
                           isRowBeingEdited ? 'relative z-50' : ''
                         }`}
                       >
@@ -1390,7 +1545,7 @@ export function CollectionTable({
               </table>
               <DragOverlay>
                 {activeId && (
-                  <div className="bg-white shadow-lg border border-gray-200 px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider rounded">
+                  <div className="bg-white shadow-lg border border-gray-200 px-4 py-2 text-[12px] font-medium text-gray-500 tracking-wide rounded">
                     {table.getColumn(activeId)?.columnDef.header as string}
                   </div>
                 )}

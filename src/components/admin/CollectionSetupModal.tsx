@@ -28,6 +28,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useSite } from '@/context/SiteContext';
 
 interface CollectionSetupModalProps {
   isOpen: boolean;
@@ -372,6 +373,9 @@ function FieldEditorModal({
   const [placeholder, setPlaceholder] = useState('');
   const [description, setDescription] = useState('');
   const [options, setOptions] = useState('');
+  const [targetCollection, setTargetCollection] = useState('');
+  const { currentSite } = useSite();
+  const [collections, setCollections] = useState<{ slug: string; name: string }[]>([]);
 
   useEffect(() => {
     if (field) {
@@ -382,6 +386,7 @@ function FieldEditorModal({
       setPlaceholder(field.placeholder || '');
       setDescription(field.description || '');
       setOptions(field.options?.join('\n') || '');
+      setTargetCollection(field.referenceCollection || '');
     } else {
       setName('');
       setLabel('');
@@ -390,6 +395,7 @@ function FieldEditorModal({
       setPlaceholder('');
       setDescription('');
       setOptions('');
+      setTargetCollection('');
     }
   }, [field]);
 
@@ -404,6 +410,22 @@ function FieldEditorModal({
     }
   }, [label, field]);
 
+  // Fetch collections for reference dropdown
+  useEffect(() => {
+    if (!currentSite) return;
+    const fetchCollections = async () => {
+      try {
+        const resp = await fetch(`/api/admin/collections?siteId=${currentSite.id}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setCollections(data.collections || []);
+      } catch (err) {
+        console.error('Failed to load collections', err);
+      }
+    };
+    fetchCollections();
+  }, [currentSite]);
+
   const handleSave = () => {
     if (!name.trim() || !label.trim()) return;
 
@@ -414,7 +436,8 @@ function FieldEditorModal({
       required,
       ...(placeholder && { placeholder }),
       ...(description && { description }),
-      ...((type === 'select' || type === 'multiselect') && options && { options: options.split('\n').filter(opt => opt.trim()) })
+      ...((type === 'select' || type === 'multiselect') && options && { options: options.split('\n').filter(opt => opt.trim()) }),
+      ...((type === 'reference' || type === 'multi-reference') && targetCollection && { referenceCollection: targetCollection }),
     };
 
     onSave(fieldConfig);
@@ -422,7 +445,9 @@ function FieldEditorModal({
 
   const selectedFieldType = getFieldTypeInfo(type);
   const isNameTaken = existingFieldNames.includes(name) && (!field || field.name !== name);
-  const isValid = name.trim() && label.trim() && !isNameTaken;
+  const isValid = name.trim() && label.trim() && !isNameTaken && (
+    (type === 'reference' || type === 'multi-reference') ? !!targetCollection : true
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -525,6 +550,22 @@ function FieldEditorModal({
                 placeholder="Option 1&#10;Option 2&#10;Option 3"
                 rows={4}
               />
+            </div>
+          )}
+
+          {(type === 'reference' || type === 'multi-reference') && (
+            <div className="space-y-2">
+              <Label htmlFor="target-collection">Target Collection</Label>
+              <Select value={targetCollection} onValueChange={setTargetCollection}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose collection..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {collections.map((col) => (
+                    <SelectItem key={col.slug} value={col.slug}>{col.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
         </div>

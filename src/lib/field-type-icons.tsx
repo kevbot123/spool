@@ -30,6 +30,8 @@ export const FIELD_TYPES: FieldTypeInfo[] = [
   { value: 'datetime', label: 'Date & Time', description: 'Date and time picker', icon: Clock },
   { value: 'select', label: 'Select', description: 'Single dropdown selection', icon: ChevronDown },
   { value: 'multiselect', label: 'Multi-select', description: 'Multiple dropdown selections', icon: ListFilter },
+  { value: 'reference', label: 'Reference', description: 'Reference to another collection item', icon: ChevronDown },
+  { value: 'multi-reference', label: 'Multi-reference', description: 'Multiple references to collection items', icon: ListFilter },
   { value: 'json', label: 'JSON', description: 'Raw JSON data', icon: Braces }
 ];
 

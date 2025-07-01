@@ -1,12 +1,17 @@
 export interface FieldConfig {
   name: string;
   label: string;
-  type: 'text' | 'markdown' | 'body' | 'number' | 'boolean' | 'date' | 'datetime' | 'select' | 'multiselect' | 'image' | 'json';
+  type: 'text' | 'markdown' | 'body' | 'number' | 'boolean' | 'date' | 'datetime' | 'select' | 'multiselect' | 'reference' | 'multi-reference' | 'image' | 'json';
   required?: boolean;
   inTable?: boolean;
   placeholder?: string;
   description?: string;
   options?: string[]; // For select and multiselect fields
+  /**
+   * For reference and multi-reference fields, specify which collection the field should reference.
+   * Holds the slug of the target collection.
+   */
+  referenceCollection?: string;
   validation?: {
     min?: number;
     max?: number;

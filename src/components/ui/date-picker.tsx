@@ -19,12 +19,14 @@ export function DatePicker({
   className,
   disabled,
   withTime = false,
+  hidePlaceholder = false,
 }: {
   date: Date | undefined;
   setDate: (date: Date | undefined) => void;
   className?: string;
   disabled?: (date: Date) => boolean;
   withTime?: boolean;
+  hidePlaceholder?: boolean;
 }) {
   // Local state for time when withTime enabled
   const [timeValue, setTimeValue] = React.useState<string>(() => {
@@ -61,13 +63,15 @@ export function DatePicker({
         <Button
           variant={'outline'}
           className={cn(
-            'w-[280px] justify-start text-left font-normal',
+            'w-[280px] justify-start text-left font-normal bg-inherit',
             !date && 'text-muted-foreground',
             className
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, 'PPP') : <span>Pick a date</span>}
+          {/* <CalendarIcon className="mr-2 h-4 w-4" /> */}
+          {date ? (withTime ? format(date, 'PPP p') : format(date, 'PPP')) : (
+            hidePlaceholder ? <span className="opacity-0 select-none">&nbsp;</span> : <span>Pick a date</span>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0">

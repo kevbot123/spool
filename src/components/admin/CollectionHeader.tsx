@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, MoreHorizontal, Plus, MoreVertical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,7 @@ export function CollectionHeader({
   const { setHeaderContent, setBreadcrumbs } = useAdminHeader();
   const { currentSite } = useSite();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     // Set breadcrumbs
@@ -121,7 +123,7 @@ export function CollectionHeader({
           {/* Create Button */}
           <Button onClick={onCreate} size="sm" className="whitespace-nowrap" variant="outline">
             <Plus className="w-4 h-4" />
-            New item
+            New
           </Button>
 
           {/* Bulk Actions */}
@@ -173,7 +175,7 @@ export function CollectionHeader({
               });
               if (resp.ok) {
                 setIsModalOpen(false);
-                // Optionally reload page or trigger refetch
+                router.refresh();
               } else {
                 console.error('Failed to save collection');
               }

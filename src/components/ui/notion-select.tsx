@@ -19,12 +19,16 @@ import {
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 
+type Option = string | { label: string; value: string };
+
 interface NotionSelectProps {
-  options: string[];
+  options: Option[];
   value?: string | null;
   onChange: (value: string | null) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
+  allowClearSelection?: boolean;
 }
 
 export function NotionSelect({ 
@@ -32,9 +36,14 @@ export function NotionSelect({
   value, 
   onChange, 
   placeholder = "Select option...",
-  className
+  className,
+  disabled = false,
+  allowClearSelection = true,
 }: NotionSelectProps) {
   const [open, setOpen] = React.useState(false)
+
+  const getOptionValue = (opt: Option) => (typeof opt === 'string' ? opt : opt.value)
+  const getOptionLabel = (opt: Option) => (typeof opt === 'string' ? opt : opt.label)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -44,25 +53,27 @@ export function NotionSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "w-full justify-between min-h-8 h-auto py-1.5 px-3 text-sm border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 transition-colors",
+            "w-full justify-between min-h-8 h-auto py-1 !pl-2.5 !pr-0 text-sm border-gray-200 hover:border-gray-300 bg-inherit transition-colors",
             !value && "text-gray-500",
+            disabled && "opacity-50 pointer-events-none",
             className
           )}
+          disabled={disabled}
         >
           <span className="truncate">
-            {value ? options.find((option) => option === value) || value : placeholder}
+            {value ? (options.find((opt) => getOptionValue(opt) === value) ? getOptionLabel(options.find((opt) => getOptionValue(opt) === value) as Option) : value) : placeholder}
           </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          {/* <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /> */}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[275px]" align="start">
+      <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[275px] min-w-[225px] mt-[-2px] ml-[-1px] shadow-xl" align="start">
         <Command>
           <CommandInput placeholder="Search options..." className="h-9" />
           <CommandList>
             <CommandEmpty>No option found.</CommandEmpty>
             <CommandGroup>
               {/* Clear selection option */}
-              {value && (
+              {value && allowClearSelection && (
                 <CommandItem
                   value=""
                   onSelect={() => {
@@ -75,25 +86,32 @@ export function NotionSelect({
                   Clear selection
                 </CommandItem>
               )}
-              {options.map((option) => (
-                <CommandItem
-                  key={option}
-                  value={option}
-                  onSelect={(currentValue) => {
-                    onChange(currentValue === value ? null : currentValue)
-                    setOpen(false)
-                  }}
-                  className="cursor-pointer hover:bg-gray-100"
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option ? "opacity-100" : "opacity-0"
+              {options.map((option) => {
+                const optValue = getOptionValue(option)
+                const optLabel = getOptionLabel(option)
+                return (
+                  <CommandItem
+                    key={optValue}
+                    value={optValue}
+                    onSelect={(currentValue) => {
+                      onChange(currentValue === value ? null : currentValue)
+                      setOpen(false)
+                    }}
+                    className="cursor-pointer hover:bg-gray-100"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === optValue ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {['draft','published','archived'].includes(optValue) && (
+                      <span className={`mr-2 inline-block w-2 h-2 rounded-full ${optValue==='published' ? 'bg-green-500' : optValue==='draft' ? 'bg-gray-400' : 'bg-yellow-500'}`}/>
                     )}
-                  />
-                  {option}
-                </CommandItem>
-              ))}
+                    {optLabel}
+                  </CommandItem>
+                )
+              })}
             </CommandGroup>
           </CommandList>
         </Command>
@@ -103,11 +121,12 @@ export function NotionSelect({
 }
 
 interface NotionMultiSelectProps {
-  options: string[];
+  options: Option[];
   value?: string[] | null;
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function NotionMultiSelect({ 
@@ -115,10 +134,14 @@ export function NotionMultiSelect({
   value = [], 
   onChange, 
   placeholder = "Select options...",
-  className
+  className,
+  disabled = false,
 }: NotionMultiSelectProps) {
   const [open, setOpen] = React.useState(false)
   const selectedValues = value || []
+
+  const getOptionValue = (opt: Option) => (typeof opt === 'string' ? opt : opt.value)
+  const getOptionLabel = (opt: Option) => (typeof opt === 'string' ? opt : opt.label)
 
   const handleSelect = (option: string) => {
     const newValue = selectedValues.includes(option)
@@ -145,40 +168,50 @@ export function NotionMultiSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "w-full justify-between min-h-8 h-auto py-1.5 px-3 text-sm border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 transition-colors",
+            "w-full justify-between min-h-8 h-auto py-1 !pl-2.5 !pr-0 text-sm border-gray-200 hover:border-gray-300 bg-inherit !hover:bg-inherit",
             selectedValues.length === 0 && "text-gray-500",
+            disabled && "opacity-50 pointer-events-none",
             className
           )}
+          disabled={disabled}
         >
-          <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">
+          <div className="flex flex-nowrap items-center gap-1 flex-1 min-w-0 overflow-hidden">
             {selectedValues.length === 0 ? (
               <span className="truncate">{placeholder}</span>
             ) : (
               <>
-                {selectedValues.slice(0, 2).map((option) => (
-                  <Badge
-                    key={option}
-                    variant="secondary"
-                    className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                  >
-                    {option}
-                    <button
-                      className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleRemove(option);
-                        }
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        handleRemove(option)
-                      }}
+                {selectedValues.slice(0, 2).map((val) => {
+                  const opt = options.find((o) => getOptionValue(o) === val)
+                  const label = opt ? getOptionLabel(opt) : val
+                  return (
+                    <Badge
+                      key={val}
+                      variant="secondary"
+                      className="text-xs pl-2 pr-1 py-0.5 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                     >
-                      <X className="h-3 w-3 text-blue-600 hover:text-blue-800" />
-                    </button>
-                  </Badge>
-                ))}
+                      {label}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Remove"
+                        className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " " ) {
+                            e.preventDefault();
+                            handleRemove(val);
+                          }
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemove(val);
+                        }}
+                      >
+                        <X className="h-3 w-3 text-blue-600 hover:text-blue-800" />
+                      </span>
+                    </Badge>
+                  )
+                })}
                 {selectedValues.length > 2 && (
                   <Badge variant="outline" className="text-xs px-2 py-0.5 bg-gray-50 text-gray-600">
                     +{selectedValues.length - 2} more
@@ -187,10 +220,10 @@ export function NotionMultiSelect({
               </>
             )}
           </div>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          {/* <ChevronDown className="h-4 w-4 shrink-0 opacity-50" /> */}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[275px]" align="start">
+      <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[225px] mt-[-2px] ml-[-1px] shadow-xl" align="start">
         <Command>
           <CommandInput placeholder="Search options..." className="h-9" />
           <CommandList>
@@ -208,12 +241,14 @@ export function NotionMultiSelect({
                 </CommandItem>
               )}
               {options.map((option) => {
-                const isSelected = selectedValues.includes(option)
+                const optValue = getOptionValue(option)
+                const optLabel = getOptionLabel(option)
+                const isSelected = selectedValues.includes(optValue)
                 return (
                   <CommandItem
-                    key={option}
-                    value={option}
-                    onSelect={() => handleSelect(option)}
+                    key={optValue}
+                    value={optValue}
+                    onSelect={() => handleSelect(optValue)}
                     className="cursor-pointer hover:bg-gray-100"
                   >
                     <div className={cn(
@@ -224,7 +259,10 @@ export function NotionMultiSelect({
                     )}>
                       {isSelected && <Check className="h-3 w-3" />}
                     </div>
-                    {option}
+                    {['draft','published','archived'].includes(optValue) && (
+                      <span className={`mr-2 inline-block w-2 h-2 rounded-full ${optValue==='published' ? 'bg-green-500' : optValue==='draft' ? 'bg-gray-400' : 'bg-yellow-500'}`}/>
+                    )}
+                    {optLabel}
                   </CommandItem>
                 )
               })}

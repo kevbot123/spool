@@ -735,6 +735,19 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
             setValue(field.name, date ? date.toISOString() : null, { shouldDirty: true });
           }}
           disabled={() => false}
+          withTime={true}
+        />
+      );
+      
+    case 'date':
+      const d = watch(field.name) ? new Date(watch(field.name)) : undefined;
+      return (
+        <DatePicker
+          date={d}
+          setDate={(date) => {
+            setValue(field.name, date ? date.toISOString() : null, { shouldDirty: true });
+          }}
+          disabled={() => false}
         />
       );
       
@@ -819,6 +832,22 @@ function renderField(field: any, register: any, setValue: any, watch: any, authT
         />
       );
       
+    case 'reference':
+    case 'multi-reference': {
+      const isMulti = field.type === 'multi-reference';
+      return (
+        <ReferenceFieldInput
+          field={field}
+          value={watch(field.name)}
+          isMulti={isMulti}
+          onValueChange={(val) => {
+            setValue(field.name, val, { shouldDirty: true });
+            onFieldUpdate(itemId, field.name, val);
+          }}
+        />
+      );
+    }
+    
     default:
       return (
         <textarea
@@ -974,6 +1003,68 @@ function ImageUploadField({ field, value, setValue, authToken, register, onField
       {/* Hidden input to store the URL value in the form */}
       <input type="hidden" {...register(field.name)} />
     </div>
+  );
+}
+
+// Helper component for reference fields to comply with React hooks rules
+function ReferenceFieldInput({
+  field,
+  value,
+  isMulti,
+  onValueChange,
+}: {
+  field: any;
+  value: any;
+  isMulti: boolean;
+  onValueChange: (val: any) => void;
+}) {
+  const [options, setOptions] = useState<any[]>(field.options || []);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (field.referenceCollection) {
+      const fetchOptions = async () => {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/admin/content/${field.referenceCollection}?limit=100`);
+          if (!res.ok) return;
+          const json = await res.json();
+          if (Array.isArray(json?.items)) {
+            const opts = json.items.map((item: any) => ({ label: item.title || item.slug || item.id, value: item.id }));
+            setOptions(opts);
+          }
+        } catch (err) {
+          console.error('Failed to fetch reference options', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchOptions();
+    }
+  }, [field.referenceCollection]);
+
+  if (isMulti) {
+    return (
+      <NotionMultiSelect
+        options={options}
+        value={value || []}
+        onChange={onValueChange}
+        placeholder={loading ? 'Loading...' : (field.placeholder || 'Select options...')}
+        disabled={loading}
+        className="w-full"
+      />
+    );
+  }
+
+  return (
+    <NotionSelect
+      options={options}
+      value={value || null}
+      onChange={onValueChange}
+      placeholder={loading ? 'Loading...' : (field.placeholder || 'Select an option...')}
+      disabled={loading}
+      className="w-full"
+    />
   );
 }
 
