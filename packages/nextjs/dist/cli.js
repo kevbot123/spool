@@ -15,25 +15,36 @@ SPOOL_API_KEY=your_api_key_here
 SPOOL_SITE_ID=your_site_id_here`;
 async function createSpoolRoute() {
     const cwd = process.cwd();
-    // Detect if it's app router or pages router
-    const hasAppDir = await fs_1.promises.access((0, path_1.join)(cwd, 'app')).then(() => true).catch(() => false);
-    const hasPagesDir = await fs_1.promises.access((0, path_1.join)(cwd, 'pages')).then(() => true).catch(() => false);
+    console.log(`🔎 Current working directory: ${cwd}`);
     // Detect project structure (root or src/)
+    console.log('🔎 Checking for Next.js project structure...');
     let baseDir = null;
+    const appPath = (0, path_1.join)(cwd, 'app');
+    const pagesPath = (0, path_1.join)(cwd, 'pages');
+    const srcAppPath = (0, path_1.join)(cwd, 'src', 'app');
+    const srcPagesPath = (0, path_1.join)(cwd, 'src', 'pages');
+    console.log(`   - Checking for: ${appPath}`);
+    const hasAppDir = await fs_1.promises.access(appPath).then(() => true).catch(() => false);
+    console.log(`   - Checking for: ${pagesPath}`);
+    const hasPagesDir = await fs_1.promises.access(pagesPath).then(() => true).catch(() => false);
+    console.log(`   - Checking for: ${srcAppPath}`);
+    const hasSrcApp = await fs_1.promises.access(srcAppPath).then(() => true).catch(() => false);
+    console.log(`   - Checking for: ${srcPagesPath}`);
+    const hasSrcPages = await fs_1.promises.access(srcPagesPath).then(() => true).catch(() => false);
     if (hasAppDir) {
         baseDir = 'app';
     }
     else if (hasPagesDir) {
         baseDir = 'pages';
     }
-    else {
-        // Check src/ variant
-        const hasSrcApp = await fs_1.promises.access((0, path_1.join)(cwd, 'src', 'app')).then(() => true).catch(() => false);
-        const hasSrcPages = await fs_1.promises.access((0, path_1.join)(cwd, 'src', 'pages')).then(() => true).catch(() => false);
-        if (hasSrcApp)
-            baseDir = (0, path_1.join)('src', 'app');
-        else if (hasSrcPages)
-            baseDir = (0, path_1.join)('src', 'pages');
+    else if (hasSrcApp) {
+        baseDir = (0, path_1.join)('src', 'app');
+    }
+    else if (hasSrcPages) {
+        baseDir = (0, path_1.join)('src', 'pages');
+    }
+    if (baseDir) {
+        console.log(`✅ Found Next.js directory: ${baseDir}`);
     }
     if (!baseDir) {
         console.error('❌ This doesn\'t appear to be a Next.js project. Make sure you\'re in the project root (app/ or pages/ folder not found).');

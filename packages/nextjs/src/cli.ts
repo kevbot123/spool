@@ -16,24 +16,42 @@ SPOOL_SITE_ID=your_site_id_here`;
 
 async function createSpoolRoute() {
   const cwd = process.cwd();
-  
-  // Detect if it's app router or pages router
-  const hasAppDir = await fs.access(join(cwd, 'app')).then(() => true).catch(() => false);
-  const hasPagesDir = await fs.access(join(cwd, 'pages')).then(() => true).catch(() => false);
-  
+  console.log(`🔎 Current working directory: ${cwd}`);
+
   // Detect project structure (root or src/)
+  console.log('🔎 Checking for Next.js project structure...');
   let baseDir: string | null = null;
+  
+  const appPath = join(cwd, 'app');
+  const pagesPath = join(cwd, 'pages');
+  const srcAppPath = join(cwd, 'src', 'app');
+  const srcPagesPath = join(cwd, 'src', 'pages');
+
+  console.log(`   - Checking for: ${appPath}`);
+  const hasAppDir = await fs.access(appPath).then(() => true).catch(() => false);
+  
+  console.log(`   - Checking for: ${pagesPath}`);
+  const hasPagesDir = await fs.access(pagesPath).then(() => true).catch(() => false);
+  
+  console.log(`   - Checking for: ${srcAppPath}`);
+  const hasSrcApp = await fs.access(srcAppPath).then(() => true).catch(() => false);
+  
+  console.log(`   - Checking for: ${srcPagesPath}`);
+  const hasSrcPages = await fs.access(srcPagesPath).then(() => true).catch(() => false);
+
+
   if (hasAppDir) {
     baseDir = 'app';
   } else if (hasPagesDir) {
     baseDir = 'pages';
-  } else {
-    // Check src/ variant
-    const hasSrcApp = await fs.access(join(cwd, 'src', 'app')).then(() => true).catch(() => false);
-    const hasSrcPages = await fs.access(join(cwd, 'src', 'pages')).then(() => true).catch(() => false);
-
-    if (hasSrcApp) baseDir = join('src', 'app');
-    else if (hasSrcPages) baseDir = join('src', 'pages');
+  } else if (hasSrcApp) {
+    baseDir = join('src', 'app');
+  } else if (hasSrcPages) {
+    baseDir = join('src', 'pages');
+  }
+  
+  if (baseDir) {
+    console.log(`✅ Found Next.js directory: ${baseDir}`);
   }
 
   if (!baseDir) {
