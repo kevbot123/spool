@@ -1218,7 +1218,7 @@ export function CollectionTable({
     // Make system-set date fields read-only with reduced opacity
     if (['dateLastModified', 'datePublished'].includes(field.name)) {
       const value = getValue();
-      const displayValue = value ? new Date(value as string).toLocaleDateString() : '—';
+      const displayValue = value ? new Date(value as string).toLocaleDateString() : '';
       return (
         <div className="px-2.5 py-2 text-gray-900 opacity-50">
           {displayValue}

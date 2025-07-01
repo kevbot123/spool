@@ -1,0 +1,46 @@
+{
+  "name": "@spool/nextjs",
+  "version": "0.1.0",
+  "description": "The beautiful headless CMS for Next.js developers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "nextjs",
+    "cms",
+    "headless",
+    "content-management",
+    "markdown",
+    "spool"
+  ],
+  "author": "Spool Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/spool.git",
+    "directory": "packages/nextjs"
+  },
+  "homepage": "https://spool.dev",
+  "peerDependencies": {
+    "next": ">=13.0.0",
+    "react": ">=18.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

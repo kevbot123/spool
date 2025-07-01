@@ -73,4 +73,4 @@ dist/
 /content/uploads/
 /public/uploads/
 *.sqlite
-*.db 
+*.db packages/nextjs/node_modules/
