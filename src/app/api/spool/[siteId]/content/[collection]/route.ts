@@ -76,17 +76,38 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch content' }, { status: 500 });
     }
 
+    // Ensure default fields always exist in the response so client code can rely on them
+    const DEFAULT_DATA_KEYS = [
+      'title',
+      'description',
+      'seoTitle',
+      'seoDescription',
+      'ogTitle',
+      'ogDescription',
+      'ogImage'
+    ];
+
+    const filledItems = (contentItems || []).map((item) => {
+      const filledData: Record<string, any> = { ...item.data };
+      DEFAULT_DATA_KEYS.forEach((key) => {
+        if (filledData[key] === undefined) {
+          filledData[key] = '';
+        }
+      });
+      return { ...item, data: filledData };
+    });
+
     return NextResponse.json({
       collection: {
         name: collection.name,
         slug: collection.slug,
         schema: collection.schema
       },
-      items: contentItems || [],
+      items: filledItems,
       pagination: {
         offset,
         limit,
-        total: contentItems?.length || 0
+        total: filledItems.length
       }
     });
 
