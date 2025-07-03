@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getMarkdownProcessor } from '@/lib/cms/markdown';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -76,26 +77,23 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch content' }, { status: 500 });
     }
 
-    // Ensure default fields always exist in the response so client code can rely on them
-    const DEFAULT_DATA_KEYS = [
-      'title',
-      'description',
-      'seoTitle',
-      'seoDescription',
-      'ogTitle',
-      'ogDescription',
-      'ogImage'
-    ];
+    const markdownProcessor = getMarkdownProcessor();
 
-    const filledItems = (contentItems || []).map((item) => {
-      const filledData: Record<string, any> = { ...item.data };
-      DEFAULT_DATA_KEYS.forEach((key) => {
-        if (filledData[key] === undefined) {
-          filledData[key] = '';
+    const processedItems = await Promise.all(
+      (contentItems || []).map(async (item) => {
+        const processedData = { ...item.data };
+        if (collection.schema) {
+          for (const field of collection.schema) {
+            if (field.type === 'markdown' && processedData[field.name]) {
+              processedData[`${field.name}_html`] = await markdownProcessor.processMarkdown(
+                processedData[field.name]
+              );
+            }
+          }
         }
-      });
-      return { ...item, data: filledData };
-    });
+        return { ...item, data: processedData };
+      })
+    );
 
     return NextResponse.json({
       collection: {
@@ -103,11 +101,11 @@ export async function GET(
         slug: collection.slug,
         schema: collection.schema
       },
-      items: filledItems,
+      items: processedItems,
       pagination: {
         offset,
         limit,
-        total: filledItems.length
+        total: processedItems.length
       }
     });
 

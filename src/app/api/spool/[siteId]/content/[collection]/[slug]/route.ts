@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getMarkdownProcessor } from '@/lib/cms/markdown';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,25 +65,24 @@ export async function GET(
       return NextResponse.json({ error: 'Content not found' }, { status: 404 });
     }
 
-    // Ensure default fields always exist (mirrors logic in collection list endpoint)
-    const DEFAULT_DATA_KEYS = [
-      'title',
-      'description',
-      'seoTitle',
-      'seoDescription',
-      'ogTitle',
-      'ogDescription',
-      'ogImage'
-    ];
+    const markdownProcessor = getMarkdownProcessor();
+    const processedData = { ...contentItem.data };
 
-    const filledData: Record<string, any> = { ...contentItem.data };
-    DEFAULT_DATA_KEYS.forEach((key) => {
-      if (filledData[key] === undefined) {
-        filledData[key] = '';
+    // Process markdown fields
+    if (collection.schema) {
+      for (const field of collection.schema) {
+        if (field.type === 'markdown' && processedData[field.name]) {
+          processedData[`${field.name}_html`] = await markdownProcessor.processMarkdown(
+            processedData[field.name]
+          );
+        }
       }
-    });
+    }
 
-    const filledItem = { ...contentItem, data: filledData };
+    const filledItem = { 
+      ...contentItem, 
+      data: processedData,
+    };
 
     return NextResponse.json(filledItem);
 
