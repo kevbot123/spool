@@ -68,9 +68,16 @@ export async function POST(
     const contentManager = getContentManager();
     const siteId = await getUserSiteId();
     
+    // Generate a better default title based on collection name
+    const collectionName = collection.charAt(0).toUpperCase() + collection.slice(1);
+    const timestamp = new Date().toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    });
+    
     const newItem = await contentManager.createContent(collection, {
-      title: 'New Item',
-      slug: `new-item-${Date.now()}`,
+      title: `New ${collectionName.slice(0, -1)} - ${timestamp}`, // Remove 's' from plural
+      slug: `new-${collection.toLowerCase()}-${Date.now()}`,
     }, siteId);
     
     return NextResponse.json(newItem, { status: 201 });

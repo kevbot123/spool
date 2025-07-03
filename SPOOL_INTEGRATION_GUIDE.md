@@ -94,9 +94,37 @@ const collections = await getSpoolCollections(spoolConfig);
 
 ---
 
-## 4. Example: Building a Blog
+## 4. Default Fields in Every Collection
+
+Every new collection you create in Spool automatically includes a set of foundational fields so you always have sensible SEO metadata and publication info without any extra configuration.
+
+| **Field**        | **Location**  | **Type**                  | **Notes**                                                                |
+|------------------|---------------|---------------------------|--------------------------------------------------------------------------|
+| `title`          | `item.data`   | string                    | **Required.** Main headline for the item                                 |
+| `description`    | `item.data`   | string                    | Optional short summary (used in lists & default meta description)        |
+| `seoTitle`       | `item.data`   | string                    | Optional. Overrides `title` for search engines                           |
+| `seoDescription` | `item.data`   | string                    | Optional. Overrides `description` for search engines                     |
+| `ogTitle`        | `item.data`   | string                    | Optional. Title for social sharing (Open Graph)                          |
+| `ogDescription`  | `item.data`   | string                    | Optional. Description for social sharing (Open Graph)                    |
+| `ogImage`        | `item.data`   | image URL\*               | Optional. Social preview / hero image                                    |
+| `slug`           | top-level     | string                    | **Required.** URL-friendly identifier set when creating the item         |
+| `status`         | top-level     | `draft` \| `published`    | Defaults to `draft`. Controls visibility                                 |
+| `published_at`   | top-level     | datetime                  | Automatic. Set the first time `status` becomes `published`               |
+| `updated_at`     | top-level     | datetime                  | Automatic. Updated every time you modify the item                        |
+
+\* `ogImage` is returned as a full URL string when you request content.
+
+You can add any custom fields you like on top of these defaults.
+
+---
+
+## 5. Example: Building a Blog
 
 Here is a complete example for creating a blog list and detail pages.
+
+> **Important Setup Notes:**
+> 1. **Dynamic Routes Required:** To enable individual post URLs like `/blog/your-post-slug` you **must** create a dynamic route folder `app/blog/[slug]` with its own `page.tsx`. Without this folder, Next.js will return a 404 even though the content exists in Spool.
+> 2. **Add Content First:** Before testing your frontend, make sure to add some content in your Spool admin dashboard and fill in at least the `title` field. Empty titles will cause your blog listing to appear broken.
 
 ### Blog Listing Page
 
@@ -118,12 +146,12 @@ export default async function BlogIndexPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {posts.map((post: any) => (
           <Link href={`/blog/${post.slug}`} key={post.id} className="block border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-            {post.data.image && (
-              <img src={post.data.image} alt={post.data.title} className="w-full h-48 object-cover" />
+            {post.data.ogImage && (
+              <img src={post.data.ogImage} alt={post.data.title} className="w-full h-48 object-cover" />
             )}
             <div className="p-6">
-              <h2 className="text-2xl font-bold mb-2">{post.data.title}</h2>
-              <p className="text-gray-600 mb-4">{post.data.excerpt}</p>
+              <h2 className="text-2xl font-bold mb-2">{post.data.title || 'Untitled'}</h2>
+              <p className="text-gray-600 mb-4">{post.data.description}</p>
               <div className="text-sm text-gray-500">
                 <span>{new Date(post.published_at).toLocaleDateString()}</span>
               </div>
@@ -148,14 +176,16 @@ import { SpoolSEO } from '@spool/nextjs';
 import { notFound } from 'next/navigation';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 }
 
 export default async function BlogPostPage({ params }: PageProps) {
+  const { slug } = await params;
+  
   // 1. Fetch the single post using the slug from the URL
-  const post = await getSpoolContent(spoolConfig, 'blog', params.slug);
+  const post = await getSpoolContent(spoolConfig, 'blog', slug);
 
   if (!post) {
     return notFound();
@@ -164,7 +194,7 @@ export default async function BlogPostPage({ params }: PageProps) {
   return (
     <>
       {/* 2. Add automatic SEO meta tags */}
-      <SpoolSEO content={post} collection="blog" path={`/blog/${params.slug}`} />
+      <SpoolSEO content={post} collection="blog" path={`/blog/${slug}`} />
 
       <article className="container mx-auto px-4 py-8">
         <h1 className="text-5xl font-extrabold mb-4">{post.data.title}</h1>
@@ -172,8 +202,8 @@ export default async function BlogPostPage({ params }: PageProps) {
           Published on {new Date(post.published_at).toLocaleDateString()}
         </div>
         
-        {post.data.image && (
-          <img src={post.data.image} alt={post.data.title} className="w-full h-96 object-cover rounded-lg mb-8" />
+        {post.data.ogImage && (
+          <img src={post.data.ogImage} alt={post.data.title} className="w-full h-96 object-cover rounded-lg mb-8" />
         )}
         
         {/* Render your markdown content here */}
@@ -192,6 +222,23 @@ export async function generateStaticParams() {
   return posts.map((post: any) => ({
     slug: post.slug,
   }));
+}
+
+// Generate metadata for SEO
+export async function generateMetadata({ params }: PageProps) {
+  const { slug } = await params;
+  const post = await getSpoolContent(spoolConfig, 'blog', slug);
+  
+  if (!post) {
+    return {
+      title: 'Post Not Found'
+    };
+  }
+  
+  return {
+    title: post.data.seoTitle || post.data.title || 'Blog Post',
+    description: post.data.seoDescription || post.data.description || undefined
+  };
 }
 ```
 

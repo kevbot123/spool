@@ -64,14 +64,27 @@ export async function GET(
       return NextResponse.json({ error: 'Content not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
-      collection: {
-        name: collection.name,
-        slug: collection.slug,
-        schema: collection.schema
-      },
-      item: contentItem
+    // Ensure default fields always exist (mirrors logic in collection list endpoint)
+    const DEFAULT_DATA_KEYS = [
+      'title',
+      'description',
+      'seoTitle',
+      'seoDescription',
+      'ogTitle',
+      'ogDescription',
+      'ogImage'
+    ];
+
+    const filledData: Record<string, any> = { ...contentItem.data };
+    DEFAULT_DATA_KEYS.forEach((key) => {
+      if (filledData[key] === undefined) {
+        filledData[key] = '';
+      }
     });
+
+    const filledItem = { ...contentItem, data: filledData };
+
+    return NextResponse.json(filledItem);
 
   } catch (error) {
     console.error('Error fetching content item:', error);
