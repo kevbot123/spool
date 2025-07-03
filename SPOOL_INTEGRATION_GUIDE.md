@@ -21,7 +21,7 @@ npm install @spool/nextjs
 npx create-spool-route
 ```
 
-This command automatically creates the file `app/api/spool/[...route]/route.ts` for you.
+This command automatically creates the file `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router) for you.
 
 ---
 
@@ -170,9 +170,8 @@ This page fetches a single post by its slug from the URL parameters.
 
 **`app/blog/[slug]/page.tsx`**
 ```typescript
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent, generateSpoolMetadata } from '@spool/nextjs';
 import { spoolConfig } from '@/lib/spool';
-import { SpoolSEO } from '@spool/nextjs';
 import { notFound } from 'next/navigation';
 
 interface PageProps {
@@ -192,27 +191,22 @@ export default async function BlogPostPage({ params }: PageProps) {
   }
 
   return (
-    <>
-      {/* 2. Add automatic SEO meta tags */}
-      <SpoolSEO content={post} collection="blog" path={`/blog/${slug}`} />
-
-      <article className="container mx-auto px-4 py-8">
-        <h1 className="text-5xl font-extrabold mb-4">{post.data.title}</h1>
-        <div className="text-gray-500 mb-8">
-          Published on {new Date(post.published_at).toLocaleDateString()}
-        </div>
-        
-        {post.data.ogImage && (
-          <img src={post.data.ogImage} alt={post.data.title} className="w-full h-96 object-cover rounded-lg mb-8" />
-        )}
-        
-        {/* Render your markdown content here */}
-        <div
-          className="prose lg:prose-xl max-w-none"
-          dangerouslySetInnerHTML={{ __html: post.data.body_html }}
-        />
-      </article>
-    </>
+    <article className="container mx-auto px-4 py-8">
+      <h1 className="text-5xl font-extrabold mb-4">{post.data.title}</h1>
+      <div className="text-gray-500 mb-8">
+        Published on {new Date(post.published_at).toLocaleDateString()}
+      </div>
+      
+      {post.data.ogImage && (
+        <img src={post.data.ogImage} alt={post.data.title} className="w-full h-96 object-cover rounded-lg mb-8" />
+      )}
+      
+      {/* Render your markdown content here */}
+      <div
+        className="prose lg:prose-xl max-w-none"
+        dangerouslySetInnerHTML={{ __html: post.data.body_html }}
+      />
+    </article>
   );
 }
 
@@ -224,7 +218,7 @@ export async function generateStaticParams() {
   }));
 }
 
-// Generate metadata for SEO
+// Generate metadata for SEO (App Router)
 export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
   const post = await getSpoolContent(spoolConfig, 'blog', slug);
@@ -235,11 +229,122 @@ export async function generateMetadata({ params }: PageProps) {
     };
   }
   
-  return {
-    title: post.data.seoTitle || post.data.title || 'Blog Post',
-    description: post.data.seoDescription || post.data.description || undefined
-  };
+  return generateSpoolMetadata({
+    content: post,
+    collection: 'blog',
+    path: `/blog/${slug}`,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  });
 }
 ```
 
-This guide should provide a complete reference for using Spool as a headless CMS with Next.js. 
+---
+
+## 6. SEO and Metadata
+
+### Automatic SEO with App Router
+
+For Next.js App Router, use the `generateSpoolMetadata` helper:
+
+```typescript
+import { generateSpoolMetadata } from '@spool/nextjs';
+
+export async function generateMetadata({ params }: PageProps) {
+  const post = await getSpoolContent(spoolConfig, 'blog', params.slug);
+  
+  return generateSpoolMetadata({
+    content: post,
+    collection: 'blog',
+    path: `/blog/${params.slug}`,
+    siteUrl: 'https://yoursite.com'
+  });
+}
+```
+
+### Sitemap Generation
+
+**`app/sitemap.xml/route.ts`**
+```typescript
+import { getSpoolSitemap } from '@spool/nextjs';
+import { spoolConfig } from '@/lib/spool';
+
+export async function GET() {
+  const sitemap = await getSpoolSitemap(spoolConfig);
+  
+  return new Response(sitemap, {
+    headers: {
+      'Content-Type': 'application/xml',
+    },
+  });
+}
+```
+
+### Robots.txt Generation
+
+**`app/robots.txt/route.ts`**
+```typescript
+import { getSpoolRobots } from '@spool/nextjs';
+import { spoolConfig } from '@/lib/spool';
+
+export async function GET() {
+  const robots = await getSpoolRobots(spoolConfig);
+  
+  return new Response(robots, {
+    headers: {
+      'Content-Type': 'text/plain',
+    },
+  });
+}
+```
+
+---
+
+## 7. Advanced Features
+
+### Real-time Content Updates
+
+When content is published in the Spool admin, your Next.js site automatically revalidates the affected pages using Next.js's `revalidatePath` function.
+
+### Draft Content
+
+By default, only published content is returned. To fetch draft content (for preview purposes), you can modify the API calls to include draft status.
+
+### Error Handling
+
+```typescript
+import { getSpoolContent } from '@spool/nextjs';
+
+export default async function BlogPage() {
+  try {
+    const posts = await getSpoolContent(spoolConfig, 'blog');
+    // Handle success
+  } catch (error) {
+    console.error('Failed to fetch posts:', error);
+    // Handle error - show fallback UI
+  }
+}
+```
+
+---
+
+## 8. Troubleshooting
+
+### Common Issues
+
+1. **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
+2. **Empty content**: Check that content is published (not draft) in the Spool admin
+3. **API errors**: Verify your `SPOOL_API_KEY` and `SPOOL_SITE_ID` are correct
+4. **Build errors**: Ensure all environment variables are set in your deployment environment
+
+### Debug Mode
+
+Add debug logging to see what's happening:
+
+```typescript
+const posts = await getSpoolContent(spoolConfig, 'blog');
+console.log('Fetched posts:', posts.length);
+```
+
+---
+
+This guide should provide a complete reference for using Spool as a headless CMS with Next.js. The setup process is now simplified to just 3 commands and works seamlessly with both App Router and Pages Router. 

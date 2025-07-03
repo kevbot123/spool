@@ -26,7 +26,16 @@ export async function getSpoolContent(
     throw new Error(`Failed to fetch content: ${response.statusText}`);
   }
   
-  return response.json();
+  const data = await response.json();
+  
+  // Handle different response formats
+  if (slug) {
+    // Single item - return just the item
+    return data.item || data;
+  } else {
+    // Collection - return just the items array
+    return data.items || data;
+  }
 }
 
 /**
@@ -45,7 +54,10 @@ export async function getSpoolCollections(config: SpoolConfig) {
     throw new Error(`Failed to fetch collections: ${response.statusText}`);
   }
   
-  return response.json();
+  const data = await response.json();
+  
+  // Return just the collections array
+  return data.collections || data;
 }
 
 /**
@@ -84,4 +96,49 @@ export async function getSpoolRobots(config: SpoolConfig): Promise<string> {
   }
   
   return response.text();
+}
+
+/**
+ * Generate metadata for Next.js App Router
+ */
+export function generateSpoolMetadata(options: {
+  content: any;
+  collection: string;
+  path: string;
+  siteUrl: string;
+}) {
+  const { content, collection, path, siteUrl } = options;
+  
+  const title = content.data?.seoTitle || content.data?.title || 'Untitled';
+  const description = content.data?.seoDescription || content.data?.description || content.data?.excerpt || '';
+  const canonicalUrl = content.data?.canonicalUrl || `${siteUrl}${path}`;
+  const ogImage = content.data?.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
+  
+  return {
+    title,
+    description,
+    canonical: canonicalUrl,
+    openGraph: {
+      title: content.data?.ogTitle || title,
+      description: content.data?.ogDescription || description,
+      url: canonicalUrl,
+      siteName: siteUrl,
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: title,
+      description: description,
+      images: [ogImage],
+    },
+    robots: content.data?.noIndex ? 'noindex,nofollow' : 'index,follow',
+  };
 } 

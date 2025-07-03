@@ -8,8 +8,16 @@ const ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spool/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY!,
-  siteId: process.env.SPOOL_SITE_ID!
+  siteId: process.env.SPOOL_SITE_ID!,
 });`;
+const PAGES_ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spool/nextjs';
+
+const handler = createSpoolHandler({
+  apiKey: process.env.SPOOL_API_KEY!,
+  siteId: process.env.SPOOL_SITE_ID!,
+});
+
+export default handler;`;
 const ENV_TEMPLATE = `# Add these to your .env.local file:
 SPOOL_API_KEY=your_api_key_here
 SPOOL_SITE_ID=your_site_id_here`;
@@ -62,8 +70,7 @@ async function createSpoolRoute() {
     }
     else {
         const routeFile = (0, path_1.join)(routeDir, '[...route].ts');
-        const pagesTemplate = ROUTE_TEMPLATE.replace('export const { GET, POST, PUT, DELETE }', 'export default');
-        await fs_1.promises.writeFile(routeFile, pagesTemplate);
+        await fs_1.promises.writeFile(routeFile, PAGES_ROUTE_TEMPLATE);
         console.log(`✅ Created ${baseDir}/api/spool/[...route].ts`);
     }
     // Show environment setup

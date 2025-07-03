@@ -8,18 +8,22 @@ interface SpoolSEOProps {
   siteUrl?: string;
 }
 
+/**
+ * SEO component for Pages Router
+ * @deprecated Use generateSpoolMetadata for App Router instead
+ */
 export function SpoolSEO({ content, collection, path, siteUrl = '' }: SpoolSEOProps) {
-  const title = content.seoTitle || content.title || 'Untitled';
-  const description = content.seoDescription || content.excerpt || '';
-  const canonicalUrl = content.canonicalUrl || `${siteUrl}${path}`;
-  const ogImage = content.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
+  const title = content.data?.seoTitle || content.data?.title || 'Untitled';
+  const description = content.data?.seoDescription || content.data?.description || content.data?.excerpt || '';
+  const canonicalUrl = content.data?.canonicalUrl || `${siteUrl}${path}`;
+  const ogImage = content.data?.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
 
   return (
     <Head>
       <title>{title}</title>
       <meta name="description" content={description} />
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
+      <meta property="og:title" content={content.data?.ogTitle || title} />
+      <meta property="og:description" content={content.data?.ogDescription || description} />
       <meta property="og:image" content={ogImage} />
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:type" content="article" />
@@ -28,7 +32,7 @@ export function SpoolSEO({ content, collection, path, siteUrl = '' }: SpoolSEOPr
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={ogImage} />
       <link rel="canonical" href={canonicalUrl} />
-      {content.noIndex && <meta name="robots" content="noindex, nofollow" />}
+      {content.data?.noIndex && <meta name="robots" content="noindex, nofollow" />}
     </Head>
   );
 } 
