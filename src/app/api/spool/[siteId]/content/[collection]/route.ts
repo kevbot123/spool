@@ -63,7 +63,7 @@ export async function GET(
     // Get content items
     let query = supabase
       .from('content_items')
-      .select('id, slug, title, data, status, created_at, updated_at, published_at')
+      .select('id, slug, data, status, created_at, updated_at, published_at')
       .eq('site_id', params.siteId)
       .eq('collection_id', collection.id)
       .order('created_at', { ascending: false })

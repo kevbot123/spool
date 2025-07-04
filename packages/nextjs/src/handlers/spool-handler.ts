@@ -33,7 +33,8 @@ export function createSpoolHandler(config: SpoolConfig) {
         const pathSegments = url.pathname.split('/').filter(Boolean);
         
         // Remove 'api', 'spool' from path to get the actual resource path
-        const resourcePath = pathSegments.slice(2).join('/');
+        // pathSegments indices: ['api', 'spool', ':siteId', ...]
+        const resourcePath = pathSegments.slice(3).join('/');
         
         if (!resourcePath) {
           return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
@@ -75,7 +76,8 @@ export function createSpoolHandler(config: SpoolConfig) {
       try {
         const url = new URL(request.url);
         const pathSegments = url.pathname.split('/').filter(Boolean);
-        const resourcePath = pathSegments.slice(2).join('/');
+        // pathSegments indices: ['api', 'spool', ':siteId', ...]
+        const resourcePath = pathSegments.slice(3).join('/');
         
         const body = await request.json();
 
@@ -132,7 +134,8 @@ export function createSpoolHandler(config: SpoolConfig) {
       try {
         const url = new URL(request.url);
         const pathSegments = url.pathname.split('/').filter(Boolean);
-        const resourcePath = pathSegments.slice(2).join('/');
+        // pathSegments indices: ['api', 'spool', ':siteId', ...]
+        const resourcePath = pathSegments.slice(3).join('/');
         
         const body = await request.json();
 
@@ -165,7 +168,8 @@ export function createSpoolHandler(config: SpoolConfig) {
       try {
         const url = new URL(request.url);
         const pathSegments = url.pathname.split('/').filter(Boolean);
-        const resourcePath = pathSegments.slice(2).join('/');
+        // pathSegments indices: ['api', 'spool', ':siteId', ...]
+        const resourcePath = pathSegments.slice(3).join('/');
 
         if (resourcePath.startsWith('content/')) {
           // DELETE /api/spool/content/[collection]/[slug] - Delete content

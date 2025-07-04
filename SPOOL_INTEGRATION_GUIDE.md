@@ -36,6 +36,8 @@ SPOOL_API_KEY="your_spool_api_key"
 SPOOL_SITE_ID="your_spool_site_id"
 ```
 
+> **Note:** Be sure to copy the **entire** API key from your Spool dashboard, including the `spool_` prefix.
+
 ---
 
 ## 3. Core Concepts & API Helpers
@@ -360,10 +362,10 @@ export default async function BlogPage() {
 
 ### Common Issues
 
-1. **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
-2. **Empty content**: Check that content is published (not draft) in the Spool admin
-3. **API errors**: Verify your `SPOOL_API_KEY` and `SPOOL_SITE_ID` are correct
-4. **Build errors**: Ensure all environment variables are set in your deployment environment
+1.  **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
+2.  **Empty content**: Check that content is published (not draft) in the Spool admin
+3.  **API errors**: Verify your `SPOOL_API_KEY` and `SPOOL_SITE_ID` are correct. If you receive a `401 Unauthorized` error, double-check that you are sending the *full* API key, including the `spool_` prefix.
+4.  **Build errors**: Ensure all environment variables are set in your deployment environment
 
 ### Debug Mode
 

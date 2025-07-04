@@ -7,7 +7,6 @@ export interface SpoolConfig {
 export interface SpoolContent {
   id: string;
   slug: string;
-  title?: string;
   data: Record<string, any>;
   status: 'draft' | 'published';
   created_at: string;
