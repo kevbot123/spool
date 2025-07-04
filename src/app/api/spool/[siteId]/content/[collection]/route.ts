@@ -85,8 +85,8 @@ export async function GET(
     const processedItems = await Promise.all(
       (contentItems || []).map(async (item) => {
         const processedData = { ...item.data };
-        if (collection.schema) {
-          for (const field of collection.schema) {
+        if (collection.schema && Array.isArray(collection.schema.fields)) {
+          for (const field of collection.schema.fields) {
             if (field.type === 'markdown' && processedData[field.name]) {
               processedData[`${field.name}_html`] = await markdownProcessor.processMarkdown(
                 processedData[field.name]
