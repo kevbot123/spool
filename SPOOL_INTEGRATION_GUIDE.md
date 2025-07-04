@@ -122,25 +122,29 @@ You can add any custom fields you like on top of these defaults.
 
 ## 5. Handling Markdown Content
 
-Spool makes it easy to work with markdown. Whenever you have a field in your collection of type `markdown` (e.g., a field named `body`), Spool will automatically do the following:
+Spool makes it easy to work with markdown. Whenever you have a field in your collection of type `markdown` (e.g., a field named `body`), you can request that Spool process it into HTML on the server.
 
 1.  **Store the Raw Markdown**: The original markdown content is always preserved in the field you created (e.g., `post.data.body`).
-2.  **Generate HTML Automatically**: Spool processes the markdown on the server and adds a new field to your data object with an `_html` suffix (e.g., `post.data.body_html`).
+2.  **Generate HTML On-Demand**: To receive the processed HTML, pass `{ renderHtml: true }` as the last argument to the `getSpoolContent` function. Spool will then add a new field to your data object with an `_html` suffix (e.g., `post.data.body_html`).
 
-This means you never have to process markdown on the client side. You can directly render the generated HTML.
+This means you only pay the performance cost of markdown processing when you actually need the HTML.
 
 **Example:**
 
 ```typescript
-// Assuming you have a markdown field named 'body'
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
+// To get just the raw markdown (default behavior):
+const postWithMarkdown = await getSpoolContent(spoolConfig, 'blog', 'my-post');
+// postWithMarkdown.data.body_html will be undefined
 
-// post.data.body contains the raw markdown string
-// post.data.body_html contains the processed HTML string
+// To get the processed HTML:
+const postWithHtml = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+
+// postWithHtml.data.body contains the raw markdown string
+// postWithHtml.data.body_html contains the processed HTML string
 
 // To render the content in React:
 <div
-  dangerouslySetInnerHTML={{ __html: post.data.body_html }}
+  dangerouslySetInnerHTML={{ __html: postWithHtml.data.body_html }}
 />
 ```
 
@@ -212,8 +216,8 @@ interface PageProps {
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = params;
   
-  // 1. Fetch the single post using the slug from the URL
-  const post = await getSpoolContent(spoolConfig, 'blog', slug);
+  // 1. Fetch the single post using the slug from the URL, requesting HTML
+  const post = await getSpoolContent(spoolConfig, 'blog', slug, { renderHtml: true });
 
   if (!post) {
     return notFound();

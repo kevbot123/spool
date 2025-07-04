@@ -8,13 +8,18 @@ const SPOOL_API_BASE = process.env.SPOOL_API_BASE || 'http://localhost:3000';
 export async function getSpoolContent(
   config: SpoolConfig,
   collection: string,
-  slug?: string
+  slug?: string,
+  options?: { renderHtml?: boolean }
 ) {
   const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = config;
   
-  const endpoint = slug 
+  let endpoint = slug 
     ? `/api/spool/${siteId}/content/${collection}/${slug}`
     : `/api/spool/${siteId}/content/${collection}`;
+
+  if (options?.renderHtml) {
+    endpoint += '?_html=true';
+  }
   
   const response = await fetch(`${baseUrl}${endpoint}`, {
     headers: {

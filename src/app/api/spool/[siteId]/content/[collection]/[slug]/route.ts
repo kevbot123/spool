@@ -65,16 +65,20 @@ export async function GET(
       return NextResponse.json({ error: 'Content not found' }, { status: 404 });
     }
 
-    const markdownProcessor = getMarkdownProcessor();
+    const url = new URL(request.url);
+    const renderHtml = url.searchParams.has('_html');
     const processedData = { ...contentItem.data };
 
-    // Process markdown fields
-    if (collection.schema && Array.isArray(collection.schema.fields)) {
-      for (const field of collection.schema.fields) {
-        if (field.type === 'markdown' && processedData[field.name]) {
-          processedData[`${field.name}_html`] = await markdownProcessor.processMarkdown(
-            processedData[field.name]
-          );
+    // Process markdown fields only if requested
+    if (renderHtml) {
+      const markdownProcessor = getMarkdownProcessor();
+      if (collection.schema && Array.isArray(collection.schema.fields)) {
+        for (const field of collection.schema.fields) {
+          if (field.type === 'markdown' && processedData[field.name]) {
+            processedData[`${field.name}_html`] = await markdownProcessor.processMarkdown(
+              processedData[field.name]
+            );
+          }
         }
       }
     }
