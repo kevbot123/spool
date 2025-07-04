@@ -1,30 +1,23 @@
 import matter from 'gray-matter';
 import { remark } from 'remark';
 import remarkGfm from 'remark-gfm';
+import remarkHtml from 'remark-html';
 import { ParsedContent, ContentMeta } from '@/types/cms';
 
 export class MarkdownProcessor {
   private processor: any;
 
   constructor() {
-    this.processor = remark().use(remarkGfm);
+    this.processor = remark()
+      .use(remarkGfm)
+      .use(remarkHtml);
   }
 
   async parse(content: string): Promise<ParsedContent> {
     const { data, content: markdownContent } = matter(content);
     
-    // Ensure required fields
-    const meta: ContentMeta = {
-      title: data.title || 'Untitled',
-      slug: data.slug || '',
-      seoTitle: data.seoTitle,
-      seoDescription: data.seoDescription,
-      ogImage: data.ogImage,
-      ...data
-    };
-
     return {
-      meta,
+      data,
       content: markdownContent
     };
   }
