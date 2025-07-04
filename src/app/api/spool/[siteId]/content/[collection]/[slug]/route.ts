@@ -55,7 +55,7 @@ export async function GET(
     // Get content item
     const { data: contentItem, error: contentError } = await supabase
       .from('content_items')
-      .select('id, slug, data, status, created_at, updated_at, published_at')
+      .select('id, slug, title, data, status, created_at, updated_at, published_at')
       .eq('site_id', params.siteId)
       .eq('collection_id', collection.id)
       .eq('slug', params.slug)

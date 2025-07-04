@@ -102,13 +102,13 @@ Every new collection you create in Spool automatically includes a set of foundat
 
 | **Field**        | **Location**  | **Type**                  | **Notes**                                                                |
 |------------------|---------------|---------------------------|--------------------------------------------------------------------------|
-| `title`          | `item.data`   | string                    | **Required.** Main headline for the item                                 |
 | `description`    | `item.data`   | string                    | Optional short summary (used in lists & default meta description)        |
 | `seoTitle`       | `item.data`   | string                    | Optional. Overrides `title` for search engines                           |
 | `seoDescription` | `item.data`   | string                    | Optional. Overrides `description` for search engines                     |
 | `ogTitle`        | `item.data`   | string                    | Optional. Title for social sharing (Open Graph)                          |
 | `ogDescription`  | `item.data`   | string                    | Optional. Description for social sharing (Open Graph)                    |
 | `ogImage`        | `item.data`   | image URL\*               | Optional. Social preview / hero image                                    |
+| `title`          | top-level     | string                    | **Required.** Main headline for the item                                 |
 | `slug`           | top-level     | string                    | **Required.** URL-friendly identifier set when creating the item         |
 | `status`         | top-level     | `draft` \| `published`    | Defaults to `draft`. Controls visibility                                 |
 | `published_at`   | top-level     | datetime                  | Automatic. Set the first time `status` becomes `published`               |
@@ -179,10 +179,10 @@ export default async function BlogIndexPage() {
         {posts.map((post: any) => (
           <Link href={`/blog/${post.slug}`} key={post.id} className="block border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
             {post.data.ogImage && (
-              <img src={post.data.ogImage} alt={post.data.title} className="w-full h-48 object-cover" />
+              <img src={post.data.ogImage} alt={post.title} className="w-full h-48 object-cover" />
             )}
             <div className="p-6">
-              <h2 className="text-2xl font-bold mb-2">{post.data.title || 'Untitled'}</h2>
+              <h2 className="text-2xl font-bold mb-2">{post.title || 'Untitled'}</h2>
               <p className="text-gray-600 mb-4">{post.data.description}</p>
               <div className="text-sm text-gray-500">
                 <span>{new Date(post.published_at).toLocaleDateString()}</span>
@@ -225,13 +225,13 @@ export default async function BlogPostPage({ params }: PageProps) {
 
   return (
     <article className="container mx-auto px-4 py-8">
-      <h1 className="text-5xl font-extrabold mb-4">{post.data.title}</h1>
+      <h1 className="text-5xl font-extrabold mb-4">{post.title}</h1>
       <div className="text-gray-500 mb-8">
         Published on {new Date(post.published_at).toLocaleDateString()}
       </div>
       
       {post.data.ogImage && (
-        <img src={post.data.ogImage} alt={post.data.title} className="w-full h-96 object-cover rounded-lg mb-8" />
+        <img src={post.data.ogImage} alt={post.title} className="w-full h-96 object-cover rounded-lg mb-8" />
       )}
       
       {/* 2. Render the auto-generated HTML */}
