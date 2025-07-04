@@ -69,8 +69,8 @@ export async function GET(
     const processedData = { ...contentItem.data };
 
     // Process markdown fields
-    if (collection.schema) {
-      for (const field of collection.schema) {
+    if (collection.schema && Array.isArray(collection.schema.fields)) {
+      for (const field of collection.schema.fields) {
         if (field.type === 'markdown' && processedData[field.name]) {
           processedData[`${field.name}_html`] = await markdownProcessor.processMarkdown(
             processedData[field.name]
