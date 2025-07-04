@@ -9,6 +9,7 @@ const supabase = createClient(
 
 // Verify API key and get site
 async function verifySiteAccess(siteId: string, apiKey: string) {
+  console.log('Verifying site access with:', { siteId, apiKey });
   const { data: site, error } = await supabase
     .from('sites')
     .select('id, user_id, api_key')
@@ -17,9 +18,11 @@ async function verifySiteAccess(siteId: string, apiKey: string) {
     .single();
 
   if (error || !site) {
+    console.error('Site access verification failed:', { error, site });
     return null;
   }
 
+  console.log('Site access verified for:', site.id);
   return site;
 }
 

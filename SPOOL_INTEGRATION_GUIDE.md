@@ -118,7 +118,33 @@ You can add any custom fields you like on top of these defaults.
 
 ---
 
-## 5. Example: Building a Blog
+## 5. Handling Markdown Content
+
+Spool makes it easy to work with markdown. Whenever you have a field in your collection of type `markdown` (e.g., a field named `body`), Spool will automatically do the following:
+
+1.  **Store the Raw Markdown**: The original markdown content is always preserved in the field you created (e.g., `post.data.body`).
+2.  **Generate HTML Automatically**: Spool processes the markdown on the server and adds a new field to your data object with an `_html` suffix (e.g., `post.data.body_html`).
+
+This means you never have to process markdown on the client side. You can directly render the generated HTML.
+
+**Example:**
+
+```typescript
+// Assuming you have a markdown field named 'body'
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
+
+// post.data.body contains the raw markdown string
+// post.data.body_html contains the processed HTML string
+
+// To render the content in React:
+<div
+  dangerouslySetInnerHTML={{ __html: post.data.body_html }}
+/>
+```
+
+---
+
+## 6. Example: Building a Blog
 
 Here is a complete example for creating a blog list and detail pages.
 
@@ -173,15 +199,16 @@ This page fetches a single post by its slug from the URL parameters.
 import { getSpoolContent, generateSpoolMetadata } from '@spool/nextjs';
 import { spoolConfig } from '@/lib/spool';
 import { notFound } from 'next/navigation';
+import { Metadata } from 'next';
 
 interface PageProps {
-  params: Promise<{
+  params: {
     slug: string;
-  }>;
+  };
 }
 
 export default async function BlogPostPage({ params }: PageProps) {
-  const { slug } = await params;
+  const { slug } = params;
   
   // 1. Fetch the single post using the slug from the URL
   const post = await getSpoolContent(spoolConfig, 'blog', slug);
@@ -201,11 +228,13 @@ export default async function BlogPostPage({ params }: PageProps) {
         <img src={post.data.ogImage} alt={post.data.title} className="w-full h-96 object-cover rounded-lg mb-8" />
       )}
       
-      {/* Render your markdown content here */}
-      <div
-        className="prose lg:prose-xl max-w-none"
-        dangerouslySetInnerHTML={{ __html: post.data.body_html }}
-      />
+      {/* 2. Render the auto-generated HTML */}
+      {post.data.body_html && (
+        <div
+          className="prose lg:prose-xl max-w-none"
+          dangerouslySetInnerHTML={{ __html: post.data.body_html }}
+        />
+      )}
     </article>
   );
 }
@@ -219,8 +248,8 @@ export async function generateStaticParams() {
 }
 
 // Generate metadata for SEO (App Router)
-export async function generateMetadata({ params }: PageProps) {
-  const { slug } = await params;
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = params;
   const post = await getSpoolContent(spoolConfig, 'blog', slug);
   
   if (!post) {
@@ -240,7 +269,7 @@ export async function generateMetadata({ params }: PageProps) {
 
 ---
 
-## 6. SEO and Metadata
+## 7. SEO and Metadata
 
 ### Automatic SEO with App Router
 
@@ -299,7 +328,7 @@ export async function GET() {
 
 ---
 
-## 7. Advanced Features
+## 8. Advanced Features
 
 ### Real-time Content Updates
 
@@ -327,7 +356,7 @@ export default async function BlogPage() {
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 ### Common Issues
 
