@@ -185,37 +185,19 @@ export class ContentManager {
     if (data.title !== undefined) updateData.title = data.title;
     if (data.slug !== undefined) updateData.slug = data.slug;
     if (data.status !== undefined) updateData.status = data.status;
-    if (data.publishedAt !== undefined) updateData.published_at = data.publishedAt;
 
-    // If this is a content update (not just a publish status change), clear draft data
-    // This happens when the "republish" button is clicked to publish draft changes
-    const isContentUpdate = data.data || data.body !== undefined || data.seoTitle !== undefined || data.seoDescription !== undefined || data.title !== undefined || data.slug !== undefined;
-    if (isContentUpdate) {
-      updateData.draft_data = null; // Clear draft data when publishing changes
+    // Handle the data payload. The frontend should send the complete, updated data object.
+    if (data.data !== undefined) {
+      updateData.data = data.data;
     }
-
-    // Handle data object - merge with existing data
-    if (data.data || data.body !== undefined || data.seoTitle !== undefined || data.seoDescription !== undefined) {
-      const currentItem = await this.getContentItemById(collectionSlug, id);
-      if (!currentItem) return null;
-
-      const newData = {
-        ...currentItem.data,
-        ...data.data,
-      };
-
-      // Handle specific fields that might be passed directly
-      if (data.body !== undefined) newData.body = data.body;
-      if (data.seoTitle !== undefined) newData.seoTitle = data.seoTitle;
-      if (data.seoDescription !== undefined) newData.seoDescription = data.seoDescription;
-      if (data.ogImage !== undefined) newData.ogImage = data.ogImage;
-
-      // Clean up system fields from data object to avoid conflicts with top-level fields
-      // These should only exist at the top level, not in the data object
-      if (data.title !== undefined) delete newData.title;
-      if (data.slug !== undefined) delete newData.slug;
-
-      updateData.data = newData;
+    
+    // If status is being set to published, update the timestamp
+    if (data.status === 'published') {
+        const currentItem = await this.getContentItemById(collectionSlug, id);
+        // Only set published_at if it's the first time being published
+        if (currentItem && !currentItem.publishedAt) {
+            updateData.published_at = new Date().toISOString();
+        }
     }
 
     const { data: updated, error } = await supabase
@@ -231,6 +213,72 @@ export class ContentManager {
     if (error) {
       console.error('Error updating content:', error);
       return null;
+    }
+
+    return this.mapDatabaseToContentItem(updated);
+  }
+
+  async publishDraftById(collectionSlug: string, id: string, draftPayload?: any): Promise<ContentItem | null> {
+    const supabase = await this.getSupabase();
+    
+    // 1. Get the current item
+    const item = await this.getContentItemById(collectionSlug, id);
+    if (!item) {
+      throw new Error('Item not found.');
+    }
+
+    // 2. Determine the draft to merge. Use the payload if provided, otherwise fallback to DB draft.
+    const draftToMerge = draftPayload || item.draft;
+    if (!draftToMerge) {
+      // If there's no payload and no draft in DB, there's nothing to publish.
+      // We can just return the item as is, or throw an error. Let's return it.
+      return item;
+    }
+
+    // 3. Merge draft data into main data
+    const mergedData = {
+      ...item.data,
+      ...draftToMerge, // Merges fields from draft payload over existing data
+    };
+
+    // 4. Handle top-level fields from the draft payload (like title, slug etc)
+    const topLevelUpdates: Partial<ContentItem> = {};
+    if (draftPayload) {
+      Object.keys(draftPayload).forEach(key => {
+        if (key !== 'data') {
+          (topLevelUpdates as any)[key] = draftPayload[key];
+        }
+      });
+    }
+
+    // 5. Prepare the final update payload
+    const updatePayload: any = {
+      ...topLevelUpdates,
+      data: mergedData,
+      draft_data: null, // Clear the draft data
+      status: 'published',
+      updated_at: new Date().toISOString(),
+    };
+
+    // 6. Set published_at if it's the first time
+    if (!item.publishedAt) {
+      updatePayload.published_at = new Date().toISOString();
+    }
+
+    // 7. Perform the update
+    const { data: updated, error } = await supabase
+      .from('content_items')
+      .update(updatePayload)
+      .eq('id', id)
+      .select(`
+        *,
+        collections!inner(slug, site_id)
+      `)
+      .single();
+
+    if (error) {
+      console.error('Error publishing draft:', error);
+      throw new Error(`Failed to publish draft: ${error.message}`);
     }
 
     return this.mapDatabaseToContentItem(updated);

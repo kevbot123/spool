@@ -64,6 +64,7 @@ import { getFieldTypeIcon } from '@/lib/field-type-icons';
 import clsx from 'clsx';
 import { toast } from 'sonner';
 import { getStatusColor } from '@/lib/status-colors';
+import { useCollectionData } from '@/hooks/useCollectionData';
 
 interface CollectionTableProps {
   collection: CollectionConfig;
@@ -74,10 +75,7 @@ interface CollectionTableProps {
   authToken: string | null;
 }
 
-interface PendingChange {
-  itemId: string;
-  changes: Partial<ContentItem>;
-}
+
 
 interface RowMenuProps {
   onDelete: () => void;
@@ -345,16 +343,35 @@ export function CollectionTable({
 }: CollectionTableProps) {
   const tableRowClass = 'h-[37px]';
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
-  const [localItems, setLocalItems] = useState(items);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
-  const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map());
-  const [savingItems, setSavingItems] = useState<Set<string>>(new Set());
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [referenceOptions, setReferenceOptions] = useState<Map<string, { label: string; value: string }[]>>(new Map());
+  
+  // Use the centralized data hook
+  const {
+    items: localItems,
+    pendingChanges,
+    savingItems,
+    pendingChangesCount,
+    updateField,
+    togglePublish,
+    republishItem,
+    clearPendingChanges,
+    batchUpdate,
+    deleteItem,
+    hasPendingChanges,
+    hasPendingChangeForField,
+  } = useCollectionData({
+    collection,
+    initialItems: items,
+    authToken,
+    onBatchUpdate,
+    onDelete,
+  });
   
   // Global click handler to close editing when clicking outside
   useEffect(() => {
@@ -379,36 +396,8 @@ export function CollectionTable({
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
 
-  const pendingCellEditsCount = useMemo(() => {
-    return Array.from(pendingChanges.values()).reduce((count, change) => {
-      const item = localItems.find(i => i.id === change.itemId);
-      if (!item || (item as any).status !== 'published') return count; // only consider published items
-
-      const { changes } = change;
-      const topLevelKeys = Object.keys(changes).filter(key => key !== 'data');
-      const dataKeysCount = (changes.data && typeof changes.data === 'object') ? Object.keys(changes.data).length : 0;
-      return count + topLevelKeys.length + dataKeysCount;
-    }, 0);
-  }, [pendingChanges, localItems]);
-
   // Helper to know if there are any pending changes for published items
-  const hasPublishedPendingChanges = pendingCellEditsCount > 0;
-
-  const hasPendingChangeForCell = useCallback((itemId: string, fieldName: string): boolean => {
-    const pendingChange = pendingChanges.get(itemId);
-    if (!pendingChange) return false;
-
-    const { changes } = pendingChange;
-    // System fields are at the top level of the `changes` object
-    const isSystemField = ['title', 'slug', 'seoTitle', 'seoDescription', 'ogImage', 'status'].includes(fieldName);
-
-    if (isSystemField) {
-        return Object.prototype.hasOwnProperty.call(changes, fieldName);
-    } else {
-        // Custom fields are inside the `data` property
-        return Object.prototype.hasOwnProperty.call(changes.data || {}, fieldName);
-    }
-  }, [pendingChanges]);
+  const hasPublishedPendingChanges = pendingChangesCount > 0;
 
   const storageKey = `table-column-sizing-${collection.name}`;
   const orderStorageKey = `table-column-order-${collection.name}`;
@@ -512,133 +501,7 @@ export function CollectionTable({
     }
   }, [columnOrder, orderStorageKey]);
 
-  const debouncedSaveDraft = useMemo(
-    () => debounce(async (itemId: string, changes: Partial<ContentItem>, slug: string) => {
-      try {
-        await fetch(`/api/admin/content/${slug}/${itemId}/draft`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(changes),
-        });
-      } catch (error) {
-        console.error('Failed to save draft:', error);
-      }
-    }, 1000), // Debounce by 1 second
-    []
-  );
 
-  const debouncedSaveItem = useMemo(
-    () => debounce(async (itemId: string, changes: Partial<ContentItem>, slug: string) => {
-      try {
-        const response = await fetch(`/api/admin/content/${slug}/${itemId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(changes),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to save changes');
-        }
-        
-        const updatedItemFromServer = await response.json();
-        
-        setLocalItems(prev => prev.map(i => 
-          i.id === itemId ? { ...i, ...updatedItemFromServer } : i
-        ));
-        
-        setPendingChanges(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(itemId);
-          return newMap;
-        });
-
-      } catch (error) {
-        console.error('Failed to save item:', error);
-        toast.error('Failed to save changes.');
-      }
-    }, 1000),
-    [localCollection.slug]
-  );
-
-  // On initial load, reconstruct pendingChanges from draft data in items (only for published items)
-  useEffect(() => {
-    const initialPendingChanges = new Map<string, PendingChange>();
-    if (items) {
-      items.forEach(item => {
-        if (!item.publishedAt || !item.draft || Object.keys(item.draft).length === 0) return;
-
-        const draft = item.draft as any;
-        const changes: any = {};
-
-        // Check top-level fields in draft
-        Object.keys(draft).forEach(key => {
-          if (key === 'data') return; // handle separately
-          if ((item as any)[key] !== draft[key]) {
-            changes[key] = draft[key];
-          }
-        });
-
-        // Check data-level fields
-        if (draft.data && typeof draft.data === 'object') {
-          const dataChanges: any = {};
-          Object.keys(draft.data).forEach(dataKey => {
-            if (item.data?.[dataKey] !== draft.data[dataKey]) {
-              dataChanges[dataKey] = draft.data[dataKey];
-            }
-          });
-          if (Object.keys(dataChanges).length > 0) {
-            changes.data = dataChanges;
-          }
-        }
-
-        if (Object.keys(changes).length > 0) {
-          initialPendingChanges.set(item.id, { itemId: item.id, changes });
-        }
-      });
-    }
-
-    if (initialPendingChanges.size > 0) {
-      setPendingChanges(initialPendingChanges);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]); // Only run when the initial items are loaded
-
-  useEffect(() => {
-    // Sync localItems whenever `items` from props change.
-    // For published items with draft data, merge the draft into the displayed values
-    const itemsWithDraftMerged = items.map(item => {
-      // Only merge draft data for published items
-      if (item.publishedAt && item.draft && Object.keys(item.draft).length > 0) {
-        return {
-          ...item,
-          ...item.draft,
-          data: {
-            ...(item.data || {}),
-            ...((item.draft as any).data || {}),
-          },
-        };
-      }
-      return item;
-    });
-    
-    setLocalItems(itemsWithDraftMerged);
-  }, [items]);
-  
-  // When pending changes are updated, save them
-  useEffect(() => {
-    pendingChanges.forEach((change, itemId) => {
-      const item = localItems.find(i => i.id === itemId);
-      if (item) {
-        if (item.publishedAt) {
-          // For published items, save to draft endpoint
-          debouncedSaveDraft(itemId, change.changes, localCollection.slug);
-        } else {
-          // For unpublished (draft) items, save to item endpoint
-          debouncedSaveItem(itemId, change.changes, localCollection.slug);
-        }
-      }
-    });
-  }, [pendingChanges, debouncedSaveDraft, debouncedSaveItem, localItems, localCollection.slug]);
 
   // Fetch options for all reference fields in the collection
   useEffect(() => {
@@ -680,378 +543,9 @@ export function CollectionTable({
     }
   }, [localCollection]);
 
-  const saveAllChanges = useCallback(async () => {
-    if (pendingChanges.size === 0) return;
 
-    debouncedSaveDraft.cancel();
 
-    const changesToSave = Array.from(pendingChanges.values());
-    const itemsToUpdate: ContentItem[] = [];
 
-    for (const change of changesToSave) {
-      const item = localItems.find(i => i.id === change.itemId);
-      // Only process changes for published items (unpublished items are saved immediately)
-      if (item && item.publishedAt) {
-        const updatedItem = {
-          ...item,
-          ...change.changes,
-          data: {
-            ...(item.data || {}),
-            ...((change.changes as any).data || {}),
-          },
-        };
-        itemsToUpdate.push(updatedItem);
-      }
-    }
-
-    if (itemsToUpdate.length > 0) {
-      const itemIds = itemsToUpdate.map(i => i.id);
-      setSavingItems(new Set(itemIds));
-
-      try {
-        // This onBatchUpdate will now hit the PUT endpoint, which publishes the changes
-        const updatedItems = await onBatchUpdate(itemsToUpdate);
-        
-        setLocalItems(prev => {
-          const newItems = [...prev];
-          for (const updatedItem of updatedItems) {
-            const index = newItems.findIndex(item => item.id === updatedItem.id);
-            if (index !== -1) {
-              // Only update the saved item, preserving any local edits to other items
-              newItems[index] = updatedItem;
-            }
-          }
-          return newItems;
-        });
-        
-        // Only clear pending changes for the items that were actually saved (published items)
-        setPendingChanges(prev => {
-          const newMap = new Map(prev);
-          itemsToUpdate.forEach(item => {
-            newMap.delete(item.id);
-          });
-
-          return newMap;
-        });
-      } catch (error) {
-        console.error('Failed to save batch items:', error);
-      } finally {
-        setSavingItems(new Set());
-      }
-    }
-  }, [pendingChanges, localItems, onBatchUpdate, debouncedSaveDraft]);
-
-  const handleRepublishSingleItem = useCallback(async (itemId: string) => {
-    debouncedSaveDraft.cancel();
-    const change = pendingChanges.get(itemId);
-    const item = localItems.find(i => i.id === itemId);
-
-    if (!change || !item) return;
-
-    // This item must be published to have pending changes that can be republished
-    if (!item.publishedAt) return;
-
-    const updatedItem = {
-      ...item,
-      ...change.changes,
-      data: {
-        ...(item.data || {}),
-        ...((change.changes as any).data || {}),
-      },
-    };
-
-    setSavingItems(prev => new Set(prev).add(itemId));
-
-    try {
-      // onBatchUpdate expects an array
-      const [republishedItem] = await onBatchUpdate([updatedItem]);
-      
-      setLocalItems(prev => {
-        const newItems = [...prev];
-        const index = newItems.findIndex(i => i.id === republishedItem.id);
-        if (index !== -1) {
-          // The republished item from server has draft cleared, so it's the new source of truth
-          newItems[index] = republishedItem;
-        }
-        return newItems;
-      });
-      
-      // Remove from pending changes
-      setPendingChanges(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(itemId);
-        return newMap;
-      });
-    } catch (error) {
-      console.error('Failed to republish single item:', error);
-      // Maybe add some UI to show error, for now just log
-    } finally {
-      setSavingItems(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(itemId);
-        return newSet;
-      });
-    }
-  }, [pendingChanges, localItems, onBatchUpdate, debouncedSaveDraft]);
-
-  // Clear pending edits for a published item (revert to live)
-  const handleClearPendingEdits = useCallback(async (itemId: string) => {
-    debouncedSaveDraft.cancel();
-    // Remove pending changes locally
-    setPendingChanges(prev => {
-      const newMap = new Map(prev);
-      newMap.delete(itemId);
-      return newMap;
-    });
-
-    try {
-      setSavingItems(prev => {
-        const newSet = new Set(prev);
-        newSet.add(itemId);
-        return newSet;
-      });
-
-      // Delete draft on server
-      await fetch(`/api/admin/content/${localCollection.slug}/${itemId}/draft`, { method: 'DELETE' });
-
-      // Refetch live item to ensure local state sync
-      const res = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`);
-      if (res.ok) {
-        const liveItem = await res.json();
-        setLocalItems(prev => prev.map(i => (i.id === itemId ? liveItem : i)));
-
-        // If the detail panel is open for this item, update it too
-        setSelectedItem(prev => (prev && prev.id === itemId ? liveItem : prev));
-      }
-    } catch (error) {
-      console.error('Failed to clear pending edits:', error);
-      toast.error('Failed to clear pending edits.');
-    } finally {
-      setSavingItems(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(itemId);
-        return newSet;
-      });
-    }
-  }, [localCollection.slug, debouncedSaveDraft, setSelectedItem]);
-
-  // Handle publish/unpublish toggle
-  const handleTogglePublish = useCallback(async (itemId: string) => {
-    const item = localItems.find(i => i.id === itemId);
-    if (!item) return;
-
-    const isCurrentlyPublished = (item as any).status === 'published';
-    const newStatus = isCurrentlyPublished ? 'draft' : 'published';
-    const newPublishedAt = newStatus === 'published' ? new Date().toISOString() : null;
-
-    try {
-      const response = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, publishedAt: newPublishedAt }),
-      });
-
-      if (!response.ok) {
-        toast.error(`Failed to ${isCurrentlyPublished ? 'unpublish' : 'publish'} "${item.title}"`);
-        throw new Error('Failed to update publish status');
-      }
-
-      const updatedItem = await response.json();
-      
-      // Update local state - update status and publishedAt according to server response
-      setLocalItems(prev => prev.map(i => 
-        i.id === itemId ? { ...i, status: updatedItem.status, publishedAt: updatedItem.publishedAt } : i
-      ));
-
-      // If item was unpublished and has pending changes, remove from pending changes
-      // since unpublished items save immediately
-      if (isCurrentlyPublished && !updatedItem.publishedAt) {
-        setPendingChanges(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(itemId);
-          return newMap;
-        });
-      }
-
-      toast.success(`${updatedItem.status === 'published' ? 'Published' : 'Unpublished'} "${item.title || 'Item'}".`);
-    } catch (error) {
-      console.error('Failed to toggle publish status:', error);
-    }
-  }, [localItems, localCollection.slug]);
-
-  // Handle field updates
-  const handleFieldUpdate = useCallback(async (itemId: string, field: string, value: any) => {
-    const item = localItems.find(i => i.id === itemId);
-    if (!item) return;
-
-    const isSystemField = ['title', 'slug', 'seoTitle', 'seoDescription', 'ogImage', 'status'].includes(field);
-    const isPublished = (item as any).status === 'published';
-
-    // Get the current value to check if it actually changed
-    let currentValue;
-    if (field === 'status') {
-      const explicitStatus = (item as any).status || item.data?.status;
-      currentValue = explicitStatus || 'draft';
-    } else {
-      currentValue = isSystemField ? (item as any)[field] : item.data?.[field];
-    }
-    
-    // Don't do anything if the value hasn't actually changed
-    if (currentValue === value) {
-      return;
-    }
-
-    // If unpublishing a published item, treat it as a special case.
-    // This discards pending changes and reverts the item to its last published state, but as a draft.
-    if (isPublished && field === 'status' && value !== 'published') {
-      // Clear pending changes for this item
-      setPendingChanges(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(itemId);
-        return newMap;
-      });
-
-      // Find the original state from before any local edits
-      const originalItemFromServer = items.find(i => i.id === itemId) || item;
-
-      // Optimistically revert item to its original state, but with the new status
-      setLocalItems(prev => prev.map(i => 
-        i.id === itemId 
-          ? { ...originalItemFromServer, status: value, publishedAt: null, draft: null }
-          : i
-      ));
-
-      // Update server in the background
-      (async () => {
-        try {
-          setSavingItems(prev => new Set(prev).add(itemId));
-          // 1. Delete the server-side draft
-          await fetch(`/api/admin/content/${localCollection.slug}/${itemId}/draft`, { method: 'DELETE' });
-          // 2. Unpublish the main item
-          const response = await fetch(`/api/admin/content/${localCollection.slug}/${itemId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: value, publishedAt: null }),
-          });
-          if (!response.ok) throw new Error('Failed to unpublish item');
-          
-          const updatedItem = await response.json();
-          setLocalItems(prev => prev.map(i => i.id === itemId ? updatedItem : i));
-
-        } catch (error) {
-          console.error('Failed to unpublish and clear draft:', error);
-          // Consider reverting UI on error
-        } finally {
-          setSavingItems(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(itemId);
-            return newSet;
-          });
-        }
-      })();
-
-      return; // Stop further execution in this handler
-    }
-
-    // Update local state immediately
-    setLocalItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        const isPublished = (item as any).status === 'published';
-        let updatedItem = { ...item };
-
-        // Optimistically update the direct properties for immediate UI feedback
-        if (isSystemField) {
-          if (field === 'status') {
-            const newPublishedAt = value === 'published' ? (item.publishedAt || new Date().toISOString()) : null;
-            updatedItem = { ...updatedItem, status: value, publishedAt: newPublishedAt };
-          } else {
-            updatedItem = { ...updatedItem, [field]: value };
-          }
-        } else {
-          updatedItem.data = { ...(item.data || {}), [field]: value };
-        }
-
-        // If the item is published, this change is a "draft" change.
-        // We need to update the `draft` property on our local item so the DetailPanel sees it.
-        if (isPublished) {
-          let draftChanges: any = {};
-          if (isSystemField) {
-            draftChanges = { [field]: value };
-            if (field === 'status') {
-              draftChanges.publishedAt = value === 'published' ? (item.publishedAt || new Date().toISOString()) : null;
-            }
-          } else {
-            draftChanges.data = { [field]: value };
-          }
-
-          updatedItem.draft = {
-            ...(updatedItem.draft || {}),
-            ...draftChanges,
-            data: {
-              ...((updatedItem.draft as any)?.data || {}),
-              ...(draftChanges.data || {}),
-            }
-          };
-        }
-        return updatedItem;
-      }
-      return item;
-    }));
-
-    if (isPublished) {
-      // For published items, use the draft mechanism
-      setPendingChanges(prev => {
-        const newChanges = new Map(prev);
-        const existing = newChanges.get(itemId) || { itemId, changes: {} };
-        
-        let updatedChanges;
-        if (isSystemField) {
-          updatedChanges = { ...existing.changes, [field]: value };
-          if (field === 'status') {
-            updatedChanges.publishedAt = value === 'published' ? (item.publishedAt || new Date().toISOString()) : null;
-          }
-        } else {
-          updatedChanges = { 
-            ...existing.changes, 
-            data: { 
-              ...((existing.changes as any).data || {}), 
-              [field]: value 
-            } 
-          };
-        }
-        
-        newChanges.set(itemId, { itemId, changes: updatedChanges });
-        return newChanges;
-      });
-    } else {
-      // For unpublished items (drafts), queue a pending change to be auto-saved
-      setPendingChanges(prev => {
-        const newChanges = new Map(prev);
-        const existing = newChanges.get(itemId) || { itemId, changes: {} };
-
-        let updatedChanges;
-        if (isSystemField) {
-          updatedChanges = { ...existing.changes, [field]: value };
-        } else {
-          updatedChanges = {
-            ...existing.changes,
-            data: {
-              ...((existing.changes as any).data || {}),
-              [field]: value,
-            },
-          };
-        }
-
-        newChanges.set(itemId, { itemId, changes: updatedChanges });
-        return newChanges;
-      });
-    }
-  }, [localItems, localCollection.slug]);
-
-  const handleDelete = async (itemId: string) => {
-    // No need to manage pending changes here anymore, as the item will be deleted
-    await onDelete(itemId);
-  };
 
   const handleBulkAction = useCallback(async (action: 'publish' | 'unpublish') => {
     const currentDate = new Date().toISOString();
@@ -1061,33 +555,11 @@ export function CollectionTable({
     }));
 
     try {
-      // Optimistically update UI - only update publishedAt to preserve local edits
-      setLocalItems(prev => prev.map(item => ({
-        ...item,
-        publishedAt: action === 'publish' ? (item.publishedAt || currentDate) : null,
-      })));
-
-      // If unpublishing, clear pending changes for items that were previously published
-      if (action === 'unpublish') {
-        setPendingChanges(prev => {
-          const newMap = new Map(prev);
-          localItems.forEach(item => {
-            if (item.publishedAt) { // Was published, now being unpublished
-              newMap.delete(item.id);
-            }
-          });
-          return newMap;
-        });
-      }
-
-      // Persist to server
-      await onBatchUpdate(updatedItems);
+      await batchUpdate(updatedItems);
     } catch (error) {
       console.error(`Failed to ${action} all items:`, error);
-      // Revert if server call fails
-      setLocalItems(localItems);
     }
-  }, [localItems, onBatchUpdate]);
+  }, [localItems, batchUpdate]);
 
   // Stable callbacks so CollectionHeader's effect doesn't fire every render
   const publishAll = useCallback(() => handleBulkAction('publish'), [handleBulkAction]);
@@ -1160,7 +632,7 @@ export function CollectionTable({
           isEditing={isEditing}
           onEdit={() => setEditingCell({ rowId: row.original.id, field: 'title' })}
           onSave={(value: any) => {
-            handleFieldUpdate(row.original.id, 'title', value);
+            updateField(row.original.id, 'title', value);
           }}
           onCancel={() => setEditingCell(null)}
           width={column.getSize()}
@@ -1177,7 +649,7 @@ export function CollectionTable({
         )}
       </>
     );
-  }, [editingCell, savingItems, handleFieldUpdate, authToken]);
+  }, [editingCell, savingItems, updateField, authToken]);
 
   const SlugCell = useCallback(({ row, getValue, column }: { row: any; getValue: () => any; column: any }) => {
     const isEditing = editingCell?.rowId === row.original.id && editingCell?.field === 'slug';
@@ -1191,7 +663,7 @@ export function CollectionTable({
           isEditing={isEditing}
           onEdit={() => setEditingCell({ rowId: row.original.id, field: 'slug' })}
           onSave={(value: any) => {
-            handleFieldUpdate(row.original.id, 'slug', value);
+            updateField(row.original.id, 'slug', value);
           }}
           onCancel={() => setEditingCell(null)}
           width={column.getSize()}
@@ -1208,7 +680,7 @@ export function CollectionTable({
         )}
       </>
     );
-  }, [editingCell, savingItems, handleFieldUpdate, authToken]);
+  }, [editingCell, savingItems, updateField, authToken]);
 
   // Memoized dynamic field cell component
   const DynamicFieldCell = useCallback(({ field, row, getValue, column }: { field: FieldConfig; row: any; getValue: () => any; column: any }) => {
@@ -1234,7 +706,7 @@ export function CollectionTable({
             type="checkbox"
             checked={currentValue}
             onChange={(e) => {
-              handleFieldUpdate(row.original.id, field.name, e.target.checked);
+              updateField(row.original.id, field.name, e.target.checked);
             }}
             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
           />
@@ -1252,7 +724,7 @@ export function CollectionTable({
           isEditing={isEditing}
           onEdit={() => setEditingCell({ rowId: row.original.id, field: field.name })}
           onSave={(value: any) => {
-            handleFieldUpdate(row.original.id, field.name, value);
+            updateField(row.original.id, field.name, value);
           }}
           onCancel={() => setEditingCell(null)}
           width={column.getSize()}
@@ -1274,7 +746,7 @@ export function CollectionTable({
         )}
       </>
     );
-  }, [editingCell, savingItems, handleFieldUpdate, authToken, referenceOptions, setSelectedItem]);
+  }, [editingCell, savingItems, updateField, authToken, referenceOptions]);
 
   // Memoize columns to prevent re-creation on every render
   const columns: ColumnDef<ContentItem>[] = useMemo(() => [
@@ -1341,19 +813,19 @@ export function CollectionTable({
       
       return (
         <div className="flex items-center justify-center">
-          <RowMenu 
-            onDelete={() => handleDelete(row.original.id)} 
-            onTogglePublish={() => handleTogglePublish(row.original.id)}
-            isPublished={isPublished}
-            viewUrl={viewUrl}
-            hasPendingChanges={hasPendingChanges}
-            onRepublish={() => handleRepublishSingleItem(row.original.id)}
-            onClearPending={() => handleClearPendingEdits(row.original.id)}
-          />
+                  <RowMenu 
+          onDelete={() => deleteItem(row.original.id)} 
+          onTogglePublish={() => togglePublish(row.original.id)}
+          isPublished={isPublished}
+          viewUrl={viewUrl}
+          hasPendingChanges={hasPendingChanges}
+          onRepublish={() => republishItem(row.original.id)}
+          onClearPending={() => clearPendingChanges(row.original.id)}
+        />
         </div>
       );
     };
-  }, [localCollection.urlPattern, handleDelete, handleTogglePublish, pendingChanges, handleRepublishSingleItem, handleClearPendingEdits]);
+  }, [localCollection.urlPattern, deleteItem, togglePublish, pendingChanges, republishItem, clearPendingChanges]);
 
   // Add the "more actions" column
   const moreActionsColumn: ColumnDef<ContentItem> = {
@@ -1411,10 +883,33 @@ export function CollectionTable({
       <CollectionHeader
         collection={localCollection}
         itemCount={localItems.length}
-        pendingChangesCount={pendingCellEditsCount}
+        pendingChangesCount={pendingChangesCount}
         globalFilter={globalFilter}
         onGlobalFilterChange={setGlobalFilter}
-        onSaveAll={hasPublishedPendingChanges ? saveAllChanges : undefined}
+        onSaveAll={hasPublishedPendingChanges ? async () => {
+          // Batch update all pending changes
+          const changesToSave = Array.from(pendingChanges.values());
+          const itemsToUpdate: ContentItem[] = [];
+
+          for (const change of changesToSave) {
+            const item = localItems.find(i => i.id === change.itemId);
+            if (item && item.publishedAt) {
+              const updatedItem = {
+                ...item,
+                ...change.changes,
+                data: {
+                  ...(item.data || {}),
+                  ...((change.changes as any).data || {}),
+                },
+              };
+              itemsToUpdate.push(updatedItem);
+            }
+          }
+
+          if (itemsToUpdate.length > 0) {
+            await batchUpdate(itemsToUpdate);
+          }
+        } : undefined}
         onCreate={onCreate}
         onPublishAll={publishAll}
         onUnpublishAll={unpublishAll}
@@ -1563,7 +1058,7 @@ export function CollectionTable({
                           fieldName = cell.column.id.replace('field_', '');
                         }
 
-                        const hasPendingChange = fieldName ? hasPendingChangeForCell(row.original.id, fieldName) : false;
+                        const hasPendingChange = fieldName ? hasPendingChangeForField(row.original.id, fieldName) : false;
                         const showPendingBackground = hasPendingChange && !!row.original.publishedAt;
                         const isCellBeingEdited = editingCell?.rowId === row.original.id && editingCell?.field === fieldName;
 
@@ -1647,14 +1142,14 @@ export function CollectionTable({
           collection={localCollection}
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onFieldUpdate={handleFieldUpdate}
-          onTogglePublish={handleTogglePublish}
+          onFieldUpdate={updateField}
+          onTogglePublish={togglePublish}
           authToken={authToken}
-          hasPendingChanges={pendingChanges.has(selectedItem.id)}
-          onRepublish={handleRepublishSingleItem}
+          hasPendingChanges={hasPendingChanges(selectedItem.id)}
+          onRepublish={republishItem}
           onCollectionUpdate={handleCollectionUpdate}
-          onDelete={handleDelete}
-          onClearPending={handleClearPendingEdits}
+          onDelete={deleteItem}
+          onClearPending={clearPendingChanges}
         />
       )}
     </div>

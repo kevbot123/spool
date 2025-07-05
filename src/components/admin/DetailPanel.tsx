@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ContentItem, CollectionConfig } from '@/types/cms';
-import { useForm } from 'react-hook-form';
 import TipTapEditor from './TipTapEditor';
 import { SEOPreview } from './SEOPreview';
-import { debounce } from 'lodash';
 import {
   Accordion,
   AccordionContent,
@@ -80,78 +78,31 @@ export function DetailPanel({
   // Local copy of collection to allow live updates
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
 
-  const { register, handleSubmit, setValue, watch, formState: { defaultValues }, reset } = useForm<any>();
+  // Helper function to get field values with draft data preferred
+  const getFieldValue = useCallback((fieldName: string) => {
+    // Handle top-level fields
+    if (['title', 'slug', 'seoTitle', 'seoDescription', 'ogImage'].includes(fieldName)) {
+      const draftValue = (item.draft as any)?.[fieldName];
+      const liveValue = (item as any)[fieldName];
+      return draftValue !== undefined ? draftValue : (liveValue || '');
+    }
 
-  // Set form values whenever item changes
-  useEffect(() => {
-    // This effect now uses `reset` to update the form when the `item` prop changes.
-    // This is more robust for ensuring all fields, including the TipTap editor,
-    // are correctly updated with the new item's data, especially after an action
-    // like "clear pending edits" which fetches a fresh version of the item.
-    const newValues: { [key: string]: any } = {};
+    // Handle status
+    if (fieldName === 'status') {
+      const draftStatus = (item.draft as any)?.status;
+      const liveStatus = (item as any).status || (item.data as any)?.status;
+      return draftStatus !== undefined ? draftStatus : (liveStatus || (item.publishedAt ? 'published' : 'draft'));
+    }
 
-    // Handle top-level fields, preferring draft versions if they exist
-    newValues.title = (item.draft?.title !== undefined ? item.draft.title : item.title) || '';
-    newValues.slug = (item.draft?.slug !== undefined ? item.draft.slug : item.slug) || '';
-    newValues.seoTitle = (item.draft?.seoTitle !== undefined ? item.draft.seoTitle : item.seoTitle) || '';
-    newValues.seoDescription = (item.draft?.seoDescription !== undefined ? item.draft.seoDescription : item.seoDescription) || '';
-    newValues.ogImage = (item.draft?.ogImage !== undefined ? item.draft.ogImage : item.ogImage) || '';
-
-    // Status, with fallbacks
-    newValues.status = (item.draft?.status !== undefined ? item.draft.status : item.status)
-      || (item.data as any)?.status
-      || (item.publishedAt ? 'published' : 'draft');
-
-    // Date fields
-    newValues.datePublished = (item as any).datePublished || (item.data as any)?.datePublished || item.publishedAt || '';
-    newValues.dateLastModified = (item as any).dateLastModified || (item.data as any)?.dateLastModified || item.updatedAt || '';
-    newValues.publishedAt = item.publishedAt || '';
-
-    // Set any custom fields from item.data, preferring draft data
-    const allDataKeys = new Set([
-      ...Object.keys(item.data || {}),
-      ...Object.keys(item.draft?.data || {})
-    ]);
-
-    allDataKeys.forEach(key => {
-      const draftValue = item.draft?.data?.[key];
-      const liveValue = (item.data as any)?.[key];
-      // Prefer draft value if it exists (even if it's null or an empty string)
-      newValues[key] = draftValue !== undefined ? draftValue : liveValue;
-    });
-
-    reset(newValues);
-  }, [item, reset]);
-
-  const debouncedUpdate = useCallback(
-    debounce((itemId: string, field: string, value: any) => {
-      onFieldUpdate(itemId, field, value);
-    }, 500),
-    [onFieldUpdate]
-  );
-
-  useEffect(() => {
-    const subscription = watch((value: any, { name, type }: any) => {
-      if (type === 'change' && name && name !== 'status' && name !== 'publishedAt') {
-        // Check if value has actually changed from default
-        if (value[name] !== (defaultValues as any)?.[name]) {
-          debouncedUpdate(item.id, name, value[name]);
-        }
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [watch, debouncedUpdate, defaultValues, item.id]);
+    // Handle data fields
+    const draftValue = item.draft?.data?.[fieldName];
+    const liveValue = item.data?.[fieldName];
+    return draftValue !== undefined ? draftValue : liveValue;
+  }, [item]);
   
   useEffect(() => {
     setIsOpen(true);
   }, []);
-
-  // Cancel any pending debounced updates when the item changes or on unmount
-  useEffect(() => {
-    return () => {
-      debouncedUpdate.cancel();
-    };
-  }, [item.id, debouncedUpdate]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -160,8 +111,7 @@ export function DetailPanel({
 
   // Helper function to handle direct field updates for the notion-like fields
   const handleDirectFieldUpdate = (fieldName: string, value: string) => {
-    setValue(fieldName as any, value, { shouldDirty: true });
-    debouncedUpdate(item.id, fieldName, value);
+    onFieldUpdate(item.id, fieldName, value);
   };
 
   // Check if a field is a date field that should be read-only
@@ -190,17 +140,17 @@ export function DetailPanel({
   // Helper to get the effective OG title
   const getOgTitle = () => {
     if (inheritOgFromSeo) {
-      return inheritSeoFromContent ? watch('title') : (watch('seoTitle') || watch('title'));
+      return inheritSeoFromContent ? getFieldValue('title') : (getFieldValue('seoTitle') || getFieldValue('title'));
     }
-    return watch('ogTitle') || watch('title');
+    return getFieldValue('ogTitle') || getFieldValue('title');
   };
 
   // Helper to get the effective OG description
   const getOgDescription = () => {
     if (inheritOgFromSeo) {
-      return inheritSeoFromContent ? (watch('body')?.substring(0, 200) || '') : (watch('seoDescription') || watch('body')?.substring(0, 200) || '');
+      return inheritSeoFromContent ? (getFieldValue('body')?.substring(0, 200) || '') : (getFieldValue('seoDescription') || getFieldValue('body')?.substring(0, 200) || '');
     }
-    return watch('ogDescription') || watch('body')?.substring(0, 200) || '';
+    return getFieldValue('ogDescription') || getFieldValue('body')?.substring(0, 200) || '';
   };
 
   // Helper to format dates nicely
@@ -216,14 +166,14 @@ export function DetailPanel({
   };
 
   // Extract key system info for display
-  const statusVal = watch('status') as 'draft' | 'published' | undefined;
+  const statusVal = getFieldValue('status') as 'draft' | 'published' | undefined;
   const isPublished = statusVal === 'published';
-  const publishedAtVal = watch('publishedAt') || (item as any).publishedAt || item.publishedAt;
-  const publishedAtDisplay = formatDate(watch('datePublished') || publishedAtVal);
-  const lastModifiedDisplay = formatDate(watch('dateLastModified') || watch('lastModified') || (item as any).dateLastModified || item.updatedAt);
+  const publishedAtVal = getFieldValue('publishedAt') || (item as any).publishedAt || item.publishedAt;
+  const publishedAtDisplay = formatDate(getFieldValue('datePublished') || publishedAtVal);
+  const lastModifiedDisplay = formatDate(getFieldValue('dateLastModified') || getFieldValue('lastModified') || (item as any).dateLastModified || item.updatedAt);
 
   // Construct a public preview URL for the item
-  const publicUrl = `https://${buildDisplayUrl().domain}${buildDisplayUrl().path}${watch('slug')}`;
+  const publicUrl = `https://${buildDisplayUrl().domain}${buildDisplayUrl().path}${getFieldValue('slug')}`;
 
   const getStructuredData = () => {
     const data: any = {
@@ -238,13 +188,13 @@ export function DetailPanel({
       };
     }
     
-    const title = watch('title');
+    const title = getFieldValue('title');
     if (title) data.headline = title;
 
-    const description = watch('seoDescription') || watch('description') || (watch('body') ? watch('body').substring(0, 160) : '');
+    const description = getFieldValue('seoDescription') || getFieldValue('description') || (getFieldValue('body') ? getFieldValue('body').substring(0, 160) : '');
     if (description) data.description = description;
 
-    const image = watch('ogImage');
+    const image = getFieldValue('ogImage');
     if (image) data.image = image;
 
     if (currentSite?.name) {
@@ -256,12 +206,12 @@ export function DetailPanel({
       data.publisher = author;
     }
 
-    const datePublished = watch('datePublished') || watch('publishedAt') || (item as any).datePublished || item.publishedAt;
+    const datePublished = getFieldValue('datePublished') || getFieldValue('publishedAt') || (item as any).datePublished || item.publishedAt;
     if (datePublished) {
       data.datePublished = new Date(datePublished).toISOString();
     }
 
-    const dateModified = watch('dateLastModified') || watch('lastModified') || (item as any).dateLastModified || item.updatedAt;
+    const dateModified = getFieldValue('dateLastModified') || getFieldValue('lastModified') || (item as any).dateLastModified || item.updatedAt;
     if (dateModified) {
       data.dateModified = new Date(dateModified).toISOString();
     }
@@ -334,17 +284,14 @@ export function DetailPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    debouncedUpdate.cancel();
-                    onClearPending(item.id);
-                  }}
+                  onClick={() => onClearPending(item.id)}
                   className="h-8 px-3 py-0"
                 >
                   Clear
                 </Button>
               ) : (
                 (() => {
-                  const explicitStatus = watch('status');
+                  const explicitStatus = getFieldValue('status');
                   const effectiveStatus: 'draft' | 'published' = (explicitStatus as any) || (isPublished ? 'published' : 'draft');
 
                   return (
@@ -354,17 +301,10 @@ export function DetailPanel({
                         const currentStatus = effectiveStatus;
                         if (newStatus === currentStatus) return;
 
-                        // Optimistically update status and publishedAt
-                        setValue('status', newStatus, { shouldDirty: false });
-                        const newPublishedAt = newStatus === 'published' ? new Date().toISOString() : null;
-                        setValue('publishedAt', newPublishedAt, { shouldDirty: false });
-
                         try {
                           await _onTogglePublish(item.id);
                         } catch (err) {
                           console.error('Toggle publish failed', err);
-                          // Revert optimistic update
-                          setValue('publishedAt', publishedAtVal, { shouldDirty: false });
                         }
                       }}
                     >
@@ -419,10 +359,7 @@ export function DetailPanel({
                       )}
                       {onClearPending && (
                         <DropdownMenuItem
-                          onClick={() => {
-                            debouncedUpdate.cancel();
-                            onClearPending(item.id);
-                          }}
+                          onClick={() => onClearPending(item.id)}
                           className="flex items-center w-full px-4 py-1 text-sm cursor-pointer text-gray-700 hover:bg-gray-50"
                         >
                           <X size={14} className="mr-2" />
@@ -470,7 +407,7 @@ export function DetailPanel({
               <div className="space-y-6 mb-8">
                 {/* Title - Notion-like */}
                 <NotionLikeInput
-                  value={watch('title') || ''}
+                  value={getFieldValue('title') || ''}
                   onChange={(value) => handleDirectFieldUpdate('title', value)}
                   placeholder="Untitled"
                   className="text-[24px] font-semibold px-3 py-2 text-gray-900 placeholder-gray-400 border border-transparent hover:border-gray-200 hover:shadow-sm focus:shadow-sm focus:border-gray-200 rounded-md outline-none resize-none w-full bg-transparent leading-tight mb-2 cursor-text transition-colors"
@@ -486,7 +423,8 @@ export function DetailPanel({
                     </label>
                     <div className="flex-1">
                       <textarea
-                        {...register('description')}
+                        value={getFieldValue('description') || ''}
+                        onChange={(e) => handleDirectFieldUpdate('description', e.target.value)}
                         rows={2}
                         placeholder="Add a description..."
                         className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
@@ -504,7 +442,7 @@ export function DetailPanel({
                   <div className="flex-1 flex items-center gap-1">
                     <span className="text-gray-400 text-sm">{buildDisplayUrl().path}</span>
                     <input
-                      value={watch('slug') || ''}
+                      value={getFieldValue('slug') || ''}
                       onChange={(e) => {
                         const cleaned = validateSlugInput(e.target.value);
                         handleDirectFieldUpdate('slug', cleaned);
@@ -549,13 +487,10 @@ export function DetailPanel({
                         <div className="flex-1">
                           {renderField(
                             field,
-                            register,
-                            setValue,
-                            watch,
                             authToken,
                             onFieldUpdate,
-                            debouncedUpdate,
-                            item.id
+                            item.id,
+                            getFieldValue
                           )}
                         </div>
                       </div>
@@ -600,7 +535,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Title'}
                             </label>
-                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, debouncedUpdate, item.id)}
+                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -612,7 +547,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Description'}
                             </label>
-                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, debouncedUpdate, item.id)}
+                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -620,9 +555,9 @@ export function DetailPanel({
                       <div className="mt-6">
                         <h4 className="text-sm font-medium text-gray-700 mb-3">Google Search Preview</h4>
                         <GoogleSearchPreview
-                          title={inheritSeoFromContent ? watch('title') : (watch('seoTitle') || watch('title'))}
-                          description={inheritSeoFromContent ? (watch('body')?.substring(0, 200) || '') : (watch('seoDescription') || watch('body')?.substring(0, 200) || '')}
-                          url={`${buildDisplayUrl().domain}${buildDisplayUrl().path}${watch('slug')}`}
+                          title={inheritSeoFromContent ? getFieldValue('title') : (getFieldValue('seoTitle') || getFieldValue('title'))}
+                          description={inheritSeoFromContent ? (getFieldValue('body')?.substring(0, 200) || '') : (getFieldValue('seoDescription') || getFieldValue('body')?.substring(0, 200) || '')}
+                          url={`${buildDisplayUrl().domain}${buildDisplayUrl().path}${getFieldValue('slug')}`}
                         />
                       </div>
                     </div>
@@ -646,33 +581,28 @@ export function DetailPanel({
                       </label>
 
                       {/* OG Title - only show if not inheriting */}
-                      {!inheritOgFromSeo && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            OG Title
-                          </label>
-                          <input
-                            {...register('ogTitle')}
-                            placeholder="Open Graph title for social sharing"
-                            className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                      )}
+                      {!inheritOgFromSeo && localCollection.fields
+                        .filter(field => field.name === 'ogTitle')
+                        .map((field, index) => (
+                          <div key={`og-title-${index}`}>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              {field.label || 'OG Title'}
+                            </label>
+                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                          </div>
+                        ))}
 
                       {/* OG Description - only show if not inheriting */}
-                      {!inheritOgFromSeo && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            OG Description
-                          </label>
-                          <textarea
-                            {...register('ogDescription')}
-                            rows={3}
-                            placeholder="Open Graph description for social sharing"
-                            className="text-sm w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                      )}
+                      {!inheritOgFromSeo && localCollection.fields
+                        .filter(field => field.name === 'ogDescription')
+                        .map((field, index) => (
+                          <div key={`og-description-${index}`}>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              {field.label || 'OG Description'}
+                            </label>
+                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                          </div>
+                        ))}
 
                       {/* OG Image */}
                       {localCollection.fields
@@ -682,87 +612,78 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Image'}
                             </label>
-                            {renderField(field, register, setValue, watch, authToken, onFieldUpdate, debouncedUpdate, item.id)}
+                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
                           </div>
                         ))}
 
                       {/* Social Preview */}
                       <div className="mt-6">
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Social Preview</h4>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Social Media Preview</h4>
                         <SocialPreview
                           title={getOgTitle()}
                           description={getOgDescription()}
-                          image={watch('ogImage')}
-                          url={`${buildDisplayUrl().domain}${buildDisplayUrl().path}${watch('slug')}`}
+                          image={getFieldValue('ogImage')}
+                          url={`${buildDisplayUrl().domain}${buildDisplayUrl().path}${getFieldValue('slug')}`}
                         />
                       </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* Schema.org Settings */}
-                <AccordionItem value="schema-settings">
-                  <AccordionTrigger className="text-sm font-semibold p-5 h-[50px] items-center hover:no-underline hover:bg-gray-50 rounded-none">Schema.org Structured Data</AccordionTrigger>
+                {/* System Information */}
+                <AccordionItem value="system-info">
+                  <AccordionTrigger className="text-sm font-semibold p-5 h-[50px] items-center hover:no-underline hover:bg-gray-50 rounded-none">System Information</AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-6 pl-12 pr-6 pb-6">
-                      <h4 className="text-sm font-medium text-gray-700 mb-3">JSON-LD Preview</h4>
-                      <p className="text-sm text-gray-600 mb-4">
-                        This is a preview of the structured data that will be embedded in your page.
-                      </p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <label className="block text-gray-600">Status</label>
+                          <span className="text-gray-900 capitalize">{isPublished ? 'Published' : 'Draft'}</span>
+                        </div>
+                        
+                        {publishedAtDisplay && (
+                          <div>
+                            <label className="block text-gray-600">Published</label>
+                            <span className="text-gray-900">{publishedAtDisplay}</span>
+                          </div>
+                        )}
+                        
+                        {lastModifiedDisplay && (
+                          <div>
+                            <label className="block text-gray-600">Last Modified</label>
+                            <span className="text-gray-900">{lastModifiedDisplay}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Structured Data */}
+                <AccordionItem value="structured-data">
+                  <AccordionTrigger className="text-sm font-semibold p-5 h-[50px] items-center hover:no-underline hover:bg-gray-50 rounded-none">Structured Data</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="pt-6 pl-12 pr-6 pb-6">
                       <StructuredDataPreview data={structuredData} />
                     </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-
-              {/* Publish & Last Modified Dates */}
-              {(publishedAtDisplay || lastModifiedDisplay) && (
-                <div className="flex items-center text-xs text-gray-500 gap-4 mt-10 border-t pt-8">
-                  {publishedAtDisplay && <span>Published: {publishedAtDisplay}</span>}
-                  {lastModifiedDisplay && <span>Last modified: {lastModifiedDisplay}</span>}
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
-
+      
       {/* Collection Setup Modal */}
       {isCollectionModalOpen && (
-        <CollectionSetupModal
+                <CollectionSetupModal
           isOpen={isCollectionModalOpen}
           onClose={() => setIsCollectionModalOpen(false)}
           existingCollection={localCollection}
-          onSave={async (data: Partial<CollectionConfig>) => {
-            if (!currentSite) return;
-            try {
-              const resp = await fetch(`/api/admin/collections/${localCollection.slug}?siteId=${currentSite.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-              });
-              if (resp.ok) {
-                const updated: CollectionConfig = await resp.json();
-                setLocalCollection(updated);
-
-                // Ensure any new fields are registered in the form with empty value
-                updated.fields.forEach(f => {
-                  if (!(f.name in watch())) {
-                    setValue(f.name as any, '', { shouldDirty: false });
-                  }
-                });
-
-                setIsCollectionModalOpen(false);
-
-                if (onCollectionUpdate) {
-                  onCollectionUpdate(updated);
-                }
-              } else {
-                console.error('Failed to save collection');
-              }
-            } catch(err) {
-              console.error('Save collection error', err);
-            }
+          onSave={async (updatedCollection) => {
+            setLocalCollection(updatedCollection as CollectionConfig);
+            onCollectionUpdate?.(updatedCollection as CollectionConfig);
+            setIsCollectionModalOpen(false);
           }}
         />
       )}
@@ -786,307 +707,209 @@ function NotionLikeInput({
   className: string; 
   multiline?: boolean; 
 }) {
-  const ref = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     onChange(e.target.value);
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement | HTMLInputElement>) => {
-    if (onBlur) {
-      onBlur(e.target.value);
-    }
+    onBlur?.(e.target.value);
   };
 
-  // Auto-resize for multiline inputs
-  useEffect(() => {
-    if (multiline && ref.current) {
-      const textarea = ref.current as HTMLTextAreaElement;
-      textarea.style.height = 'auto';
-      textarea.style.height = textarea.scrollHeight + 'px';
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    if (e.key === 'Enter' && !multiline) {
+      e.preventDefault();
+      (e.target as HTMLInputElement).blur();
     }
-  }, [value, multiline]);
+  };
 
   if (multiline) {
     return (
       <textarea
-        ref={ref as React.RefObject<HTMLTextAreaElement>}
+        ref={inputRef as React.RefObject<HTMLTextAreaElement>}
         value={value}
         onChange={handleChange}
         onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className={className}
         rows={1}
-        style={{ overflow: 'hidden', backgroundColor: 'transparent' }}
+        style={{ resize: 'none' }}
       />
     );
   }
 
   return (
     <input
-      ref={ref as React.RefObject<HTMLInputElement>}
+      ref={inputRef as React.RefObject<HTMLInputElement>}
       type="text"
       value={value}
       onChange={handleChange}
       onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
       placeholder={placeholder}
       className={className}
-      style={{
-        backgroundColor: 'transparent',
-      }}
     />
   );
 }
 
 function renderField(
   field: any,
-  register: any,
-  setValue: any,
-  watch: any,
   authToken: string,
   onFieldUpdate: (itemId: string, field: string, value: any) => void,
-  debouncedUpdate: (itemId: string, field: string, value: any) => void,
-  itemId: string
+  itemId: string,
+  getFieldValue: (fieldName: string) => any
 ) {
-  // Check if this is a date field that should be read-only
-  const isReadOnlyDate = field.type === 'datetime' && SYSTEM_DATE_FIELDS.includes(field.name);
-
+  const value = getFieldValue(field.name);
+  
   switch (field.type) {
-    case 'datetime':
-      const date = watch(field.name) ? new Date(watch(field.name)) : undefined;
-      
-      if (isReadOnlyDate) {
-        // Display read-only date
-        return (
-          <div className="w-100 text-sm px-3 py-2 bg-gray-50 border rounded-md text-gray-600">
-            {date ? date.toLocaleString() : 'Not set'}
-          </div>
-        );
-      }
-      
-      return (
-        <DatePicker
-          date={date}
-          setDate={(date) => {
-            setValue(field.name, date ? date.toISOString() : null, { shouldDirty: true });
-          }}
-          disabled={() => false}
-          withTime={true}
-          className="w-full"
-        />
-      );
-      
-    case 'date':
-      const d = watch(field.name) ? new Date(watch(field.name)) : undefined;
-      return (
-        <DatePicker
-          date={d}
-          setDate={(date) => {
-            setValue(field.name, date ? date.toISOString() : null, { shouldDirty: true });
-          }}
-          disabled={() => false}
-          className='w-full'
-        />
-      );
-      
     case 'text':
       return (
         <input
-          {...register(field.name, { required: field.required })}
+          type="text"
+          value={value || ''}
+          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.value)}
           placeholder={field.placeholder}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
-      
-    case 'select':
+    
+    case 'textarea':
       return (
-        <NotionSelect
-          options={field.options || []}
-          value={watch(field.name) || null}
-          onChange={(value) => {
-            setValue(field.name, value, { shouldDirty: true });
-            onFieldUpdate(itemId, field.name, value);
-          }}
-          placeholder={field.placeholder || "Select an option..."}
-          className="w-full"
+        <textarea
+          value={value || ''}
+          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.value)}
+          placeholder={field.placeholder}
+          rows={4}
+          className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
-      
-    case 'multiselect':
-      return (
-        <NotionMultiSelect
-          options={field.options || []}
-          value={watch(field.name) || []}
-          onChange={(value) => {
-            setValue(field.name, value, { shouldDirty: true });
-            onFieldUpdate(itemId, field.name, value);
-          }}
-          placeholder={field.placeholder || "Select options..."}
-          className="w-full"
-        />
-      );
-      
-    case 'boolean':
-      return (
-        <div className="w-full py-2 px-4 border rounded-lg">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              {...register(field.name)}
-              className="rounded border-gray-300 text-primary focus:ring-primary"
-            />
-            <span className="text-sm">Enable</span>
-          </label>
-        </div>
-      );
-      
-    case 'image':
-      return (
-      <div className="w-full p-3 border rounded-lg">
-        <ImageUploadField field={field} value={watch(field.name)} setValue={setValue} authToken={authToken} register={register} onFieldUpdate={(field, value) => onFieldUpdate(itemId, field, value)} />
-      </div>
-    );
-    case 'markdown':
-      return (
-        <TipTapEditor
-          key={`${itemId}-${field.name}-${watch(field.name)?.substring(0, 50) || 'empty'}`}
-          content={watch(field.name)}
-          onChange={(content) => {
-            setValue(field.name, content, { shouldDirty: true });
-            debouncedUpdate(itemId, field.name, content);
-          }}
-          authToken={authToken}
-        />
-      );
-      
+    
     case 'number':
       return (
         <input
           type="number"
-          {...register(field.name, { valueAsNumber: true })}
+          value={value || ''}
+          onChange={(e) => onFieldUpdate(itemId, field.name, Number(e.target.value))}
+          placeholder={field.placeholder}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-          onBlur={(e) => {
-            const numVal = Number(e.target.value);
-            if (!isNaN(numVal)) {
-              onFieldUpdate(itemId, field.name, numVal);
-            }
-          }}
         />
       );
-      
+    
+    case 'boolean':
+      return (
+        <input
+          type="checkbox"
+          checked={value || false}
+          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.checked)}
+          className="rounded border-gray-300 text-primary focus:ring-primary"
+        />
+      );
+    
+         case 'datetime':
+       return (
+         <DatePicker
+           date={value ? new Date(value) : undefined}
+           setDate={(date: Date | undefined) => onFieldUpdate(itemId, field.name, date?.toISOString())}
+           className="w-full"
+         />
+       );
+    
+    case 'select':
+      return (
+        <Select
+          value={value || ''}
+          onValueChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={field.placeholder} />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((option: any, idx: number) => (
+              <SelectItem key={`${option.value}-${idx}`} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    
+    case 'multi-select':
+      return (
+        <NotionMultiSelect
+          value={value || []}
+          onChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+          options={field.options || []}
+          placeholder={field.placeholder}
+        />
+      );
+    
     case 'reference':
-    case 'multi-reference': {
-      const isMulti = field.type === 'multi-reference';
-      const [options, setOptions] = useState<any[]>(field.options || []);
-      const [loading, setLoading] = useState(true);
-
-      useEffect(() => {
-        if (field.referenceCollection) {
-          const fetchOptions = async () => {
-            try {
-              setLoading(true);
-              const res = await fetch(`/api/admin/content/${field.referenceCollection}?limit=100`);
-              if (!res.ok) return;
-              const json = await res.json();
-              if (Array.isArray(json?.items)) {
-                const opts = json.items.map((item: any) => ({ label: item.title || item.slug || item.id, value: item.id }));
-                setOptions(opts);
-              }
-            } catch (err) {
-              console.error('Failed to fetch reference options', err);
-            } finally {
-              setLoading(false);
-            }
-          };
-          fetchOptions();
-        }
-      }, [field.referenceCollection]);
-
-      const displayValue = loading ? (isMulti ? [] : null) : watch(field.name);
-
-      if (isMulti) {
-        return (
-          <NotionMultiSelect
-            options={options}
-            value={displayValue as string[]}
-            onChange={(value) => {
-              setValue(field.name, value, { shouldDirty: true });
-              onFieldUpdate(itemId, field.name, value);
-            }}
-            placeholder={loading ? 'Loading...' : (field.placeholder || 'Select options...')}
-            disabled={loading}
-            className="w-full"
-          />
-        );
-      }
-
+      // Reference fields would need additional logic for fetching options
       return (
         <NotionSelect
-          options={options}
-          value={displayValue as string | null}
-          onChange={(value) => {
-            setValue(field.name, value, { shouldDirty: true });
-            onFieldUpdate(itemId, field.name, value);
-          }}
-          placeholder={loading ? 'Loading...' : (field.placeholder || 'Select an option...')}
-          disabled={loading}
-          className="w-full"
+          value={value || ''}
+          onChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+          options={[]} // Would need to fetch reference options
+          placeholder={field.placeholder}
         />
       );
-    }
+    
+    case 'image':
+      return (
+        <ImageUploadField
+          field={field}
+          value={value || ''}
+          authToken={authToken}
+          onFieldUpdate={(fieldName, value) => onFieldUpdate(itemId, fieldName, value)}
+        />
+      );
+    
+         case 'markdown':
+       return (
+         <TipTapEditor
+           content={value || ''}
+           onChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+           authToken={authToken}
+         />
+       );
     
     default:
       return (
-        <textarea
-          {...register(field.name, { required: field.required })}
-          rows={3}
+        <input
+          type="text"
+          value={value || ''}
+          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.value)}
+          placeholder={field.placeholder}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
   }
 }
 
-// Simple Google Search Preview Component
 function GoogleSearchPreview({ title, description, url }: { title: string; description: string; url: string }) {
   return (
-    <div className="border rounded-lg p-4 bg-white">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <span>{url}</span>
-        </div>
-        <h3 className="text-blue-600 text-lg hover:underline cursor-pointer leading-tight">
-          {title || 'Untitled'}
-        </h3>
-        <p className="text-gray-600 text-sm leading-relaxed">
-          {description || 'No description available'}
-        </p>
-      </div>
+    <div className="border rounded-lg p-4 bg-gray-50">
+      <div className="text-xs text-gray-600 mb-1">{url}</div>
+      <div className="text-lg text-blue-600 font-medium mb-1">{title}</div>
+      <div className="text-sm text-gray-700">{description}</div>
     </div>
   );
 }
 
-// Simple Social/OG Preview Component
 function SocialPreview({ title, description, image, url }: { title: string; description: string; image?: string; url: string }) {
   return (
-    <div className="border rounded-lg p-4 bg-white max-w-md">
+    <div className="border rounded-lg overflow-hidden bg-gray-50">
       {image && (
-        <div className="mb-3">
-          <img src={image} alt="OG Preview" className="w-full h-32 object-cover rounded" />
+        <div className="aspect-[1.91/1] bg-gray-200 flex items-center justify-center">
+          <img src={image} alt="" className="max-w-full max-h-full object-cover" />
         </div>
       )}
-      <div className="space-y-1">
-        <div className="text-xs text-gray-500 uppercase tracking-wide">
-          {url.replace(/^https?:\/\//, '')}
-        </div>
-        <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
-          {title || 'Untitled'}
-        </h3>
-        <p className="text-gray-600 text-xs leading-relaxed line-clamp-2">
-          {description || 'No description available'}
-        </p>
+      <div className="p-4">
+        <div className="text-xs text-gray-600 mb-1">{url}</div>
+        <div className="font-medium text-gray-900 mb-1">{title}</div>
+        <div className="text-sm text-gray-700">{description}</div>
       </div>
     </div>
   );
@@ -1094,34 +917,29 @@ function SocialPreview({ title, description, image, url }: { title: string; desc
 
 function StructuredDataPreview({ data }: { data: object }) {
   return (
-    <div className="border rounded-lg p-4 bg-gray-50 text-xs font-mono">
-      <pre className="overflow-x-auto whitespace-pre-wrap break-all">
-        <code>
-          {JSON.stringify(data, null, 2)}
-        </code>
+    <div className="border rounded-lg p-4 bg-gray-50">
+      <pre className="text-xs text-gray-700 whitespace-pre-wrap">
+        {JSON.stringify(data, null, 2)}
       </pre>
     </div>
   );
 }
 
-function ImageUploadField({ field, value, setValue, authToken, register, onFieldUpdate }: { field: any, value: string, setValue: any, authToken: string, register: any, onFieldUpdate: (field: string, value: any) => void }) {
-  const [uploading, setUploading] = useState(false);
+function ImageUploadField({ field, value, authToken, onFieldUpdate }: { field: any, value: string, authToken: string, onFieldUpdate: (field: string, value: any) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
-
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/admin/media/upload', {
+      const response = await fetch('/api/admin/upload', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${authToken}`
+          'Authorization': `Bearer ${authToken}`,
         },
         body: formData,
       });
@@ -1130,16 +948,10 @@ function ImageUploadField({ field, value, setValue, authToken, register, onField
         throw new Error('Upload failed');
       }
 
-      const { url } = await response.json();
-      // Update the form value
-      setValue(field.name, url, { shouldDirty: true });
-      // Trigger the parent's update handler with the new URL
-      onFieldUpdate(field.name, url);
+      const result = await response.json();
+      onFieldUpdate(field.name, result.url);
     } catch (error) {
-      console.error('Failed to upload image:', error);
-      // TODO: Show an error to the user
-    } finally {
-      setUploading(false);
+      console.error('Error uploading image:', error);
     }
   };
 
@@ -1148,47 +960,37 @@ function ImageUploadField({ field, value, setValue, authToken, register, onField
   };
 
   return (
-    <div>
+    <div className="space-y-2">
       <input
-        type="file"
         ref={fileInputRef}
+        type="file"
+        accept="image/*"
         onChange={handleImageUpload}
         className="hidden"
-        accept="image/*"
       />
-      <div className="flex items-center gap-4">
-        <div className="w-20 h-20 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
-          {value ? (
-            <img src={value} alt="Preview" className="w-full h-full object-cover" />
-          ) : (
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          )}
-        </div>
-        <div>
+      
+      {value && (
+        <div className="relative">
+          <img
+            src={value}
+            alt="Uploaded image"
+            className="max-w-full h-32 object-cover rounded-md"
+          />
           <button
-            type="button"
-            onClick={triggerFileInput}
-            disabled={uploading}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => onFieldUpdate(field.name, '')}
+            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 text-xs"
           >
-            {uploading ? 'Uploading...' : 'Change'}
+            ×
           </button>
-          {value && (
-            <button
-              type="button"
-              onClick={() => {
-                setValue(field.name, null, { shouldDirty: true });
-                onFieldUpdate(field.name, null);
-              }}
-              className="ml-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700"
-            >
-              Remove
-            </button>
-          )}
         </div>
-      </div>
-      {/* Hidden input to store the URL value in the form */}
-      <input type="hidden" {...register(field.name)} />
+      )}
+      
+      <button
+        onClick={triggerFileInput}
+        className="text-sm px-3 py-1 border rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
+      >
+        {value ? 'Replace Image' : 'Upload Image'}
+      </button>
     </div>
   );
 }
