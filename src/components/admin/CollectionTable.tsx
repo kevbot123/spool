@@ -65,6 +65,8 @@ import clsx from 'clsx';
 import { toast } from 'sonner';
 import { getStatusColor } from '@/lib/status-colors';
 import { useCollectionData } from '@/hooks/useCollectionData';
+import { useSite } from '@/context/SiteContext';
+import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
 
 interface CollectionTableProps {
   collection: CollectionConfig;
@@ -73,6 +75,8 @@ interface CollectionTableProps {
   onDelete: (id: string) => Promise<void>;
   onCreate: () => void;
   authToken: string | null;
+  // Accept the shared collection data hook
+  collectionDataHook: ReturnType<typeof useCollectionData>;
 }
 
 
@@ -257,17 +261,21 @@ function RowMenu({ onDelete, onTogglePublish, isPublished, viewUrl, hasPendingCh
             </>
           )}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => {
-            if (confirm('Are you sure you want to delete this item?')) {
-              onDelete();
-            }
-          }}
-          className="flex items-center w-full px-4 py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-        >
-          <Trash2 size={14} className="mr-2" />
-          <span>Delete</span>
-        </DropdownMenuItem>
+
+        <DestructiveActionDialog
+          trigger={
+            <DropdownMenuItem
+              onSelect={(e)=>e.preventDefault()}
+              className="flex items-center w-full px-4 py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+            >
+              <Trash2 size={14} className="mr-2" />
+              <span>Delete</span>
+            </DropdownMenuItem>
+          }
+          title="Delete item?"
+          description="Are you sure you want to delete this item? This action cannot be undone."
+          onConfirm={onDelete}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -280,6 +288,7 @@ interface BulkActionsDropdownProps {
 }
 
 function BulkActionsDropdown({ onPublishAll, onUnpublishAll, collection }: BulkActionsDropdownProps) {
+  const { currentSite } = useSite();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -328,6 +337,41 @@ function BulkActionsDropdown({ onPublishAll, onUnpublishAll, collection }: BulkA
             <span>Visit {collection.name}</span>
           </a>
         </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DestructiveActionDialog
+          trigger={
+            <DropdownMenuItem
+              onSelect={(e)=>e.preventDefault()}
+              className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+            >
+              Delete collection
+            </DropdownMenuItem>
+          }
+          title={`Delete collection "${collection.name}"?`}
+          description={`This will permanently delete the collection and all of its content. This action cannot be undone.`}
+          confirmInputText="delete forever"
+          onConfirm={async () => {
+            try {
+              if (!currentSite) {
+                alert('No site selected');
+                return;
+              }
+              const resp = await fetch(`/api/admin/collections/${collection.slug}?siteId=${currentSite.id}`, {
+                method: 'DELETE',
+              });
+              if (!resp.ok) throw new Error('Failed to delete collection');
+              // Redirect to admin home after deletion
+              window.location.href = '/admin';
+            } catch (err) {
+              console.error('Error deleting collection', err);
+              alert('Failed to delete collection');
+            }
+          }}
+        />
+
+        <DropdownMenuSeparator />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -339,7 +383,8 @@ export function CollectionTable({
   onBatchUpdate,
   onDelete,
   onCreate,
-  authToken
+  authToken,
+  collectionDataHook,
 }: CollectionTableProps) {
   const tableRowClass = 'h-[37px]';
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
@@ -365,13 +410,7 @@ export function CollectionTable({
     deleteItem,
     hasPendingChanges,
     hasPendingChangeForField,
-  } = useCollectionData({
-    collection,
-    initialItems: items,
-    authToken,
-    onBatchUpdate,
-    onDelete,
-  });
+  } = collectionDataHook;
   
   // Global click handler to close editing when clicking outside
   useEffect(() => {
@@ -395,6 +434,16 @@ export function CollectionTable({
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
+
+  // Keep the selectedItem reference updated when underlying data changes so the DetailPanel shows live updates.
+  useEffect(() => {
+    if (selectedItem) {
+      const latest = localItems.find(i => i.id === selectedItem.id);
+      if (latest && latest !== selectedItem) {
+        setSelectedItem(latest);
+      }
+    }
+  }, [localItems, selectedItem]);
 
   // Helper to know if there are any pending changes for published items
   const hasPublishedPendingChanges = pendingChangesCount > 0;
@@ -789,6 +838,19 @@ export function CollectionTable({
             return row.publishedAt ? 'published' : 'draft';
           }
 
+          // Map system date fields to top-level properties
+          if (field.name === 'datePublished') {
+            // Show a date only if the item status is explicitly 'published'
+            const isPublished = (row as any).status === 'published' || row.data?.status === 'published';
+            if (!isPublished) return null;
+
+            // Prefer the canonical publishedAt value, but fall back to any custom data field
+            return (row as any).publishedAt || row.data?.datePublished;
+          }
+          if (field.name === 'dateLastModified') {
+            return (row as any).updatedAt || row.data?.dateLastModified || row.data?.lastModified;
+          }
+
           const isTopLevelField = ['seoTitle', 'seoDescription', 'ogImage'].includes(field.name);
           return isTopLevelField ? (row as any)[field.name] : row.data[field.name];
         },
@@ -1130,7 +1192,7 @@ export function CollectionTable({
                 onClick={onCreate}
                 className="mt-4 text-primary hover:underline"
               >
-                Create your first {localCollection.name.slice(0, -1).toLowerCase()}
+                Create your first post
               </button>
             </div>
           </div>
@@ -1150,6 +1212,9 @@ export function CollectionTable({
           onCollectionUpdate={handleCollectionUpdate}
           onDelete={deleteItem}
           onClearPending={clearPendingChanges}
+          onBatchUpdate={batchUpdate}
+          onDeleteItem={deleteItem}
+          collectionDataHook={collectionDataHook}
         />
       )}
     </div>

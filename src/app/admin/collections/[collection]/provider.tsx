@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ContentItem, CollectionConfig } from '@/types/cms';
 import { CollectionTable } from '@/components/admin/CollectionTable';
+import { useCollectionData } from '@/hooks/useCollectionData';
 
 interface AdminContentProviderProps {
   collection: CollectionConfig;
@@ -12,10 +13,18 @@ interface AdminContentProviderProps {
 }
 
 export function AdminContentProvider({ collection, initialItems, authToken }: AdminContentProviderProps) {
-  const [items, setItems] = useState(initialItems);
   const router = useRouter();
 
-  const handleBatchUpdate = async (updatedItems: ContentItem[]) => {
+  // Move useCollectionData here to be the single source of truth
+  const collectionDataHook = useCollectionData({
+    collection,
+    initialItems,
+    authToken,
+    onBatchUpdate: handleBatchUpdate,
+    onDelete: handleDelete,
+  });
+
+  async function handleBatchUpdate(updatedItems: ContentItem[]) {
     try {
       const results = await Promise.all(updatedItems.map(item => {
         
@@ -67,18 +76,6 @@ export function AdminContentProvider({ collection, initialItems, authToken }: Ad
         });
       }));
 
-      // Update the local state with the returned items
-      setItems(prevItems => {
-        const newItems = [...prevItems];
-        for (const updatedItem of results) {
-          const index = newItems.findIndex(item => item.id === updatedItem.id);
-          if (index !== -1) {
-            newItems[index] = updatedItem;
-          }
-        }
-        return newItems;
-      });
-
       router.refresh();
       return results;
     } catch (error) {
@@ -86,10 +83,10 @@ export function AdminContentProvider({ collection, initialItems, authToken }: Ad
       alert('Failed to update one or more items. Please try again.');
       throw error;
     }
-  };
+  }
 
-  const handleDelete = async (id: string) => {
-    const item = items.find(i => i.id === id);
+  async function handleDelete(id: string) {
+    const item = collectionDataHook.items.find(i => i.id === id);
     if (!item) return;
 
     try {
@@ -101,15 +98,13 @@ export function AdminContentProvider({ collection, initialItems, authToken }: Ad
         throw new Error('Failed to delete content');
       }
 
-      setItems(items.filter(i => i.id !== id));
-      
       // Refresh the page data
       router.refresh();
     } catch (error) {
       console.error('Error deleting content:', error);
       alert('Failed to delete content. Please try again.');
     }
-  };
+  }
 
   const handleCreate = async () => {
     try {
@@ -122,7 +117,6 @@ export function AdminContentProvider({ collection, initialItems, authToken }: Ad
       }
 
       const newItem = await response.json();
-      setItems([newItem, ...items]);
       router.refresh();
     } catch (error) {
       console.error('Error creating content:', error);
@@ -133,11 +127,13 @@ export function AdminContentProvider({ collection, initialItems, authToken }: Ad
   return (
     <CollectionTable
       collection={collection}
-      items={items}
-      onBatchUpdate={handleBatchUpdate}
-      onDelete={handleDelete}
+      items={collectionDataHook.items}
+      onBatchUpdate={collectionDataHook.batchUpdate}
+      onDelete={collectionDataHook.deleteItem}
       onCreate={handleCreate}
       authToken={authToken}
+      // Pass all the hook data and handlers
+      collectionDataHook={collectionDataHook}
     />
   );
 } 

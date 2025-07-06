@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSite } from '@/context/SiteContext';
@@ -115,6 +116,36 @@ export function NavFavorites() {
                   <DropdownMenuItem onClick={() => { setEditingCollection(collection); setIsModalOpen(true); }}>
                     <span>Edit Collection</span>
                   </DropdownMenuItem>
+                  <DestructiveActionDialog
+                    trigger={
+                      <DropdownMenuItem
+                        onSelect={(e)=>e.preventDefault()}
+                        className="flex items-center w-full py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                      >
+                        <span>Delete Collection</span>
+                      </DropdownMenuItem>
+                    }
+                    title={`Delete collection "${collection.name}"?`}
+                    description="This will permanently delete the collection and all of its content. This action cannot be undone."
+                    confirmInputText="delete forever"
+                    onConfirm={async () => {
+                      if (!currentSite) return;
+                      try {
+                        const resp = await fetch(`/api/admin/collections/${collection.slug}?siteId=${currentSite.id}`, {
+                          method: 'DELETE',
+                        });
+                        if (!resp.ok) throw new Error('Failed to delete collection');
+                        // Reload collections and redirect if on this collection page
+                        await loadCollections();
+                        if (pathname.startsWith(`/admin/collections/${collection.slug}`)) {
+                          window.location.href = '/admin';
+                        }
+                      } catch (err) {
+                        console.error('Error deleting collection', err);
+                        alert('Failed to delete collection');
+                      }
+                    }}
+                  />
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem>

@@ -32,7 +32,8 @@ export function useCollectionData({
     return rawItems.map(item => {
       // Only merge draft data for published items
       if (item.publishedAt && item.draft && Object.keys(item.draft).length > 0) {
-        return {
+        // Create a stable merged object
+        const mergedItem = {
           ...item,
           ...item.draft,
           data: {
@@ -40,7 +41,9 @@ export function useCollectionData({
             ...((item.draft as any).data || {}),
           },
         };
+        return mergedItem;
       }
+      // Return the original item reference if no changes needed
       return item;
     });
   }, [rawItems]);
@@ -250,26 +253,17 @@ export function useCollectionData({
         return newChanges;
       });
     } else {
-      setPendingChanges(prev => {
-        const newChanges = new Map(prev);
-        const existing = newChanges.get(itemId) || { itemId, changes: {} };
+      // Draft items should autosave immediately without creating pending changes.
 
-        let updatedChanges;
-        if (isSystemField) {
-          updatedChanges = { ...existing.changes, [fieldName]: value };
-        } else {
-          updatedChanges = {
-            ...existing.changes,
-            data: {
-              ...((existing.changes as any).data || {}),
-              [fieldName]: value,
-            },
-          };
-        }
+      // Prepare the change payload based on system vs. data field
+      const changePayload = isSystemField
+        ? { [fieldName]: value }
+        : { data: { [fieldName]: value } };
 
-        newChanges.set(itemId, { itemId, changes: updatedChanges });
-        return newChanges;
-      });
+      // Debounced PUT directly to the live (draft) record
+      debouncedSaveItem(itemId, changePayload);
+      // Note: we intentionally do NOT record pendingChanges for draft items so that
+      // the UI doesn’t show the republish / clear-changes workflow.
     }
   }, [rawItems]);
 
@@ -289,11 +283,22 @@ export function useCollectionData({
     const originalItem = initialItems.find(i => i.id === itemId) || item;
 
     // Optimistically update to original state but as draft
-    setRawItems(prev => prev.map(i => 
-      i.id === itemId 
-        ? { ...originalItem, status: 'draft', publishedAt: null, draft: null }
-        : i
-    ));
+    setRawItems(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+
+      // Remove any stored datePublished in custom data
+      const cleanedData = { ...(originalItem.data || {}) } as any;
+      delete cleanedData.datePublished;
+      delete cleanedData.publishedAt;
+
+      return {
+        ...originalItem,
+        status: 'draft',
+        publishedAt: null,
+        draft: null,
+        data: cleanedData,
+      };
+    }));
 
     // Update server in background
     try {
@@ -329,10 +334,9 @@ export function useCollectionData({
     const item = rawItems.find(i => i.id === itemId);
     if (!item) return;
 
-    const isCurrentlyPublished = (item as any).status === 'published';
-    const newStatus = isCurrentlyPublished ? 'draft' : 'published';
+    const newStatus = (item as any).status === 'published' ? 'draft' : 'published';
 
-    if (isCurrentlyPublished) {
+    if (newStatus === 'draft') {
       await handleUnpublish(itemId);
     } else {
       const newPublishedAt = new Date().toISOString();
@@ -360,11 +364,12 @@ export function useCollectionData({
         console.error('Failed to toggle publish status:', error);
       }
     }
-  }, [rawItems, handleUnpublish, collection.slug]);
+  }, [handleUnpublish, collection.slug]);
 
   // Republish item with pending changes
   const republishItem = useCallback(async (itemId: string) => {
-    debouncedSaveDraft.cancel();
+    // Ensure any in-flight debounced draft save is sent before republishing
+    debouncedSaveDraft.flush();
     
     const change = pendingChanges.get(itemId);
     const item = rawItems.find(i => i.id === itemId);
@@ -390,9 +395,18 @@ export function useCollectionData({
 
       const republishedItem = await response.json();
       
-      setRawItems(prev => prev.map(i => 
-        i.id === republishedItem.id ? republishedItem : i
-      ));
+      setRawItems(prev => prev.map(i => {
+        if (i.id !== republishedItem.id) return i;
+
+        return {
+          ...i,
+          ...republishedItem,
+          data: {
+            ...(i.data || {}),
+            ...(republishedItem.data || {}),
+          },
+        };
+      }));
       
       setPendingChanges(prev => {
         const newMap = new Map(prev);
@@ -411,7 +425,7 @@ export function useCollectionData({
         return newSet;
       });
     }
-  }, [pendingChanges, rawItems, collection.slug, authToken, debouncedSaveDraft]);
+  }, [pendingChanges, collection.slug, authToken, debouncedSaveDraft]);
 
   // Clear pending changes
   const clearPendingChanges = useCallback(async (itemId: string) => {

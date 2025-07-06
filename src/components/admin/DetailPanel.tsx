@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ContentItem, CollectionConfig } from '@/types/cms';
 import TipTapEditor from './TipTapEditor';
 import { SEOPreview } from './SEOPreview';
@@ -17,11 +17,68 @@ import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
 import { getFieldTypeIcon } from '@/lib/field-type-icons';
 import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
 import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
 import { getStatusColor } from '@/lib/status-colors';
+import { useCollectionData } from '@/hooks/useCollectionData';
+
+// StatusSelect component to prevent infinite re-renders
+const StatusSelect = React.memo(({ 
+  itemId,
+  status,
+  publishedAt,
+  onTogglePublish 
+}: {
+  itemId: string;
+  status: 'draft' | 'published';
+  publishedAt: string | null;
+  onTogglePublish: (itemId: string) => Promise<void>;
+}) => {
+  const handleValueChange = useCallback(async (newStatus: string) => {
+    if (newStatus === status) return;
+
+    try {
+      await onTogglePublish(itemId);
+    } catch (err) {
+      console.error('Toggle publish failed', err);
+    }
+  }, [status, onTogglePublish, itemId]);
+
+  return (
+    <Select
+      value={status}
+      onValueChange={handleValueChange}
+    >
+      <SelectTrigger size="sm" className="capitalize">
+        <SelectValue>
+          <span className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${getStatusColor(status as any)}`} />
+            {status}
+          </span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="draft">
+          <span className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${getStatusColor('draft')}`} />
+            Draft
+          </span>
+        </SelectItem>
+        <SelectItem value="published">
+          <span className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${getStatusColor('published')}`} />
+            Published
+          </span>
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  );
+});
+
+StatusSelect.displayName = 'StatusSelect';
 
 const SYSTEM_DATE_FIELDS = [
   'createdAt', 'updatedAt', 'publishedAt', 'datePublished', 'lastModified',
@@ -50,6 +107,11 @@ interface DetailPanelProps {
   onCollectionUpdate?: (updatedCollection: CollectionConfig) => void; // Add collection update handler
   onDelete?: (itemId: string) => Promise<void> | void; // Add delete handler
   onClearPending?: (itemId: string) => Promise<void> | void; // Clear pending edits handler
+  // Add props for unified data handling
+  onBatchUpdate?: (items: ContentItem[]) => Promise<ContentItem[]>;
+  onDeleteItem?: (id: string) => Promise<void>;
+  // Accept the shared collection data hook
+  collectionDataHook: ReturnType<typeof useCollectionData>;
 }
 
 export function DetailPanel({
@@ -64,10 +126,35 @@ export function DetailPanel({
   onCollectionUpdate,
   onDelete,
   onClearPending,
+  onBatchUpdate,
+  onDeleteItem,
+  collectionDataHook,
 }: DetailPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { currentSite } = useSite();
   
+  // Use the shared collection data hook
+  const {
+    items: localItems,
+    updateField,
+    togglePublish,
+    republishItem,
+    clearPendingChanges,
+    deleteItem,
+    hasPendingChanges: hasItemPendingChanges,
+  } = collectionDataHook;
+
+  // Get the current item from the unified data - memoize to prevent infinite re-renders
+  const currentItem = useMemo(() => {
+    const foundItem = localItems.find(i => i.id === item.id);
+    return foundItem || item;
+  }, [localItems, item.id, item]);
+
+  // Create a key that changes when the item data changes to force re-render
+  const itemDataKey = useMemo(() => {
+    return `${currentItem.id}-${currentItem.title}-${currentItem.status}-${JSON.stringify(currentItem.data)}`;
+  }, [currentItem]);
+
   // SEO and OG inheritance states
   const [inheritSeoFromContent, setInheritSeoFromContent] = useState(true);
   const [inheritOgFromSeo, setInheritOgFromSeo] = useState(true);
@@ -78,27 +165,19 @@ export function DetailPanel({
   // Local copy of collection to allow live updates
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
 
-  // Helper function to get field values with draft data preferred
+  // Helper function to get field values - useCollectionData already merges draft data
   const getFieldValue = useCallback((fieldName: string) => {
-    // Handle top-level fields
-    if (['title', 'slug', 'seoTitle', 'seoDescription', 'ogImage'].includes(fieldName)) {
-      const draftValue = (item.draft as any)?.[fieldName];
-      const liveValue = (item as any)[fieldName];
-      return draftValue !== undefined ? draftValue : (liveValue || '');
+    // Handle system fields (top-level)
+    if (['title', 'slug', 'seoTitle', 'seoDescription', 'ogImage', 'status'].includes(fieldName)) {
+      if (fieldName === 'status') {
+        return (currentItem as any).status || (currentItem.publishedAt ? 'published' : 'draft');
+      }
+      return (currentItem as any)[fieldName] || '';
     }
-
-    // Handle status
-    if (fieldName === 'status') {
-      const draftStatus = (item.draft as any)?.status;
-      const liveStatus = (item as any).status || (item.data as any)?.status;
-      return draftStatus !== undefined ? draftStatus : (liveStatus || (item.publishedAt ? 'published' : 'draft'));
-    }
-
+    
     // Handle data fields
-    const draftValue = item.draft?.data?.[fieldName];
-    const liveValue = item.data?.[fieldName];
-    return draftValue !== undefined ? draftValue : liveValue;
-  }, [item]);
+    return currentItem.data?.[fieldName];
+  }, [currentItem]);
   
   useEffect(() => {
     setIsOpen(true);
@@ -111,7 +190,7 @@ export function DetailPanel({
 
   // Helper function to handle direct field updates for the notion-like fields
   const handleDirectFieldUpdate = (fieldName: string, value: string) => {
-    onFieldUpdate(item.id, fieldName, value);
+    updateField(currentItem.id, fieldName, value);
   };
 
   // Check if a field is a date field that should be read-only
@@ -121,7 +200,7 @@ export function DetailPanel({
   };
 
   // Helper to build the display URL for the slug field
-  const buildDisplayUrl = () => {
+  const buildDisplayUrl = useMemo(() => {
     const domain = currentSite?.domain || 'yoursite.com';
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
     
@@ -135,7 +214,7 @@ export function DetailPanel({
       domain: cleanDomain,
       path: pathPattern
     };
-  };
+  }, [currentSite?.domain, collection.urlPattern, collection.slug]);
 
   // Helper to get the effective OG title
   const getOgTitle = () => {
@@ -165,15 +244,15 @@ export function DetailPanel({
     });
   };
 
-  // Extract key system info for display
-  const statusVal = getFieldValue('status') as 'draft' | 'published' | undefined;
-  const isPublished = statusVal === 'published';
-  const publishedAtVal = getFieldValue('publishedAt') || (item as any).publishedAt || item.publishedAt;
-  const publishedAtDisplay = formatDate(getFieldValue('datePublished') || publishedAtVal);
-  const lastModifiedDisplay = formatDate(getFieldValue('dateLastModified') || getFieldValue('lastModified') || (item as any).dateLastModified || item.updatedAt);
+  // Extract key system info for display - memoize to prevent infinite re-renders
+  const statusVal = useMemo(() => getFieldValue('status') as 'draft' | 'published' | undefined, [getFieldValue]);
+  const isPublished = useMemo(() => statusVal === 'published', [statusVal]);
+  const publishedAtVal = useMemo(() => getFieldValue('publishedAt') || (currentItem as any).publishedAt || currentItem.publishedAt, [getFieldValue, currentItem]);
+  const publishedAtDisplay = useMemo(() => formatDate(getFieldValue('datePublished') || publishedAtVal), [getFieldValue, publishedAtVal]);
+  const lastModifiedDisplay = useMemo(() => formatDate(getFieldValue('dateLastModified') || getFieldValue('lastModified') || (currentItem as any).dateLastModified || currentItem.updatedAt), [getFieldValue, currentItem]);
 
   // Construct a public preview URL for the item
-  const publicUrl = `https://${buildDisplayUrl().domain}${buildDisplayUrl().path}${getFieldValue('slug')}`;
+  const publicUrl = useMemo(() => `https://${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`, [buildDisplayUrl, getFieldValue]);
 
   const getStructuredData = () => {
     const data: any = {
@@ -206,12 +285,12 @@ export function DetailPanel({
       data.publisher = author;
     }
 
-    const datePublished = getFieldValue('datePublished') || getFieldValue('publishedAt') || (item as any).datePublished || item.publishedAt;
+    const datePublished = getFieldValue('datePublished') || getFieldValue('publishedAt') || (currentItem as any).datePublished || currentItem.publishedAt;
     if (datePublished) {
       data.datePublished = new Date(datePublished).toISOString();
     }
 
-    const dateModified = getFieldValue('dateLastModified') || getFieldValue('lastModified') || (item as any).dateLastModified || item.updatedAt;
+    const dateModified = getFieldValue('dateLastModified') || getFieldValue('lastModified') || (currentItem as any).dateLastModified || currentItem.updatedAt;
     if (dateModified) {
       data.dateModified = new Date(dateModified).toISOString();
     }
@@ -225,6 +304,9 @@ export function DetailPanel({
       window.open(publicUrl, '_blank');
     }
   };
+
+  // Update the hasPendingChanges check to use the unified system
+  const itemHasPendingChanges = hasItemPendingChanges(currentItem.id);
 
   return (
     <>
@@ -269,70 +351,33 @@ export function DetailPanel({
             {/* Right-aligned status and actions */}
             <div className="flex items-center gap-2">
               {/* Pending edits indicator and republish button */}
-              {isPublished && hasPendingChanges && onRepublish && (
+              {isPublished && itemHasPendingChanges && (
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs font-medium bg-blue-50 text-blue-700">
                     Pending edits
                   </Badge>
-                  <Button size="sm" onClick={() => onRepublish(item.id)} className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 py-0">
+                  <Button size="sm" onClick={() => republishItem(currentItem.id)} className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 py-0">
                     Republish
                   </Button>
                 </div>
               )}
               
-              {hasPendingChanges && onClearPending ? (
+              {itemHasPendingChanges ? (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => onClearPending(item.id)}
+                  onClick={() => clearPendingChanges(currentItem.id)}
                   className="h-8 px-3 py-0"
                 >
                   Clear
                 </Button>
               ) : (
-                (() => {
-                  const explicitStatus = getFieldValue('status');
-                  const effectiveStatus: 'draft' | 'published' = (explicitStatus as any) || (isPublished ? 'published' : 'draft');
-
-                  return (
-                    <Select
-                      value={effectiveStatus}
-                      onValueChange={async (newStatus) => {
-                        const currentStatus = effectiveStatus;
-                        if (newStatus === currentStatus) return;
-
-                        try {
-                          await _onTogglePublish(item.id);
-                        } catch (err) {
-                          console.error('Toggle publish failed', err);
-                        }
-                      }}
-                    >
-                      <SelectTrigger size="sm" className="capitalize">
-                        <SelectValue>
-                          <span className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${getStatusColor(effectiveStatus as any)}`} />
-                            {effectiveStatus}
-                          </span>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="draft">
-                          <span className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${getStatusColor('draft')}`} />
-                            Draft
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="published">
-                          <span className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${getStatusColor('published')}`} />
-                            Published
-                          </span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  );
-                })()
+                <StatusSelect
+                  itemId={currentItem.id}
+                  status={statusVal || 'draft'}
+                  publishedAt={currentItem.publishedAt}
+                  onTogglePublish={togglePublish}
+                />
               )}
 
               {/* More actions dropdown */}
@@ -346,26 +391,22 @@ export function DetailPanel({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {isPublished && hasPendingChanges && (
+                  {isPublished && itemHasPendingChanges && (
                     <>
-                      {onRepublish && (
-                        <DropdownMenuItem
-                          onClick={() => onRepublish(item.id)}
-                          className="flex items-center w-full px-4 py-1 text-sm cursor-pointer hover:bg-blue-50"
-                        >
-                          <RefreshCcw size={14} className="mr-2" />
-                          <span>Republish edits</span>
-                        </DropdownMenuItem>
-                      )}
-                      {onClearPending && (
-                        <DropdownMenuItem
-                          onClick={() => onClearPending(item.id)}
-                          className="flex items-center w-full px-4 py-1 text-sm cursor-pointer text-gray-700 hover:bg-gray-50"
-                        >
-                          <X size={14} className="mr-2" />
-                          <span>Clear pending edits</span>
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuItem
+                        onClick={() => republishItem(currentItem.id)}
+                        className="flex items-center w-full px-4 py-1 text-sm cursor-pointer hover:bg-blue-50"
+                      >
+                        <RefreshCcw size={14} className="mr-2" />
+                        <span>Republish edits</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => clearPendingChanges(currentItem.id)}
+                        className="flex items-center w-full px-4 py-1 text-sm cursor-pointer text-gray-700 hover:bg-gray-50"
+                      >
+                        <X size={14} className="mr-2" />
+                        <span>Clear pending edits</span>
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </>
                   )}
@@ -383,17 +424,20 @@ export function DetailPanel({
                     </a>
                   </DropdownMenuItem>
                   {onDelete && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete this item?')) {
-                          onDelete(item.id);
-                        }
-                      }}
-                      className="flex items-center w-full px-4 py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-                    >
-                      <Trash2 size={14} className="mr-2" />
-                      <span>Delete</span>
-                    </DropdownMenuItem>
+                    <DestructiveActionDialog
+                      trigger={
+                        <DropdownMenuItem
+                          onSelect={(e)=>e.preventDefault()}
+                          className="flex items-center w-full px-4 py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                        >
+                          <Trash2 size={14} className="mr-2" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
+                      }
+                      title="Delete item?"
+                      description="Are you sure you want to delete this item? This action cannot be undone."
+                      onConfirm={() => deleteItem(currentItem.id)}
+                    />
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -440,7 +484,7 @@ export function DetailPanel({
                     Slug
                   </label>
                   <div className="flex-1 flex items-center gap-1">
-                    <span className="text-gray-400 text-sm">{buildDisplayUrl().path}</span>
+                    <span className="text-gray-400 text-sm">{buildDisplayUrl.path}</span>
                     <input
                       value={getFieldValue('slug') || ''}
                       onChange={(e) => {
@@ -488,8 +532,8 @@ export function DetailPanel({
                           {renderField(
                             field,
                             authToken,
-                            onFieldUpdate,
-                            item.id,
+                            updateField, // Use the unified updateField function
+                            currentItem.id,
                             getFieldValue
                           )}
                         </div>
@@ -535,7 +579,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Title'}
                             </label>
-                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -547,7 +591,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Description'}
                             </label>
-                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -557,7 +601,7 @@ export function DetailPanel({
                         <GoogleSearchPreview
                           title={inheritSeoFromContent ? getFieldValue('title') : (getFieldValue('seoTitle') || getFieldValue('title'))}
                           description={inheritSeoFromContent ? (getFieldValue('body')?.substring(0, 200) || '') : (getFieldValue('seoDescription') || getFieldValue('body')?.substring(0, 200) || '')}
-                          url={`${buildDisplayUrl().domain}${buildDisplayUrl().path}${getFieldValue('slug')}`}
+                          url={`${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`}
                         />
                       </div>
                     </div>
@@ -588,7 +632,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Title'}
                             </label>
-                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -600,7 +644,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Description'}
                             </label>
-                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -612,7 +656,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Image'}
                             </label>
-                            {renderField(field, authToken, onFieldUpdate, item.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
                           </div>
                         ))}
 
@@ -623,7 +667,7 @@ export function DetailPanel({
                           title={getOgTitle()}
                           description={getOgDescription()}
                           image={getFieldValue('ogImage')}
-                          url={`${buildDisplayUrl().domain}${buildDisplayUrl().path}${getFieldValue('slug')}`}
+                          url={`${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`}
                         />
                       </div>
                     </div>
@@ -757,7 +801,7 @@ function NotionLikeInput({
 function renderField(
   field: any,
   authToken: string,
-  onFieldUpdate: (itemId: string, field: string, value: any) => void,
+  updateField: (itemId: string, field: string, value: any) => void,
   itemId: string,
   getFieldValue: (fieldName: string) => any
 ) {
@@ -769,7 +813,7 @@ function renderField(
         <input
           type="text"
           value={value || ''}
-          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.value)}
+          onChange={(e) => updateField(itemId, field.name, e.target.value)}
           placeholder={field.placeholder}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
@@ -779,7 +823,7 @@ function renderField(
       return (
         <textarea
           value={value || ''}
-          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.value)}
+          onChange={(e) => updateField(itemId, field.name, e.target.value)}
           placeholder={field.placeholder}
           rows={4}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
@@ -791,7 +835,7 @@ function renderField(
         <input
           type="number"
           value={value || ''}
-          onChange={(e) => onFieldUpdate(itemId, field.name, Number(e.target.value))}
+          onChange={(e) => updateField(itemId, field.name, Number(e.target.value))}
           placeholder={field.placeholder}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
@@ -802,7 +846,7 @@ function renderField(
         <input
           type="checkbox"
           checked={value || false}
-          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.checked)}
+          onChange={(e) => updateField(itemId, field.name, e.target.checked)}
           className="rounded border-gray-300 text-primary focus:ring-primary"
         />
       );
@@ -811,7 +855,7 @@ function renderField(
        return (
          <DatePicker
            date={value ? new Date(value) : undefined}
-           setDate={(date: Date | undefined) => onFieldUpdate(itemId, field.name, date?.toISOString())}
+           setDate={(date: Date | undefined) => updateField(itemId, field.name, date?.toISOString())}
            className="w-full"
          />
        );
@@ -820,7 +864,7 @@ function renderField(
       return (
         <Select
           value={value || ''}
-          onValueChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+          onValueChange={(newValue) => updateField(itemId, field.name, newValue)}
         >
           <SelectTrigger className="w-full">
             <SelectValue placeholder={field.placeholder} />
@@ -839,7 +883,7 @@ function renderField(
       return (
         <NotionMultiSelect
           value={value || []}
-          onChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+          onChange={(newValue) => updateField(itemId, field.name, newValue)}
           options={field.options || []}
           placeholder={field.placeholder}
         />
@@ -850,7 +894,7 @@ function renderField(
       return (
         <NotionSelect
           value={value || ''}
-          onChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+          onChange={(newValue) => updateField(itemId, field.name, newValue)}
           options={[]} // Would need to fetch reference options
           placeholder={field.placeholder}
         />
@@ -862,7 +906,7 @@ function renderField(
           field={field}
           value={value || ''}
           authToken={authToken}
-          onFieldUpdate={(fieldName, value) => onFieldUpdate(itemId, fieldName, value)}
+          onFieldUpdate={(fieldName, value) => updateField(itemId, fieldName, value)}
         />
       );
     
@@ -870,7 +914,7 @@ function renderField(
        return (
          <TipTapEditor
            content={value || ''}
-           onChange={(newValue) => onFieldUpdate(itemId, field.name, newValue)}
+           onChange={(newValue) => updateField(itemId, field.name, newValue)}
            authToken={authToken}
          />
        );
@@ -880,7 +924,7 @@ function renderField(
         <input
           type="text"
           value={value || ''}
-          onChange={(e) => onFieldUpdate(itemId, field.name, e.target.value)}
+          onChange={(e) => updateField(itemId, field.name, e.target.value)}
           placeholder={field.placeholder}
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />

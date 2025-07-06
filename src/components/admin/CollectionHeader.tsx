@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
 import { CollectionConfig } from '@/types/cms';
 import { useAdminHeader } from '@/context/AdminHeaderContext';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
@@ -25,6 +26,7 @@ interface BulkActionsDropdownProps {
 }
 
 function BulkActionsDropdown({ onPublishAll, onUnpublishAll, onEditCollection, collection }: BulkActionsDropdownProps) {
+  const { currentSite } = useSite();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -43,6 +45,33 @@ function BulkActionsDropdown({ onPublishAll, onUnpublishAll, onEditCollection, c
         <DropdownMenuItem onClick={onEditCollection}>
           Edit Collection
         </DropdownMenuItem>
+
+        <DestructiveActionDialog
+          trigger={
+            <DropdownMenuItem
+              onSelect={(e)=>e.preventDefault()}
+              className="text-red-600 focus:text-red-700"
+            >
+              Delete Collection
+            </DropdownMenuItem>
+          }
+          title={`Delete collection "${collection.name}"?`}
+          description="This will permanently delete the collection and all of its content. This action cannot be undone."
+          confirmInputText="delete forever"
+          onConfirm={async () => {
+            if (!currentSite) return;
+            try {
+              const resp = await fetch(`/api/admin/collections/${collection.slug}?siteId=${currentSite.id}`, {
+                method: 'DELETE',
+              });
+              if (!resp.ok) throw new Error('Failed to delete collection');
+              window.location.href = '/admin';
+            } catch (err) {
+              console.error('Error deleting collection', err);
+              alert('Failed to delete collection');
+            }
+          }}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
