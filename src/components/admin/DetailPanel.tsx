@@ -52,7 +52,7 @@ const StatusSelect = React.memo(({
       value={status}
       onValueChange={handleValueChange}
     >
-      <SelectTrigger size="sm" className="capitalize">
+      <SelectTrigger size="sm" className="capitalize pr-1">
         <SelectValue>
           <span className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${getStatusColor(status as any)}`} />
@@ -320,7 +320,7 @@ export function DetailPanel({
       
       {/* Panel */}
       <div
-        className={`fixed right-0 top-0 h-full w-full max-w-[820px] bg-white shadow-2xl z-50 m-[8px] rounded-t-xl outline-1 outline-gray-900/5 transform transition-transform ${
+        className={`fixed right-0 top-0 h-full w-full max-w-[900px] bg-white shadow-2xl z-50 m-[8px] rounded-t-xl outline-1 outline-gray-900/5 transform transition-transform ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -459,27 +459,25 @@ export function DetailPanel({
                 />
 
                 {/* Description */}
-                {collection.fields.find(f => f.name === 'description') && (
-                  <div className="md:flex md:items-start md:gap-6 pt-8">
-                    <label className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-38 gap-2">
-                      <TextCursorInput className="w-4 h-4 text-gray-400 shrink-0" />
-                      Description
-                    </label>
-                    <div className="flex-1">
-                      <textarea
-                        value={getFieldValue('description') || ''}
-                        onChange={(e) => handleDirectFieldUpdate('description', e.target.value)}
-                        rows={2}
-                        placeholder="Add a description..."
-                        className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
-                    </div>
+                <div className="md:flex md:items-start md:gap-6 pt-8 mx-3">
+                  <label className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-32 gap-2">
+                    <TextCursorInput className="w-4 h-4 text-gray-400 shrink-0" />
+                    Description
+                  </label>
+                  <div className="flex-1">
+                    <textarea
+                      value={getFieldValue('description') || ''}
+                      onChange={(e) => handleDirectFieldUpdate('description', e.target.value)}
+                      rows={2}
+                      placeholder="Add a description..."
+                      className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
                   </div>
-                )}
+                </div>
 
                 {/* Slug */}
-                <div className="md:flex md:items-start md:gap-6">
-                  <label className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-38 gap-2">
+                <div className="md:flex md:items-start md:gap-6 mx-3">
+                  <label className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-32 gap-2">
                     <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
                     Slug
                   </label>
@@ -505,7 +503,7 @@ export function DetailPanel({
               </div>
 
               {/* Custom Fields - Following collection field order */}
-              <div className="space-y-8 pb-6">
+              <div className="space-y-8 pb-6 mx-3">
                 {localCollection.fields
                   .filter(field => !ALL_NON_CUSTOM_FIELDS.includes(field.name))
                   .map((field, index) => {
@@ -517,7 +515,7 @@ export function DetailPanel({
                       >
                         {/* Label (left column) */}
                         <label
-                          className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-38 gap-2"
+                          className="flex items-center text-[13px] font-medium text-gray-700 mb-2 md:mb-0 md:w-32 gap-2"
                         >
                           {Icon && (
                             <Icon className="w-4 h-4 text-gray-400 shrink-0" />
@@ -554,7 +552,7 @@ export function DetailPanel({
                 </div>
               </div>
 
-              <Accordion type="single" collapsible className="w-full border rounded-lg overflow-hidden">
+              <Accordion type="single" collapsible className="border rounded-lg overflow-hidden mx-3">
                 {/* SEO Settings */}
                 <AccordionItem value="seo-settings">
                   <AccordionTrigger className="text-sm font-semibold p-5 h-[50px] items-center hover:no-underline hover:bg-gray-50 rounded-none">SEO Settings</AccordionTrigger>
