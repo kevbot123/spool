@@ -1,11 +1,20 @@
 "use server"
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { Database } from './database.types'
 
 // Function specifically for Server Components and Server Actions
 // Needs to be async to await cookies()
+// Admin client – bypasses RLS, use ONLY in trusted server contexts
+export async function createSupabaseAdminClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies() // Await cookies()
   return createServerClient<Database>(
@@ -30,6 +39,7 @@ export async function createSupabaseServerClient() {
 
 // NEW Function specifically for Route Handlers
 // Needs to be async to await cookies()
+// User-scoped client for Route Handlers
 export async function createSupabaseRouteHandlerClient() {
   const cookieStore = await cookies(); // Await cookies()
   return createServerClient<Database>(

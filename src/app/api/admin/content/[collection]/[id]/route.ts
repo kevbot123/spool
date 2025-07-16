@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getContentManager } from '@/lib/cms/content';
+import { ContentManager } from '@/lib/cms/content';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{
@@ -12,7 +13,8 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection, id } = await params;
-    const contentManager = await getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
     const item = await contentManager.getContentItemById(collection, id);
     
     if (!item) {
@@ -36,7 +38,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection, id } = await params;
-    const contentManager = await getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
     const data = await request.json();
     
     console.log('--- API Update Received ---');
@@ -64,7 +67,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection, id } = await params;
-    const contentManager = await getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
     await contentManager.deleteContentById(collection, id);
     
     return NextResponse.json({ success: true });

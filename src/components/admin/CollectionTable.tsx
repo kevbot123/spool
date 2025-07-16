@@ -72,7 +72,7 @@ interface CollectionTableProps {
   collection: CollectionConfig;
   items: ContentItem[];
   onBatchUpdate: (items: ContentItem[]) => Promise<ContentItem[]>;
-  onDelete: (id: string) => Promise<void>;
+
   onCreate: () => void;
   authToken: string | null;
   // Accept the shared collection data hook
@@ -381,7 +381,6 @@ export function CollectionTable({
   collection,
   items,
   onBatchUpdate,
-  onDelete,
   onCreate,
   authToken,
   collectionDataHook,

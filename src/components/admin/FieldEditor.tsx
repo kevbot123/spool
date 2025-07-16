@@ -9,6 +9,7 @@ import { getStatusColor } from '@/lib/status-colors';
 import { validateSlugInput, createUrlSafeSlug } from '@/lib/utils';
 import { NotionSelect, NotionMultiSelect } from '@/components/ui/notion-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useSite } from '@/context/SiteContext';
 import TipTapEditor from './TipTapEditor';
 
 interface FieldEditorProps {
@@ -40,6 +41,7 @@ export function FieldEditor({
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const { currentSite } = useSite();
   
   // Internal popover state for text/number fields to match other field types
   const [internalPopoverOpen, setInternalPopoverOpen] = useState(false);
@@ -94,6 +96,9 @@ export function FieldEditor({
     
     const formData = new FormData();
     formData.append('file', file);
+    if (currentSite?.id) {
+      formData.append('site_id', currentSite.id);
+    }
 
     const headers: Record<string, string> = {};
     if (authToken) {

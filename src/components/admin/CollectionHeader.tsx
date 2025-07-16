@@ -2,78 +2,41 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import CollectionActionsDropdown from '@/components/admin/CollectionActionsDropdown';
 import { Search, MoreHorizontal, Plus, MoreVertical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
+import { ImportItemsModal } from '@/components/admin/ImportItemsModal';
 import { CollectionConfig } from '@/types/cms';
 import { useAdminHeader } from '@/context/AdminHeaderContext';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
-import { useSite } from '@/context/SiteContext';
 
 interface BulkActionsDropdownProps {
-  onPublishAll: () => void;
-  onUnpublishAll: () => void;
+  onPublishAll?: () => void;
+  onUnpublishAll?: () => void;
   onEditCollection: () => void;
+  onImportItems: () => void;
+  onDeleted?: () => void;
   collection: CollectionConfig;
 }
 
-function BulkActionsDropdown({ onPublishAll, onUnpublishAll, onEditCollection, collection }: BulkActionsDropdownProps) {
-  const { currentSite } = useSite();
+function BulkActionsDropdown({ onPublishAll, onUnpublishAll, onEditCollection, onImportItems, onDeleted, collection }: BulkActionsDropdownProps) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <CollectionActionsDropdown
+      collection={collection}
+      trigger={
         <Button variant="ghost" size="sm" className="h-8 w-7 p-0">
           <MoreVertical className="h-4 w-4" />
           <span className="sr-only">Open bulk actions menu</span>
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onPublishAll}>
-          Publish All Items
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onUnpublishAll}>
-          Unpublish All Items
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onEditCollection}>
-          Edit Collection
-        </DropdownMenuItem>
-
-        <DestructiveActionDialog
-          trigger={
-            <DropdownMenuItem
-              onSelect={(e)=>e.preventDefault()}
-              className="text-red-600 focus:text-red-700"
-            >
-              Delete Collection
-            </DropdownMenuItem>
-          }
-          title={`Delete collection "${collection.name}"?`}
-          description="This will permanently delete the collection and all of its content. This action cannot be undone."
-          confirmInputText="delete forever"
-          onConfirm={async () => {
-            if (!currentSite) return;
-            try {
-              const resp = await fetch(`/api/admin/collections/${collection.slug}?siteId=${currentSite.id}`, {
-                method: 'DELETE',
-              });
-              if (!resp.ok) throw new Error('Failed to delete collection');
-              window.location.href = '/admin';
-            } catch (err) {
-              console.error('Error deleting collection', err);
-              alert('Failed to delete collection');
-            }
-          }}
-        />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      }
+      onPublishAll={onPublishAll}
+      onUnpublishAll={onUnpublishAll}
+      onEditCollection={onEditCollection}
+      onImportItems={onImportItems}
+      onDeleted={onDeleted}
+    />
   );
 }
 
@@ -87,8 +50,9 @@ interface CollectionHeaderProps {
   onCreate: () => void;
   onPublishAll?: () => void;
   onUnpublishAll?: () => void;
+  /** Callback to refresh after import */
+  onImported?: () => void;
 }
-
 
 export function CollectionHeader({
   collection,
@@ -99,11 +63,13 @@ export function CollectionHeader({
   onSaveAll,
   onCreate,
   onPublishAll,
-  onUnpublishAll
+  onUnpublishAll,
+  onImported,
 }: CollectionHeaderProps) {
   const { setHeaderContent, setBreadcrumbs } = useAdminHeader();
-  const { currentSite } = useSite();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -156,11 +122,13 @@ export function CollectionHeader({
           </Button>
 
           {/* Bulk Actions */}
-          {itemCount > 0 && onPublishAll && onUnpublishAll && (
+          {itemCount >= 0 && (
             <BulkActionsDropdown
               onPublishAll={onPublishAll}
               onUnpublishAll={onUnpublishAll}
               onEditCollection={() => setIsModalOpen(true)}
+              onImportItems={() => setImportOpen(true)}
+              onDeleted={() => (window.location.href = '/admin')}
               collection={collection}
             />
           )}
@@ -184,7 +152,8 @@ export function CollectionHeader({
     onSaveAll,
     onCreate,
     onPublishAll,
-    onUnpublishAll
+    onUnpublishAll,
+    onImported,
   ]);
 
   return (
@@ -212,6 +181,14 @@ export function CollectionHeader({
               console.error('Save collection error', err);
             }
           }}
+        />
+      )}
+    {importOpen && (
+        <ImportItemsModal
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          collection={collection}
+          onImported={onImported}
         />
       )}
     </>

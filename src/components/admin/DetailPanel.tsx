@@ -227,9 +227,18 @@ export function DetailPanel({
   // Helper to get the effective OG description
   const getOgDescription = () => {
     if (inheritOgFromSeo) {
-      return inheritSeoFromContent ? (getFieldValue('body')?.substring(0, 200) || '') : (getFieldValue('seoDescription') || getFieldValue('body')?.substring(0, 200) || '');
+      // When OG inherits from SEO, use the same logic as SEO for description
+      return inheritSeoFromContent
+        ? (getFieldValue('description') || '')
+        : (getFieldValue('seoDescription') || getFieldValue('description') || '');
     }
-    return getFieldValue('ogDescription') || getFieldValue('body')?.substring(0, 200) || '';
+    // When OG does not inherit from SEO, fall back from ogDescription -> seoDescription -> description
+    return (
+      getFieldValue('ogDescription') ||
+      getFieldValue('seoDescription') ||
+      getFieldValue('description') ||
+      ''
+    );
   };
 
   // Helper to format dates nicely
@@ -270,7 +279,7 @@ export function DetailPanel({
     const title = getFieldValue('title');
     if (title) data.headline = title;
 
-    const description = getFieldValue('seoDescription') || getFieldValue('description') || (getFieldValue('body') ? getFieldValue('body').substring(0, 160) : '');
+    const description = getFieldValue('seoDescription') || getFieldValue('description') || '';
     if (description) data.description = description;
 
     const image = getFieldValue('ogImage');
@@ -598,7 +607,9 @@ export function DetailPanel({
                         <h4 className="text-sm font-medium text-gray-700 mb-3">Google Search Preview</h4>
                         <GoogleSearchPreview
                           title={inheritSeoFromContent ? getFieldValue('title') : (getFieldValue('seoTitle') || getFieldValue('title'))}
-                          description={inheritSeoFromContent ? (getFieldValue('body')?.substring(0, 200) || '') : (getFieldValue('seoDescription') || getFieldValue('body')?.substring(0, 200) || '')}
+                          description={inheritSeoFromContent
+                            ? (getFieldValue('description') || '')
+                            : (getFieldValue('seoDescription') || getFieldValue('description') || '')}
                           url={`${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`}
                         />
                       </div>

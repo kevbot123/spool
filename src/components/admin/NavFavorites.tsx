@@ -1,5 +1,8 @@
 'use client';
 
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ImportNewCollectionModal } from '@/components/admin/ImportNewCollectionModal';
+
 import { useState, useEffect } from 'react';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
 import { Folder, Plus, MoreHorizontal } from 'lucide-react';
@@ -14,13 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
+import CollectionActionsDropdown from '@/components/admin/CollectionActionsDropdown';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSite } from '@/context/SiteContext';
@@ -31,6 +28,8 @@ export function NavFavorites() {
   const { currentSite } = useSite();
   const [collections, setCollections] = useState<CollectionConfig[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<CollectionConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -61,7 +60,7 @@ export function NavFavorites() {
 
   const handleCreateCollection = () => {
     setEditingCollection(null);
-    setIsModalOpen(true);
+    setChoiceOpen(true);
   };
 
   if (isLoading) {
@@ -101,53 +100,29 @@ export function NavFavorites() {
                   <span>{collection.name}</span>
                 </Link>
               </SidebarMenuButton>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <CollectionActionsDropdown
+                collection={collection}
+                align="start"
+                trigger={
                   <SidebarMenuAction showOnHover>
                     <MoreHorizontal />
                     <span className="sr-only">More</span>
                   </SidebarMenuAction>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="w-48 rounded-lg"
-                  side="right"
-                  align="start"
-                >
-                  <DropdownMenuItem onClick={() => { setEditingCollection(collection); setIsModalOpen(true); }}>
-                    <span>Edit Collection</span>
-                  </DropdownMenuItem>
-                  <DestructiveActionDialog
-                    trigger={
-                      <DropdownMenuItem
-                        onSelect={(e)=>e.preventDefault()}
-                        className="flex items-center w-full py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-                      >
-                        <span>Delete Collection</span>
-                      </DropdownMenuItem>
-                    }
-                    title={`Delete collection "${collection.name}"?`}
-                    description="This will permanently delete the collection and all of its content. This action cannot be undone."
-                    confirmInputText="delete forever"
-                    onConfirm={async () => {
-                      if (!currentSite) return;
-                      try {
-                        const resp = await fetch(`/api/admin/collections/${collection.slug}?siteId=${currentSite.id}`, {
-                          method: 'DELETE',
-                        });
-                        if (!resp.ok) throw new Error('Failed to delete collection');
-                        // Reload collections and redirect if on this collection page
-                        await loadCollections();
-                        if (pathname.startsWith(`/admin/collections/${collection.slug}`)) {
-                          window.location.href = '/admin';
-                        }
-                      } catch (err) {
-                        console.error('Error deleting collection', err);
-                        alert('Failed to delete collection');
-                      }
-                    }}
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
+                }
+                onPublishAll={() => alert('Publish All clicked')}
+                onUnpublishAll={() => alert('Unpublish All clicked')}
+                onImportItems={() => alert('Import Items clicked')}
+                onEditCollection={() => {
+                  setEditingCollection(collection);
+                  setIsModalOpen(true);
+                }}
+                onDeleted={async () => {
+                  await loadCollections();
+                  if (pathname.startsWith(`/admin/collections/${collection.slug}`)) {
+                    window.location.href = '/admin';
+                  }
+                }}
+              />
             </SidebarMenuItem>
           ))}
           <SidebarMenuItem>
@@ -159,6 +134,7 @@ export function NavFavorites() {
         </SidebarMenu>
       </SidebarGroupContent>
       </SidebarGroup>
+      {/* Scratch setup modal */}
       {isModalOpen && (
     <CollectionSetupModal
       isOpen={isModalOpen}
@@ -185,6 +161,49 @@ export function NavFavorites() {
       }}
     />
   )}
+
+      {/* Import CSV flow */}
+      {importModalOpen && (
+        <ImportNewCollectionModal
+          open={importModalOpen}
+          onOpenChange={(v)=>setImportModalOpen(v)}
+          onCreated={async ()=>{
+            await loadCollections();
+            setImportModalOpen(false);
+          }}
+        />
+      )}
+
+      {/* Choice dialog */}
+      {choiceOpen && (
+        <Dialog open={choiceOpen} onOpenChange={setChoiceOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="sr-only">Create collection</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 gap-4">
+              <button
+                className="border rounded-lg p-6 flex flex-col items-center gap-2 hover:bg-muted"
+                onClick={()=>{
+                  setChoiceOpen(false);
+                  setIsModalOpen(true);
+                }}
+              >
+                <span className="font-medium text-lg">Start from scratch</span>
+              </button>
+              <button
+                className="border rounded-lg p-6 flex flex-col items-center gap-2 hover:bg-muted"
+                onClick={()=>{
+                  setChoiceOpen(false);
+                  setImportModalOpen(true);
+                }}
+              >
+                <span className="font-medium text-lg">Import from CSV</span>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 } 

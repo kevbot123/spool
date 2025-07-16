@@ -359,7 +359,7 @@ interface FieldEditorModalProps {
   existingFieldNames: string[];
 }
 
-function FieldEditorModal({
+export function FieldEditorModal({
   isOpen,
   onClose,
   onSave,

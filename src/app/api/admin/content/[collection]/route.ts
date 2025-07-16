@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getContentManager } from '@/lib/cms/content';
+import { ContentManager } from '@/lib/cms/content';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface RouteParams {
@@ -35,7 +35,8 @@ async function getUserSiteId(): Promise<string> {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection } = await params;
-    const contentManager = getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
     const { searchParams } = new URL(request.url);
     
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
@@ -65,7 +66,8 @@ export async function POST(
 ) {
   try {
     const { collection } = await params;
-    const contentManager = getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
     const siteId = await getUserSiteId();
     
     // Generate a better default title based on collection name

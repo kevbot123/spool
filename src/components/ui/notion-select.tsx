@@ -139,7 +139,7 @@ export function NotionMultiSelect({
   disabled = false,
 }: NotionMultiSelectProps) {
   const [open, setOpen] = React.useState(false)
-  const selectedValues = value || []
+  const selectedValues = Array.isArray(value) ? value : (value ? [value] : [])
 
   const getOptionValue = (opt: Option) => (typeof opt === 'string' ? opt : opt.value)
   const getOptionLabel = (opt: Option) => (typeof opt === 'string' ? opt : opt.label)

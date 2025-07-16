@@ -22,6 +22,7 @@ export interface FieldConfig {
 }
 
 export interface CollectionConfig {
+  site_id: string;
   name: string;
   slug: string;
   description?: string;

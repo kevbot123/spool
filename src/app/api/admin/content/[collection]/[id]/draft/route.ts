@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getContentManager } from '@/lib/cms/content';
+import { ContentManager } from '@/lib/cms/content';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{
@@ -12,7 +13,8 @@ interface RouteParams {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection, id } = await params;
-    const contentManager = await getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
     const data = await request.json();
     
     // Here we'd ideally get the user ID and store it with the draft
@@ -37,7 +39,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection, id } = await params;
-    const contentManager = await getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
 
     // The content manager should have a method to delete/reset the draft data.
     // We'll assume `clearDraftById` returns the updated item (without draft).

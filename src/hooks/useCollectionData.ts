@@ -13,7 +13,7 @@ interface UseCollectionDataOptions {
   initialItems: ContentItem[];
   authToken: string | null;
   onBatchUpdate?: (items: ContentItem[]) => Promise<ContentItem[]>;
-  onDelete?: (id: string) => Promise<void>;
+
 }
 
 export function useCollectionData({
@@ -21,7 +21,7 @@ export function useCollectionData({
   initialItems,
   authToken,
   onBatchUpdate,
-  onDelete,
+
 }: UseCollectionDataOptions) {
   const [rawItems, setRawItems] = useState<ContentItem[]>(initialItems);
   const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map());
@@ -506,17 +506,34 @@ export function useCollectionData({
 
   // Delete handler
   const deleteItem = useCallback(async (itemId: string) => {
-    if (!onDelete) return;
-    
-    // Clear any pending changes
+    let originalItems: ContentItem[] = [];
+    setRawItems(currentItems => {
+      originalItems = currentItems;
+      return currentItems.filter(item => item.id !== itemId);
+    });
+
     setPendingChanges(prev => {
       const newMap = new Map(prev);
       newMap.delete(itemId);
       return newMap;
     });
-    
-    await onDelete(itemId);
-  }, [onDelete]);
+
+    try {
+      const response = await fetch(`/api/admin/content/${collection.slug}/${itemId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Server responded with an error');
+      }
+
+      toast.success('Item deleted successfully.');
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+      toast.error('Failed to delete item. Restoring...');
+      setRawItems(originalItems);
+    }
+  }, [collection.slug]);
 
   // Computed values
   const pendingChangesCount = useMemo(() => {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+
 import { createSupabaseRouteHandlerClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest) {
@@ -8,6 +7,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createSupabaseRouteHandlerClient();
 
   // Validate user session
+  // We need the site_id to create a user-specific folder.
+  // The site_id should be passed from the client.
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
   if (userError || !user) {
@@ -18,30 +19,44 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
+    const siteId = formData.get('site_id') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    if (!siteId) {
+      return NextResponse.json({ error: 'Site ID is required' }, { status: 400 });
+    }
+
     const fileExtension = file.name.split('.').pop();
     // Create a filename that is less predictable and includes a timestamp
-    const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}.${fileExtension}`;
+    const fileName = `${siteId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
     
-    // Define the path to the public uploads directory
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    const filePath = path.join(uploadsDir, fileName);
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Ensure the uploads directory exists
-    await fs.mkdir(uploadsDir, { recursive: true });
+    let { data: uploadData, error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(fileName, buffer, { contentType: file.type });
 
-    // Write the file to the filesystem
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(filePath, fileBuffer);
+    if (uploadError && uploadError.message.includes('Bucket not found')) {
+      const { error: createError } = await supabase.storage.createBucket('media', { public: true });
+      if (createError) {
+        console.error('Failed to create bucket:', createError);
+        return NextResponse.json({ error: 'Failed to create storage bucket' }, { status: 500 });
+      }
+      ({ data: uploadData, error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(fileName, buffer, { contentType: file.type }));
+    }
 
-    // Return the relative URL path
-    const relativeUrl = `/uploads/${fileName}`;
+    if (uploadError || !uploadData) {
+      console.error('Upload error:', uploadError);
+      return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
+    }
 
-    return NextResponse.json({ url: relativeUrl }, { status: 200 });
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(uploadData.path);
+    return NextResponse.json({ url: publicUrl }, { status: 200 });
 
   } catch (error: any) {
     console.error('Upload API error:', error);

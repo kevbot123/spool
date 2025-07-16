@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getContentManager } from '@/lib/cms/content';
+import { ContentManager } from '@/lib/cms/content';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface RouteParams {
   params: Promise<{
@@ -11,7 +12,8 @@ interface RouteParams {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { collection, id } = await params;
-    const contentManager = await getContentManager();
+    const supabase = await createSupabaseServerClient();
+    const contentManager = new ContentManager(supabase);
 
     // Try to get the draft from the request body
     let draftPayload: any = null;

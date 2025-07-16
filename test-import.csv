@@ -1,0 +1,4 @@
+title,body_markdown,tags
+"My First Test Post","<p>This is the body of my <strong>first</strong> post. It has some HTML.</p>","first-post;cool-stuff"
+"Another Test Post","This one is already in markdown.","second-post;testing"
+"A Post with No Tags","<p>No tags here!</p>",""
