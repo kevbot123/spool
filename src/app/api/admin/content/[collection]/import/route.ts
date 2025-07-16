@@ -7,6 +7,7 @@ import { createSupabaseRouteHandlerClient, createSupabaseAdminClient } from '@/l
 import slugify from 'slugify';
 import fetch from 'node-fetch';
 import { Readable } from 'stream';
+import { uploadImageWithSizes } from '@/lib/media';
 import { ContentManager } from '@/lib/cms/content';
 
 interface ImportResult {
@@ -139,19 +140,10 @@ for (const f of schemaFields) {
                     const response = await fetch(value);
                     if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
                     const blob = await response.blob();
-                    const buffer = await blob.arrayBuffer();
-                    const originalFileName = value.split('/').pop()?.split('?')[0] || 'image.jpg';
-                    const safeFileName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-                    const fileName = `${siteId}/${uuidv4()}-${safeFileName}`;
-
-                    const { data: uploadData, error: uploadError } = await storageAdmin.storage
-                      .from('media')
-                      .upload(fileName, buffer, { contentType: blob.type });
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = storageAdmin.storage.from('media').getPublicUrl(uploadData!.path);
-                    payload.data[fieldName] = publicUrl;
+                    const bufferArr = await blob.arrayBuffer();
+                    const safeFileName = (value.split('/').pop()?.split('?')[0] || 'image.jpg').replace(/[^a-zA-Z0-9.-]/g, '_');
+                    const urls = await uploadImageWithSizes(storageAdmin, siteId, safeFileName, blob.type, Buffer.from(bufferArr));
+                    payload.data[fieldName] = urls.original;
                   } catch (e: any) {
                     console.error(`Failed to process dedicated image for row ${rowNum}: ${e.message}`);
                     importResult.errors.push({ row: rowNum, message: `Image download failed for ${value}` });

@@ -586,7 +586,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Title'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
                           </div>
                         ))}
 
@@ -598,7 +598,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Description'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
                           </div>
                         ))}
 
@@ -641,7 +641,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Title'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
                           </div>
                         ))}
 
@@ -653,7 +653,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Description'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
                           </div>
                         ))}
 
@@ -665,7 +665,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Image'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
                           </div>
                         ))}
 
@@ -812,7 +812,8 @@ function renderField(
   authToken: string,
   updateField: (itemId: string, field: string, value: any) => void,
   itemId: string,
-  getFieldValue: (fieldName: string) => any
+  getFieldValue: (fieldName: string) => any,
+  siteId?: string | null,
 ) {
   const value = getFieldValue(field.name);
   
@@ -910,13 +911,14 @@ function renderField(
       );
     
     case 'image':
-      return (
-        <ImageUploadField
-          field={field}
-          value={value || ''}
-          authToken={authToken}
-          onFieldUpdate={(fieldName, value) => updateField(itemId, fieldName, value)}
-        />
+       return (
+         <ImageUploadField
+           field={field}
+           value={value}
+           authToken={authToken}
+           siteId={siteId}
+           onFieldUpdate={(fieldName, value) => updateField(itemId, fieldName, value)}
+         />
       );
     
          case 'markdown':
@@ -978,18 +980,23 @@ function StructuredDataPreview({ data }: { data: object }) {
   );
 }
 
-function ImageUploadField({ field, value, authToken, onFieldUpdate }: { field: any, value: string, authToken: string, onFieldUpdate: (field: string, value: any) => void }) {
+function ImageUploadField({ field, value, authToken, siteId, onFieldUpdate }: { field: any; value: any; authToken: string; siteId?: string | null; onFieldUpdate: (field: string, value: any) => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Determine which URL to show
+  const src = typeof value === 'string' ? value : value?.small ?? value?.thumb ?? value?.original ?? '';
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const formData = new FormData();
+    if (siteId) {
+      formData.append('site_id', siteId);
+    }
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/admin/upload', {
+      const response = await fetch('/api/admin/media/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -1002,7 +1009,8 @@ function ImageUploadField({ field, value, authToken, onFieldUpdate }: { field: a
       }
 
       const result = await response.json();
-      onFieldUpdate(field.name, result.url);
+      const newVal = result.sizes ?? result.url;
+      onFieldUpdate(field.name, newVal);
     } catch (error) {
       console.error('Error uploading image:', error);
     }
@@ -1022,10 +1030,10 @@ function ImageUploadField({ field, value, authToken, onFieldUpdate }: { field: a
         className="hidden"
       />
       
-      {value && (
+      {src && (
         <div className="relative">
           <img
-            src={value}
+            src={src}
             alt="Uploaded image"
             className="max-w-full h-32 object-cover rounded-md"
           />
@@ -1042,10 +1050,8 @@ function ImageUploadField({ field, value, authToken, onFieldUpdate }: { field: a
         onClick={triggerFileInput}
         className="text-sm px-3 py-1 border rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
       >
-        {value ? 'Replace Image' : 'Upload Image'}
+         {src ? 'Replace Image' : 'Upload Image'}
       </button>
     </div>
   );
 }
-
- 

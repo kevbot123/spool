@@ -158,7 +158,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             </div>
           )}
         </div>
-        <header className="flex h-[60px] shrink-0 items-center gap-2 border-b bg-white min-w-0">
+        <header className="z-40 flex h-[60px] shrink-0 items-center gap-2 border-b bg-white min-w-0">
           <div className="flex flex-1 items-center gap-2 px-4 min-w-0">
             <SidebarTrigger />
             <Separator orientation="vertical" className="mr-2 h-4" />
@@ -188,7 +188,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             </div>
           )}
         </header>
-        <div className="flex flex-1 flex-col min-w-0">
+        <div className="flex flex-1 flex-col min-w-0 overflow-y-auto">
           {children}
         </div>
       </SidebarInset>

@@ -96,7 +96,40 @@ const collections = await getSpoolCollections(spoolConfig);
 
 ---
 
-## 4. Default Fields in Every Collection
+## 4. Handling Images & Thumbnails
+
+Spool automatically generates two extra sizes for every uploaded image:
+
+| Label | Width | Format |
+|-------|-------|--------|
+| `thumb` | 160 px | webp |
+| `small` | 480 px | webp |
+| `original` | — | original mime |
+
+Image fields now return **either** a plain URL string (legacy items) **or** an object:
+
+```jsonc
+{
+  "original": "https://media…/foo.jpg",
+  "thumb": "https://media…/foo_thumb.webp",
+  "small": "https://media…/foo_small.webp"
+}
+```
+
+To make this seamless in Next.js you can import the helper exported by `@spool/nextjs`:
+
+```ts
+import { img } from '@spool/nextjs';
+
+<Image src={img(item.headerImage, 'thumb')} width={160} height={90} />
+```
+
+• Pass the image field value (string _or_ object) and the desired size (`'thumb' | 'small' | 'original'`).
+• Falls back gracefully so existing content keeps working.
+
+---
+
+## 5. Default Fields in Every Collection
 
 Every new collection you create in Spool automatically includes a set of foundational fields so you always have sensible SEO metadata and publication info without any extra configuration.
 

@@ -118,8 +118,9 @@ export function FieldEditor({
       }
 
       const result = await response.json();
-      setEditValue(result.url);
-      onSave(result.url);
+      const imageValue = result.sizes ?? result.url;
+      setEditValue(imageValue);
+      onSave(imageValue);
 
     } catch (error) {
       console.error('Failed to upload image:', error);
@@ -407,12 +408,14 @@ function renderValue(field: FieldConfig, value: any, referenceOptions?: { label:
       );
     }
 
-    case 'image':
+    case 'image': {
+      const src = typeof value === 'string' ? value : value?.thumb ?? value?.original ?? '';
       return (
         <div className="w-[100px] h-[36px] overflow-hidden rounded border border-gray-200 bg-gray-50">
-          <img src={value} alt="image thumbnail" className="object-cover w-full h-full" loading="lazy" />
+          {src && <img src={src} alt="thumbnail" className="object-cover w-full h-full" loading="lazy" />}
         </div>
       );
+    }
 
     case 'markdown':
     case 'body': {

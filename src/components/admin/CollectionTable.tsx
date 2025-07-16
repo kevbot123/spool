@@ -137,7 +137,7 @@ function DraggableHeader({ header, children, isLastHeader, fieldType }: Draggabl
         maxWidth: header.getSize(),
         ...style,
       }}
-      className={`text-left text-[12px] font-medium text-gray-500 tracking-wide overflow-visible relative group ${
+      className={`text-left text-[12px] font-medium text-gray-500 tracking-wide overflow-visible relative group sticky top-0 z-20 bg-gray-50 ${
         header.column.getCanSort() && header.column.id !== 'more-actions'
           ? 'cursor-pointer hover:bg-gray-100'
           : ''
@@ -999,14 +999,14 @@ export function CollectionTable({
       `}</style>
       <div className="bg-white shadow-sm flex flex-col flex-1 min-w-0">
         {localItems.length > 0 ? (
-          <div className="overflow-x-auto overflow-y-auto flex-grow min-w-0">
+          <div className="flex-grow min-w-0">
             <DndContext
               sensors={sensors}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
               <table className="divide-y-0 divide-gray-200 table-fixed min-w-full border-b" style={{ width: table.getTotalSize() }}>
-                <thead className="bg-gray-50 border-b border-gray-100">
+                <thead className="sticky top-0 z-30 bg-gray-50 border-b border-gray-100">
                   {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id} className={tableRowClass}>
                       <SortableContext
@@ -1054,7 +1054,7 @@ export function CollectionTable({
                             <th
                               key={header.id}
                               className={`text-left text-[12px] font-medium text-gray-500 tracking-wide overflow-visible relative ${
-                                isSticky ? 'sticky z-20 bg-gray-50' : ''
+                                isSticky ? 'sticky top-0 z-20 bg-gray-50' : ''
                               } ${header.column.getCanSort() && !isActionsColumn ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                               style={{ 
                                 width: header.getSize(), 

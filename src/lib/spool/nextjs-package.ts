@@ -16,6 +16,15 @@ const SPOOL_API_BASE = process.env.SPOOL_API_BASE || 'http://localhost:3000';
  * Create Spool API handlers for Next.js
  * This function returns HTTP handlers that manage content from Spool CMS
  */
+/**
+ * Helper to pick an image size from a Spool image field value.
+ * Works with both legacy string values and the new {original, thumb, small} object.
+ */
+export function img(value: any, size: 'thumb' | 'small' | 'original' = 'original'): string {
+  if (typeof value === 'string') return value;
+  return value?.[size] ?? '';
+}
+
 export function createSpoolHandler(config: SpoolConfig) {
   const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = config;
 
