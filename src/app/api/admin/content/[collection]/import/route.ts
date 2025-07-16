@@ -129,9 +129,10 @@ for (const f of schemaFields) {
                 if (fieldType === 'boolean') {
                   const lowerCaseValue = String(value).toLowerCase().trim();
                   processedValue = lowerCaseValue === 'true' || lowerCaseValue === '1';
-                  payload.data[fieldName] = processedValue;
-                  continue;
                 }
+
+                // Determine target location (top-level vs data)
+                const isTopLevel = fieldName === 'slug' || fieldName === 'title' || fieldName === 'status';
 
                 if (fieldType === 'image' && typeof value === 'string' && value.startsWith('http')) {
                   try {
@@ -204,7 +205,12 @@ if ((fieldType === 'multiselect' || fieldType === 'multi-reference' || fieldType
 if ((fieldType === 'reference' || fieldType === 'multi-reference')) {
   const targetCollection = referenceCollectionMap[fieldName];
   if (targetCollection) {
-    const slugArray: string[] = Array.isArray(processedValue) ? processedValue : [processedValue];
+    let slugArray: string[] = Array.isArray(processedValue) ? processedValue : [processedValue];
+    slugArray = slugArray
+      .map(s => s.trim().replace(/^"+|"+$/g, '')) // remove leading/trailing quotes
+      .map(s => s.replace(/\s+/g, '-')) // spaces -> dashes just in case
+      .filter(Boolean)
+      .map(s => s.toLowerCase());
     // slug -> id cache per collection
     if (!slugIdCache[targetCollection]) slugIdCache[targetCollection] = new Map<string,string>();
     const cache = slugIdCache[targetCollection];
@@ -223,6 +229,11 @@ if ((fieldType === 'reference' || fieldType === 'multi-reference')) {
       }
     }
     const idArray = slugArray.map(slug => cache.get(slug)).filter(Boolean);
+    // Collect unmatched slugs for debugging
+    const unmatched = slugArray.filter(slug => !cache.get(slug));
+    if (unmatched.length) {
+      importResult.errors?.push({ row: rowNum, message: `Unmatched slugs for field ${fieldName}: ${unmatched.join(', ')}` });
+    }
     processedValue = fieldType === 'reference' ? (idArray[0] || null) : idArray;
   }
 }
@@ -257,7 +268,11 @@ if ((fieldType === 'reference' || fieldType === 'multi-reference')) {
                   });
                 }
 
-                payload.data[fieldName] = processedValue;
+                if (isTopLevel) {
+                  (payload as any)[fieldName] = processedValue;
+                } else {
+                  payload.data[fieldName] = processedValue;
+                }
               }
 
               // Second pass: Find and replace images embedded in any string field
@@ -293,8 +308,12 @@ if ((fieldType === 'reference' || fieldType === 'multi-reference')) {
                 }
               }
 
-              (payload as any).title = payload.data.title || `Imported ${rowNum}`;
-              (payload as any).slug = slugify(payload.data.title || `Imported ${rowNum}`, { lower: true, strict: true });
+              if (!(payload as any).title) {
+                (payload as any).title = payload.data.title || `Imported ${rowNum}`;
+              }
+              if (!(payload as any).slug) {
+                (payload as any).slug = slugify((payload as any).title, { lower: true, strict: true });
+              }
 
               batch.push(payload);
               if (batch.length >= BATCH_SIZE) {

@@ -240,29 +240,32 @@ export class ContentManager {
 
   async updateContentById(collectionSlug: string, id: string, data: Record<string, any>): Promise<ContentItem | null> {
     const supabase = this.supabase;
-    
-    // Prepare update data
+
+    // Fetch current item for merging purposes
+    const currentItem = await this.getContentItemById(collectionSlug, id);
+    if (!currentItem) return null;
+
+    // Prepare payload
     const updateData: any = {
       updated_at: new Date().toISOString(),
     };
 
-    // Handle top-level fields
+    // Top-level fields
     if (data.title !== undefined) updateData.title = data.title;
     if (data.slug !== undefined) updateData.slug = data.slug;
     if (data.status !== undefined) updateData.status = data.status;
 
-    // Handle the data payload. The frontend should send the complete, updated data object.
+    // Merge custom data object
     if (data.data !== undefined) {
-      updateData.data = data.data;
+      updateData.data = {
+        ...currentItem.data,
+        ...data.data,
+      };
     }
-    
-    // If status is being set to published, update the timestamp
-    if (data.status === 'published') {
-        const currentItem = await this.getContentItemById(collectionSlug, id);
-        // Only set published_at if it's the first time being published
-        if (currentItem && !currentItem.publishedAt) {
-            updateData.published_at = new Date().toISOString();
-        }
+
+    // If publishing for first time add published_at
+    if (data.status === 'published' && !currentItem.publishedAt) {
+      updateData.published_at = new Date().toISOString();
     }
 
     const { data: updated, error } = await supabase
@@ -275,13 +278,14 @@ export class ContentManager {
       `)
       .single();
 
-    if (error) {
+    if (error || !updated) {
       console.error('Error updating content:', error);
       return null;
     }
 
     return this.mapDatabaseToContentItem(updated);
   }
+
 
   async publishDraftById(collectionSlug: string, id: string, draftPayload?: any): Promise<ContentItem | null> {
     const supabase = this.supabase;

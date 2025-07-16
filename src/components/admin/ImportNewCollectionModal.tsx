@@ -137,8 +137,8 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="w-full max-w-[750px]">
+        <DialogHeader className="pb-6">
           <DialogTitle>Create collection from CSV</DialogTitle>
         </DialogHeader>
 

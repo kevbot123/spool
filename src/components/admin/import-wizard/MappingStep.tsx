@@ -94,7 +94,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
           {csvHeaders.map((header) => (
             <tr key={header} className="border-b last:border-none">
               <td className="py-2 px-1 font-medium">{header}</td>
-              <td className="py-2 px-1 truncate max-w-[240px]">
+              <td className="py-2 px-1 truncate max-w-[240px] opacity-50">
                 {String(sampleRow[header] ?? '')}
               </td>
               <td className="py-2 px-1">

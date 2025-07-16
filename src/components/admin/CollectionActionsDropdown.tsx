@@ -112,7 +112,7 @@ export default function CollectionActionsDropdown({
               </DropdownMenuItem>
             }
             title={`Delete collection "${collection.name}"?`}
-            description="This will permanently delete the collection and all of its content. This action cannot be undone."
+            description="This will permanently delete the collection and all of its content. This action cannot be undone. Type the phrase 'delete forever' to confirm."
             confirmInputText="delete forever"
             onConfirm={deleteCollection}
           />
