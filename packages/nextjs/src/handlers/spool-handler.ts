@@ -4,6 +4,43 @@ import { SpoolConfig } from '../types';
 
 const SPOOL_API_BASE = process.env.SPOOL_API_BASE || 'http://localhost:3000';
 
+/* ------------------------------------------------------------------
+ * In-memory caching + rate limiting (per instance)
+ * ------------------------------------------------------------------*/
+const CACHE_TTL_MS = 60_000; // 1 min
+const responseCache = new Map<string, { timestamp: number; payload: any }>();
+function getCached(key: string) {
+  const entry = responseCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) return entry.payload;
+  if (entry) responseCache.delete(key);
+  return null;
+}
+function setCache(key: string, payload: any) {
+  responseCache.set(key, { timestamp: Date.now(), payload });
+}
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 100; // per IP per window
+const rateMap = new Map<string, { count: number; windowStart: number }>();
+function isRateLimited(ip: string) {
+  const now = Date.now();
+  const entry = rateMap.get(ip) || { count: 0, windowStart: now };
+  if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry.count = 0;
+    entry.windowStart = now;
+  }
+  entry.count += 1;
+  rateMap.set(ip, entry);
+  return entry.count > RATE_LIMIT_MAX;
+}
+
+function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}, timeoutMs = 10_000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const mergedOpts = { ...options, signal: controller.signal };
+  return fetch(resource, mergedOpts).finally(() => clearTimeout(id));
+}
+
 /**
  * Create Spool API handlers for Next.js
  * This function returns HTTP handlers that manage content from Spool CMS
@@ -11,11 +48,10 @@ const SPOOL_API_BASE = process.env.SPOOL_API_BASE || 'http://localhost:3000';
 export function createSpoolHandler(config: SpoolConfig) {
   const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = config;
 
-  // Helper function to make authenticated requests to Spool API
+    // Helper function to make authenticated requests to Spool API with timeout
   async function spoolFetch(endpoint: string, options: RequestInit = {}) {
     const url = `${baseUrl}/api/spool/${siteId}${endpoint}`;
-    
-    return fetch(url, {
+    return fetchWithTimeout(url, {
       ...options,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -40,12 +76,25 @@ export function createSpoolHandler(config: SpoolConfig) {
           return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
         }
 
+        // --- Rate limiting ---
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+        if (isRateLimited(ip)) {
+          return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+        }
+
+        // --- Response cache ---
+        const cacheKey = `${resourcePath}${url.search}`;
+        const cached = getCached(cacheKey);
+        if (cached) {
+          return NextResponse.json(cached);
+        }
+
         // Handle different request types
         if (resourcePath === 'collections') {
           // GET /api/spool/collections - Get all collections configuration
           const collectionsResponse = await spoolFetch('/collections');
           const collections = await collectionsResponse.json();
-          
+          setCache(cacheKey, collections);
           return NextResponse.json(collections);
         }
 
@@ -56,7 +105,7 @@ export function createSpoolHandler(config: SpoolConfig) {
           
           const contentResponse = await spoolFetch(`/content/${contentPath}${queryString}`);
           const content = await contentResponse.json();
-          
+          setCache(cacheKey, content);
           return NextResponse.json(content);
         }
 

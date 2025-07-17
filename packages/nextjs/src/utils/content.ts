@@ -1,5 +1,42 @@
 import { SpoolConfig } from '../types';
 
+// ---------------------------------------------------------------------------
+// Simple in-memory request cache to deduplicate identical, short-lived requests
+// ---------------------------------------------------------------------------
+interface CacheEntry<T> {
+  timestamp: number;
+  promise: Promise<T>;
+}
+
+const REQUEST_DEDUP_WINDOW_MS = 5_000; // 5 seconds – enough for build/dev usage
+const requestCache: Map<string, CacheEntry<any>> = new Map();
+
+async function fetchWithDedup<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const cached = requestCache.get(key);
+
+  // If there is an in-flight request less than x ms old, reuse its promise
+  if (cached && now - cached.timestamp < REQUEST_DEDUP_WINDOW_MS) {
+    return cached.promise;
+  }
+
+  const promise = fetcher().finally(() => {
+    // Clean up old cache entries to avoid unbounded growth
+    requestCache.delete(key);
+  });
+
+  requestCache.set(key, { timestamp: now, promise });
+  return promise;
+}
+
+// Helper to add a timeout to fetch calls (prevents runaway 20+ second waits)
+function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}, timeoutMs = 10_000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const mergedOptions = { ...options, signal: controller.signal };
+  return fetch(resource, mergedOptions).finally(() => clearTimeout(id));
+}
+
 const SPOOL_API_BASE = process.env.SPOOL_API_BASE || 'http://localhost:3000';
 
 /**
@@ -21,11 +58,14 @@ export async function getSpoolContent(
     endpoint += '?_html=true';
   }
   
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-    },
-  });
+  const cacheKey = `${baseUrl}${endpoint}`;
+  const response = await fetchWithDedup(cacheKey, () =>
+    fetchWithTimeout(`${baseUrl}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+  );
   
   if (!response.ok) {
     throw new Error(`Failed to fetch content: ${response.statusText}`);
@@ -57,11 +97,14 @@ export async function getSpoolContent(
 export async function getSpoolCollections(config: SpoolConfig) {
   const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = config;
   
-  const response = await fetch(`${baseUrl}/api/spool/${siteId}/collections`, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-    },
-  });
+  const collEndpoint = `${baseUrl}/api/spool/${siteId}/collections`;
+  const response = await fetchWithDedup(collEndpoint, () =>
+    fetchWithTimeout(collEndpoint, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    })
+  );
   
   if (!response.ok) {
     throw new Error(`Failed to fetch collections: ${response.statusText}`);
