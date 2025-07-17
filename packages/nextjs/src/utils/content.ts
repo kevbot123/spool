@@ -35,12 +35,20 @@ export async function getSpoolContent(
   
   // Handle different response formats
   if (slug) {
-    // Single item - return just the item
-    return data.item || data;
-  } else {
-    // Collection - return just the items array
-    return data.items || data;
+    // Single item - return just the item (could be null if not found)
+    return data?.item ?? data ?? null;
   }
+  
+  // Collection request – always return an array for consistency
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
+  // If API returned an empty object or unexpected shape, fall back to []
+  return [];
+
 }
 
 /**
@@ -61,8 +69,14 @@ export async function getSpoolCollections(config: SpoolConfig) {
   
   const data = await response.json();
   
-  // Return just the collections array
-  return data.collections || data;
+  // Always return an array of collections
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.collections)) {
+    return data.collections;
+  }
+  return [];
 }
 
 /**
