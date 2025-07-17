@@ -1,0 +1,12 @@
+{
+  "name": "spoolcms",
+  "version": "0.1.0",
+  "description": "Reserved for Spool CMS. The main packages are under the @spoolcms scope.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/spool.git"
+  },
+  "author": "Spool Team",
+  "license": "MIT"
+}

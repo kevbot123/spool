@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 
-// Demo API implementation that simulates @spool/nextjs package behavior
+// Demo API implementation that simulates @spoolcms/nextjs package behavior
 // This allows testing the blog without requiring actual Spool backend
 
 const DEMO_COLLECTIONS = {

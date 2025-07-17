@@ -42,7 +42,7 @@ Welcome to **Spool CMS** - the fastest headless CMS for Next.js developers!
 
 ## How It Works
 
-1. Install the package: \`npm install @spool/nextjs\`
+1. Install the package: \`npm install @spoolcms/nextjs\`
 2. Add one API route
 3. Start creating content!
 
@@ -165,7 +165,7 @@ function IntegrationFlow() {
               </div>
               <div>
                 <div className="font-medium">API Request from Next.js</div>
-                <div className="text-sm text-gray-500">Your site fetches content via @spool/nextjs package</div>
+                <div className="text-sm text-gray-500">Your site fetches content via @spoolcms/nextjs package</div>
               </div>
             </div>
             
@@ -193,7 +193,7 @@ function IntegrationFlow() {
           <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
             <pre className="text-sm">
               <code>{`// app/blog/[slug]/page.tsx
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 
 export default async function BlogPost({ params }) {
   const config = {
@@ -324,7 +324,7 @@ function CodeIntegrationSection() {
             <div>
               <h4 className="font-medium mb-2">1. Install the package</h4>
               <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
-                <code>npm install @spool/nextjs</code>
+                <code>npm install @spoolcms/nextjs</code>
               </div>
             </div>
             
@@ -340,7 +340,7 @@ SPOOL_SITE_ID=your_site_id`}</code>
               <h4 className="font-medium mb-2">3. Create API route</h4>
               <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
                 <code>{`// app/api/spool/[...route]/route.ts
-import { createSpoolHandler } from '@spool/nextjs';
+import { createSpoolHandler } from '@spoolcms/nextjs';
 
 const config = {
   apiKey: process.env.SPOOL_API_KEY!,

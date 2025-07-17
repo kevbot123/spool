@@ -63,13 +63,13 @@ export async function POST(request: NextRequest) {
         domain: site.domain,
         apiKey: site.api_key,
         setupInstructions: {
-          step1: 'npm install @spool/nextjs',
+          step1: 'npm install @spoolcms/nextjs',
           step2: `Add API route to your Next.js app`,
           step3: `Set environment variables:
 SPOOL_API_KEY=${site.api_key}
 SPOOL_SITE_ID=${site.id}`,
           apiRoute: `// app/api/spool/[...route]/route.ts
-import { createSpoolHandler } from '@spool/nextjs';
+import { createSpoolHandler } from '@spoolcms/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY!,

@@ -1,9 +1,17 @@
 {
-  "name": "@spool/nextjs",
+  "name": "@spoolcms/nextjs",
   "version": "0.1.0",
   "description": "The beautiful headless CMS for Next.js developers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist/**/*",
     "README.md",
@@ -28,6 +36,9 @@
   ],
   "author": "Spool Team",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/your-username/spool.git",

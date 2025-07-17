@@ -1,5 +1,5 @@
-// This simulates the @spool/nextjs package that users would install
-// npm install @spool/nextjs
+// This simulates the @spoolcms/nextjs package that users would install
+// npm install @spoolcms/nextjs
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';

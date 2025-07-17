@@ -166,7 +166,7 @@ export default function SetupPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <CodeBlock>npm install @spool/nextjs</CodeBlock>
+              <CodeBlock>npm install @spoolcms/nextjs</CodeBlock>
             </CardContent>
           </Card>
 
@@ -202,7 +202,7 @@ SPOOL_SITE_ID=${site.id}`}
             </CardHeader>
             <CardContent>
               <CodeBlock>
-{`import { createSpoolHandler } from '@spool/nextjs';
+{`import { createSpoolHandler } from '@spoolcms/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY!,
@@ -225,7 +225,7 @@ export const { GET, POST, PUT, DELETE } = createSpoolHandler({
             </CardHeader>
             <CardContent>
               <CodeBlock>
-{`import { getSpoolContent } from '@spool/nextjs';
+{`import { getSpoolContent } from '@spoolcms/nextjs';
 
 export default async function BlogPost({ params }) {
   const config = {
@@ -262,7 +262,7 @@ export default async function BlogPost({ params }) {
                 <div>
                   <h4 className="font-medium mb-2">app/sitemap.xml/route.ts</h4>
                   <CodeBlock>
-{`import { getSpoolSitemap } from '@spool/nextjs';
+{`import { getSpoolSitemap } from '@spoolcms/nextjs';
 
 export async function GET() {
   const config = {
@@ -282,7 +282,7 @@ export async function GET() {
                 <div>
                   <h4 className="font-medium mb-2">app/robots.txt/route.ts</h4>
                   <CodeBlock>
-{`import { getSpoolRobots } from '@spool/nextjs';
+{`import { getSpoolRobots } from '@spoolcms/nextjs';
 
 export async function GET() {
   const config = {

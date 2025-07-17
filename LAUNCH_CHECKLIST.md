@@ -111,7 +111,7 @@ vercel --prod
 - [ ] Gather initial user feedback
 - [ ] Monitor usage patterns
 - [ ] Optimize performance bottlenecks
-- [ ] Create @spool/nextjs npm package
+- [ ] Create @spoolcms/nextjs npm package
 - [ ] Set up customer support system
 
 ### Month 1

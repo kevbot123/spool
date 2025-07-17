@@ -4,13 +4,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createSpoolRoute = createSpoolRoute;
 const fs_1 = require("fs");
 const path_1 = require("path");
-const ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spool/nextjs';
+const ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spoolcms/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY!,
   siteId: process.env.SPOOL_SITE_ID!,
 });`;
-const PAGES_ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spool/nextjs';
+const PAGES_ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spoolcms/nextjs';
 
 const handler = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY!,

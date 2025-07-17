@@ -2,7 +2,10 @@
   "name": "@spool/cms",
   "version": "0.1.0",
   "description": "Beautiful headless CMS for Next.js with real-time editing and AI-native content",
-  "private": false,
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "homepage": "https://spool.dev",

@@ -8,7 +8,7 @@ Database-first for performance/simplicity with UI-first collection management. P
 
 ## MVP Features (3 weeks)
 - ✅ Cloud admin UI with visual collection builder
-- ✅ User installs `@spool/nextjs` package (one API route)
+- ✅ User installs `@spoolcms/nextjs` package (one API route)
 - ✅ Content & images stored in Spool database (fast, scalable)
 - ✅ Real-time API updates with instant revalidation
 - ✅ UI-first collection management (no config files needed)
@@ -25,11 +25,11 @@ Spool Admin → User's Next.js API → Spool Database → revalidatePath() → I
 ## User Setup (15 seconds)
 ```bash
 # 1. Install package
-npm install @spool/nextjs
+npm install @spoolcms/nextjs
 
 # 2. Add one API route (copy/paste)
 # app/api/spool/[...route]/route.ts
-import { createSpoolHandler } from '@spool/nextjs';
+import { createSpoolHandler } from '@spoolcms/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY,
@@ -96,7 +96,7 @@ CREATE INDEX idx_content_published ON content_items(published_at DESC);
 
 ## API Flow
 ```typescript
-// @spool/nextjs package
+// @spoolcms/nextjs package
 export function createSpoolHandler(config: { 
   apiKey: string, 
   siteId: string
@@ -191,7 +191,7 @@ Please summarize this content...
 ```
 
 ## Setup Flow
-1. **Install** `@spool/nextjs` package (1 command)
+1. **Install** `@spoolcms/nextjs` package (1 command)
 2. **Add API route** (copy/paste 5 lines)
 3. **Connect to Spool** → Beautiful admin dashboard opens
 4. **Create collections visually** → Drag-and-drop field builder
@@ -215,12 +215,12 @@ Spool Cloud Platform:
 └── /api/sites/[siteId] (content management API)
 
 User's Next.js Site:
-└── /api/spool/[...route] (@spool/nextjs package)
+└── /api/spool/[...route] (@spoolcms/nextjs package)
 ```
 
 ## Week 1: Foundation
 - Supabase auth + site management
-- Basic @spool/nextjs package
+- Basic @spoolcms/nextjs package
 - Visual collection builder UI
 - Simple content CRUD
 

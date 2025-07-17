@@ -30,7 +30,7 @@ Real-time content editing • AI-native markdown • Zero-config setup • Beaut
 ### 1. Install the package
 
 ```bash
-npm install @spool/nextjs
+npm install @spoolcms/nextjs
 ```
 
 ### 2. Create your collections
@@ -52,7 +52,7 @@ npm install @spool/nextjs
 
 ```typescript
 // app/api/spool/[...route]/route.ts
-import { createSpoolHandler } from '@spool/nextjs';
+import { createSpoolHandler } from '@spoolcms/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
   apiKey: process.env.SPOOL_API_KEY,

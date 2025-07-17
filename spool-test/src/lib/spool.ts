@@ -1,4 +1,4 @@
-import { SpoolConfig } from '@spool/nextjs';
+import { SpoolConfig } from '@spoolcms/nextjs';
 
 export const spoolConfig: SpoolConfig = {
   apiKey: process.env.SPOOL_API_KEY!,

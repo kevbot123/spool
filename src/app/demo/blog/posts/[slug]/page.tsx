@@ -41,7 +41,7 @@ Spool CMS is designed specifically for modern Next.js applications, offering:
 First, install the Spool package in your Next.js project:
 
 \`\`\`bash
-npm install @spool/nextjs
+npm install @spoolcms/nextjs
 \`\`\`
 
 ### 2. Environment Variables
@@ -59,7 +59,7 @@ Create an API route to handle Spool requests:
 
 \`\`\`typescript
 // app/api/spool/[...route]/route.ts
-import { createSpoolHandler } from '@spool/nextjs';
+import { createSpoolHandler } from '@spoolcms/nextjs';
 
 const config = {
   apiKey: process.env.SPOOL_API_KEY!,
@@ -76,7 +76,7 @@ export { handler as GET, handler as POST, handler as PUT, handler as DELETE };
 Now you can fetch content in your pages:
 
 \`\`\`typescript
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 
 export default async function BlogPost({ params }) {
   const config = {
@@ -111,7 +111,7 @@ revalidatePath(\`/blog/\${slug}\`);
 Spool includes built-in SEO features:
 
 \`\`\`typescript
-import { generateSpoolMetadata } from '@spool/nextjs';
+import { generateSpoolMetadata } from '@spoolcms/nextjs';
 
 export async function generateMetadata({ params }) {
   const { item, collection } = await getSpoolContent(config, 'blog', params.slug);

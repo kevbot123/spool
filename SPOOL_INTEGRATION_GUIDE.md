@@ -15,7 +15,7 @@ First, install the Spool Next.js package and run the setup command from the root
 
 ```bash
 # 1. Install the package
-npm install @spool/nextjs
+npm install @spoolcms/nextjs
 
 # 2. Run the setup command to create your API route
 npx create-spool-route
@@ -42,7 +42,7 @@ SPOOL_SITE_ID="your_spool_site_id"
 
 ## 3. Core Concepts & API Helpers
 
-The `@spool/nextjs` package provides simple helpers to fetch your content.
+The `@spoolcms/nextjs` package provides simple helpers to fetch your content.
 
 ### Shared Configuration (Recommended)
 
@@ -50,7 +50,7 @@ To avoid repeating your API key and Site ID, create a shared config file.
 
 **`lib/spool.ts`**
 ```typescript
-import { SpoolConfig } from '@spool/nextjs/types';
+import { SpoolConfig } from '@spoolcms/nextjs/types';
 
 export const spoolConfig: SpoolConfig = {
   apiKey: process.env.SPOOL_API_KEY!,
@@ -63,7 +63,7 @@ export const spoolConfig: SpoolConfig = {
 To get all items from a collection, call `getSpoolContent` with just the collection's slug.
 
 ```typescript
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 
 // Returns an array of all items in the 'blog' collection
@@ -75,7 +75,7 @@ const posts = await getSpoolContent(spoolConfig, 'blog');
 To get a single item by its slug, provide the slug as the third argument.
 
 ```typescript
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 
 // Returns the single post with the matching slug
@@ -87,7 +87,7 @@ const post = await getSpoolContent(spoolConfig, 'blog', 'my-first-post');
 If you need the schema or metadata for your collections, use `getSpoolCollections`.
 
 ```typescript
-import { getSpoolCollections } from '@spool/nextjs';
+import { getSpoolCollections } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 
 // Returns an array of all collection objects (id, name, slug, schema)
@@ -116,10 +116,10 @@ Image fields now return **either** a plain URL string (legacy items) **or** an o
 }
 ```
 
-To make this seamless in Next.js you can import the helper exported by `@spool/nextjs`:
+To make this seamless in Next.js you can import the helper exported by `@spoolcms/nextjs`:
 
 ```ts
-import { img } from '@spool/nextjs';
+import { img } from '@spoolcms/nextjs';
 
 <Image src={img(item.headerImage, 'thumb')} width={160} height={90} />
 ```
@@ -197,7 +197,7 @@ This page fetches all posts from the "blog" collection and displays them in a gr
 
 **`app/blog/page.tsx`**
 ```typescript
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 import Link from 'next/link';
 
@@ -235,7 +235,7 @@ This page fetches a single post by its slug from the URL parameters.
 
 **`app/blog/[slug]/page.tsx`**
 ```typescript
-import { getSpoolContent, generateSpoolMetadata } from '@spool/nextjs';
+import { getSpoolContent, generateSpoolMetadata } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
@@ -315,7 +315,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 For Next.js App Router, use the `generateSpoolMetadata` helper:
 
 ```typescript
-import { generateSpoolMetadata } from '@spool/nextjs';
+import { generateSpoolMetadata } from '@spoolcms/nextjs';
 
 export async function generateMetadata({ params }: PageProps) {
   const post = await getSpoolContent(spoolConfig, 'blog', params.slug);
@@ -333,7 +333,7 @@ export async function generateMetadata({ params }: PageProps) {
 
 **`app/sitemap.xml/route.ts`**
 ```typescript
-import { getSpoolSitemap } from '@spool/nextjs';
+import { getSpoolSitemap } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 
 export async function GET() {
@@ -351,7 +351,7 @@ export async function GET() {
 
 **`app/robots.txt/route.ts`**
 ```typescript
-import { getSpoolRobots } from '@spool/nextjs';
+import { getSpoolRobots } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 
 export async function GET() {
@@ -380,7 +380,7 @@ By default, only published content is returned. To fetch draft content (for prev
 ### Error Handling
 
 ```typescript
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 
 export default async function BlogPage() {
   try {

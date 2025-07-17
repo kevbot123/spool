@@ -1,4 +1,4 @@
-// SEO components for @spool/nextjs package
+// SEO components for @spoolcms/nextjs package
 import Head from 'next/head';
 import { ContentItem, CollectionConfig, SEOData } from '@/types/cms';
 import { getSEOManager } from '@/lib/cms/seo';

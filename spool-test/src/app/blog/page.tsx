@@ -1,4 +1,4 @@
-import { getSpoolContent } from '@spool/nextjs';
+import { getSpoolContent } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 import Link from 'next/link';
 
