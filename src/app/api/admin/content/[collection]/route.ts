@@ -10,25 +10,44 @@ interface RouteParams {
 
 // Helper function to get user's site ID
 async function getUserSiteId(): Promise<string> {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    throw new Error('User not authenticated');
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('Authentication error:', authError);
+      throw new Error(`Authentication failed: ${authError.message}`);
+    }
+    
+    if (!user) {
+      throw new Error('User not authenticated. Please sign in.');
+    }
+
+    const { data, error } = await supabase
+      .from('sites')
+      .select('id, name')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true }) // Always get the first created site for consistency
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('Site lookup error:', error);
+      if (error.code === 'PGRST116') {
+        throw new Error(`No site found for user ${user.email || user.id}. Please create a site first.`);
+      }
+      throw new Error(`Failed to get user site: ${error.message}`);
+    }
+    
+    if (!data) {
+      throw new Error(`No site found for user ${user.email || user.id}. Please create a site first.`);
+    }
+
+    return data.id;
+  } catch (error) {
+    console.error('getUserSiteId error:', error);
+    throw error;
   }
-
-  const { data, error } = await supabase
-    .from('sites')
-    .select('id')
-    .eq('user_id', user.id)
-    .limit(1)
-    .single();
-
-  if (error || !data) {
-    throw new Error('No site found for user. Please create a site first.');
-  }
-
-  return data.id;
 }
 
 // GET - List all content in a collection
@@ -41,7 +60,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
     const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined;
-    const siteId = await getUserSiteId();
+    
+    // Use siteId from URL parameter if provided, otherwise get user's default site
+    const urlSiteId = searchParams.get('siteId');
+    const siteId = urlSiteId || await getUserSiteId();
     
     const result = await contentManager.listContent(collection, {
       limit,
@@ -61,14 +83,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // POST - Create new content
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ collection: string }> }
 ) {
   try {
     const { collection } = await params;
     const supabase = await createSupabaseServerClient();
     const contentManager = new ContentManager(supabase);
-    const siteId = await getUserSiteId();
+    
+    // Use siteId from URL parameter if provided, otherwise get user's default site
+    const { searchParams } = new URL(request.url);
+    const urlSiteId = searchParams.get('siteId');
+    const siteId = urlSiteId || await getUserSiteId();
     
     // Generate a better default title based on collection name
     const collectionName = collection.charAt(0).toUpperCase() + collection.slice(1);

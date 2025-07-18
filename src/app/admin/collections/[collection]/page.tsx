@@ -121,6 +121,7 @@ export default function CollectionPage({ params }: PageProps) {
         collection={collection}
         initialItems={initialItems}
         authToken={authToken}
+        siteId={currentSite?.id}
       />
     </div>
   );

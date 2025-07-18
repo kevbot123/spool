@@ -131,7 +131,7 @@ export class ContentManager {
       .single();
 
     if (collectionError || !collection) {
-      throw new Error(`Collection ${collectionSlug} not found`);
+      throw new Error(`Collection '${collectionSlug}' not found in site '${actualSiteId}'. Please verify the collection exists in the target site.`);
     }
 
     // Generate slug if not provided
@@ -183,22 +183,17 @@ export class ContentManager {
       throw new Error('A valid siteId must be provided to create a content batch.');
     }
 
-    // Build query – in development we use a placeholder site ID. When that
-    // placeholder is detected we DON’T restrict by `site_id` so any collection
-    // slug can be matched.
-    let collectionQuery = supabase
+    // Always enforce site isolation - no bypasses to prevent cross-site data contamination
+    const collectionQuery = supabase
       .from('collections')
       .select('id, site_id')
-      .eq('slug', collectionSlug);
-
-    if (actualSiteId !== '00000000-0000-0000-0000-000000000000') {
-      collectionQuery = collectionQuery.eq('site_id', actualSiteId);
-    }
+      .eq('slug', collectionSlug)
+      .eq('site_id', actualSiteId);
 
     const { data: collection, error: collectionError } = await collectionQuery.single();
 
     if (collectionError || !collection) {
-      throw new Error(`Collection ${collectionSlug} not found for site ${actualSiteId}`);
+      throw new Error(`Collection '${collectionSlug}' not found in site '${actualSiteId}'. Please verify the collection exists in the target site.`);
     }
 
     const authorId = await this.getCurrentUserId();

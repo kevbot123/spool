@@ -54,7 +54,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (collectionErr) {
-      return NextResponse.json({ error: collectionErr.message }, { status: 400 });
+      const errorMessage = collectionErr.code === 'PGRST116' 
+        ? `Collection '${collection}' not found in the specified site. Please verify the collection exists and you have access to it.`
+        : `Error accessing collection '${collection}': ${collectionErr.message}`;
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     const fieldTypeMap: Record<string, string> = {};
@@ -104,7 +107,11 @@ for (const f of schemaFields) {
         }
       } catch (e: any) {
         importResult.failed += batch.length;
-        importResult.errors.push({ row: importResult.success + 1, message: e.message });
+        // Provide more context for collection-related errors
+        const errorMessage = e.message.includes('Collection') && e.message.includes('not found')
+          ? `${e.message} This may indicate a site isolation issue or the collection was deleted during import.`
+          : e.message;
+        importResult.errors.push({ row: importResult.success + 1, message: errorMessage });
       }
       batch = [];
     };

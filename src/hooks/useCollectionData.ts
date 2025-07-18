@@ -572,6 +572,13 @@ export function useCollectionData({
     };
   }, [debouncedSaveDraft, debouncedSaveItem]);
 
+  // Method to update items from external source (like after refresh)
+  const setItems = useCallback((newItems: ContentItem[]) => {
+    setRawItems(newItems);
+    // Clear any pending changes that might be stale
+    setPendingChanges(new Map());
+  }, []);
+
   return {
     items,
     pendingChanges,
@@ -585,5 +592,6 @@ export function useCollectionData({
     deleteItem,
     hasPendingChanges,
     hasPendingChangeForField,
+    setItems,
   };
 } 
