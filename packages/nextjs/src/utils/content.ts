@@ -68,7 +68,11 @@ export async function getSpoolContent(
   );
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch content: ${response.statusText}`);
+    // Gracefully handle errors (rate-limit, 5xx) by returning empty values
+    if (slug) {
+      return null;
+    }
+    return [];
   }
   
   const data = await response.json();
@@ -107,7 +111,8 @@ export async function getSpoolCollections(config: SpoolConfig) {
   );
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch collections: ${response.statusText}`);
+    // On errors just return an empty array so callers don’t retry forever
+    return [];
   }
   
   const data = await response.json();
