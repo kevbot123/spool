@@ -20,7 +20,7 @@ function setCache(key: string, payload: any) {
 }
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 100; // per IP per window
+const RATE_LIMIT_MAX = process.env.NODE_ENV === 'development' ? 1000 : 100; // Higher limit for dev
 const rateMap = new Map<string, { count: number; windowStart: number }>();
 function isRateLimited(ip: string) {
   const now = Date.now();

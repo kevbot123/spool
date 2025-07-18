@@ -46,12 +46,23 @@ async function fetchWithDedup<T>(key: string, fetcher: () => Promise<Response>):
 
   const promise = fetcher().then(async (response) => {
     if (!response.ok) {
+      // For rate limit errors, cache the error to prevent retry loops
+      if (response.status === 429) {
+        const errorData = { error: 'Rate limit exceeded', items: [] };
+        requestCache.set(key, { timestamp: Date.now(), data: errorData });
+        return errorData;
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
     // Store resolved data for TTL window
     requestCache.set(key, { timestamp: Date.now(), data });
     return data;
+  }).catch((error) => {
+    // Cache empty result for errors to prevent retry loops
+    const errorData = { error: error.message, items: [] };
+    requestCache.set(key, { timestamp: Date.now(), data: errorData });
+    return errorData;
   });
 
   requestCache.set(key, { timestamp: now, promise });
