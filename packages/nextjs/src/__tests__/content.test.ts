@@ -377,7 +377,7 @@ describe('SpoolCMS Content Utilities', () => {
       const results = await Promise.all(promises);
 
       // All should succeed
-      results.forEach(result => {
+      results.forEach((result: any) => {
         expect(result).toEqual(mockData);
       });
 

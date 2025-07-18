@@ -21,10 +21,14 @@ export const __testing__ = {
   disableCache: false,
 };
 
-async function fetchWithDedup<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+async function fetchWithDedup<T>(key: string, fetcher: () => Promise<Response>): Promise<T> {
   // Skip caching during tests
   if (__testing__.disableCache) {
-    return fetcher();
+    const response = await fetcher();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.json() as T;
   }
 
   const now = Date.now();
@@ -40,7 +44,11 @@ async function fetchWithDedup<T>(key: string, fetcher: () => Promise<T>): Promis
     return cached.promise as Promise<T>;
   }
 
-  const promise = fetcher().then((data) => {
+  const promise = fetcher().then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data = await response.json();
     // Store resolved data for TTL window
     requestCache.set(key, { timestamp: Date.now(), data });
     return data;
@@ -82,7 +90,7 @@ export async function getSpoolContent(
   const cacheKey = `${baseUrl}${endpoint}`;
   
   try {
-    const response = await fetchWithDedup(cacheKey, () =>
+    const data = await fetchWithDedup(cacheKey, () =>
       fetchWithTimeout(`${baseUrl}${endpoint}`, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -90,29 +98,18 @@ export async function getSpoolContent(
       })
     );
     
-    if (!response.ok) {
-      console.error(`SpoolCMS API error: HTTP ${response.status} ${response.statusText}`);
-      // Gracefully handle errors (rate-limit, 5xx) by returning empty values
-      if (slug) {
-        return null;
-      }
-      return [];
-    }
-    
-    const data = await response.json();
-    
     // Handle different response formats
     if (slug) {
       // Single item - return just the item (could be null if not found)
-      return data?.item ?? data ?? null;
+      return (data as any)?.item ?? data ?? null;
     }
     
     // Collection request – always return an array for consistency
     if (Array.isArray(data)) {
       return data;
     }
-    if (Array.isArray(data?.items)) {
-      return data.items;
+    if (Array.isArray((data as any)?.items)) {
+      return (data as any).items;
     }
     // If API returned an empty object or unexpected shape, fall back to []
     return [];
@@ -135,7 +132,7 @@ export async function getSpoolCollections(config: SpoolConfig) {
   
   try {
     const collEndpoint = `${baseUrl}/api/spool/${siteId}/collections`;
-    const response = await fetchWithDedup(collEndpoint, () =>
+    const data = await fetchWithDedup(collEndpoint, () =>
       fetchWithTimeout(collEndpoint, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -143,20 +140,12 @@ export async function getSpoolCollections(config: SpoolConfig) {
       })
     );
     
-    if (!response.ok) {
-      console.error(`SpoolCMS Collections API error: HTTP ${response.status} ${response.statusText}`);
-      // On errors just return an empty array so callers don't retry forever
-      return [];
-    }
-    
-    const data = await response.json();
-    
     // Always return an array of collections
     if (Array.isArray(data)) {
       return data;
     }
-    if (Array.isArray(data?.collections)) {
-      return data.collections;
+    if (Array.isArray((data as any)?.collections)) {
+      return (data as any).collections;
     }
     return [];
     
