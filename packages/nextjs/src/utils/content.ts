@@ -66,7 +66,24 @@ function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}
   return fetch(resource, mergedOptions).finally(() => clearTimeout(id));
 }
 
-const SPOOL_API_BASE = process.env.SPOOL_API_BASE || 'http://localhost:3000';
+// Smart default for Spool API base URL
+function getDefaultSpoolApiBase(): string {
+  // If explicitly set, use that
+  if (process.env.SPOOL_API_BASE || process.env.SPOOL_BASE_URL) {
+    return process.env.SPOOL_API_BASE || process.env.SPOOL_BASE_URL!;
+  }
+  
+  // Auto-detect based on environment
+  if (process.env.NODE_ENV === 'production') {
+    // In production, try to use the same domain as the site
+    return process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:3000';
+}
+
+const SPOOL_API_BASE = getDefaultSpoolApiBase();
 
 /**
  * Helper function to get content from Spool CMS (for use in getStaticProps, etc.)
