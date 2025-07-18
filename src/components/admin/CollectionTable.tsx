@@ -603,6 +603,7 @@ export function CollectionTable({
     const currentDate = new Date().toISOString();
     const updatedItems = localItems.map(item => ({
       ...item,
+      status: action === 'publish' ? 'published' : 'draft',
       publishedAt: action === 'publish' ? (item.publishedAt || currentDate) : null,
     }));
 
