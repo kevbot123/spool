@@ -9,20 +9,29 @@ interface CacheEntry<T> {
 }
 
 const REQUEST_DEDUP_WINDOW_MS = 5_000; // 5 seconds – enough for build/dev usage
-const requestCache: Map<string, CacheEntry<any>> = new Map();
+const RESPONSE_TTL_MS = 60_000; // 1 minute response cache to stop loops
+
+// Keeps in-flight promises and fulfilled responses for a short TTL
+const requestCache: Map<string, CacheEntry<any> | { timestamp: number; data: any }> = new Map();
 
 async function fetchWithDedup<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   const now = Date.now();
   const cached = requestCache.get(key);
 
-  // If there is an in-flight request less than x ms old, reuse its promise
-  if (cached && now - cached.timestamp < REQUEST_DEDUP_WINDOW_MS) {
-    return cached.promise;
+  // If a resolved data cache entry exists and is fresh, return it immediately
+  if (cached && 'data' in cached && now - cached.timestamp < RESPONSE_TTL_MS) {
+    return cached.data as T;
   }
 
-  const promise = fetcher().finally(() => {
-    // Clean up old cache entries to avoid unbounded growth
-    requestCache.delete(key);
+  // If there is an in-flight request less than x ms old, reuse its promise
+  if (cached && 'promise' in cached && now - cached.timestamp < REQUEST_DEDUP_WINDOW_MS) {
+    return cached.promise as Promise<T>;
+  }
+
+  const promise = fetcher().then((data) => {
+    // Store resolved data for TTL window
+    requestCache.set(key, { timestamp: Date.now(), data });
+    return data;
   });
 
   requestCache.set(key, { timestamp: now, promise });
