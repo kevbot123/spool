@@ -52,7 +52,6 @@ export function AdminContentProvider({ collection, initialItems, authToken, site
           collection: itemCollection,
           createdAt,
           updatedAt,
-          status,
           draft,
 
           // System fields to include in the payload
@@ -63,6 +62,7 @@ export function AdminContentProvider({ collection, initialItems, authToken, site
           seoDescription,
           ogImage,
           publishedAt,
+          status,
           
           // The rest is the 'data' object with custom fields
           data,
@@ -76,6 +76,7 @@ export function AdminContentProvider({ collection, initialItems, authToken, site
           seoDescription,
           ogImage,
           publishedAt,
+          status,
           data,
         };
         

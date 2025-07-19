@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { ImportItemsModal } from '@/components/admin/ImportItemsModal';
 import { CollectionConfig } from '@/types/cms';
 import { useAdminHeader } from '@/context/AdminHeaderContext';
+import { useSite } from '@/context/SiteContext';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
 
 interface BulkActionsDropdownProps {
@@ -67,6 +68,7 @@ export function CollectionHeader({
   onImported,
 }: CollectionHeaderProps) {
   const { setHeaderContent, setBreadcrumbs } = useAdminHeader();
+  const { currentSite } = useSite();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);

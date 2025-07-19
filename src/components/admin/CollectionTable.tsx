@@ -389,6 +389,7 @@ export function CollectionTable({
   collectionDataHook,
   onImported,
 }: CollectionTableProps) {
+  const { currentSite } = useSite();
   const tableRowClass = 'h-[37px]';
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -558,6 +559,8 @@ export function CollectionTable({
   // Fetch options for all reference fields in the collection
   useEffect(() => {
     const fetchAllReferenceOptions = async () => {
+      if (!currentSite) return; // Don't fetch if no site is selected
+      
       const newOptions = new Map<string, { label: string; value: string }[]>();
       const collectionsToFetch = new Set<string>();
 
@@ -571,7 +574,7 @@ export function CollectionTable({
       // Fetch options for each unique collection
       for (const collectionSlug of collectionsToFetch) {
         try {
-          const res = await fetch(`/api/admin/content/${collectionSlug}?limit=1000`); // High limit to get all items
+          const res = await fetch(`/api/admin/content/${collectionSlug}?limit=1000&siteId=${currentSite.id}`); // Include siteId
           if (res.ok) {
             const json = await res.json();
             if (Array.isArray(json?.items)) {
@@ -590,10 +593,10 @@ export function CollectionTable({
       setReferenceOptions(newOptions);
     };
 
-    if (localCollection.fields) {
+    if (localCollection.fields && currentSite) {
       fetchAllReferenceOptions();
     }
-  }, [localCollection]);
+  }, [localCollection, currentSite]);
 
 
 
@@ -1003,7 +1006,7 @@ export function CollectionTable({
           }
         }
       `}</style>
-      <div className="bg-white shadow-sm flex flex-col flex-1 min-w-0">
+      <div className="bg-white flex flex-col flex-1 min-w-0">
         {localItems.length > 0 ? (
           <div className="flex-grow min-w-0">
             <DndContext
