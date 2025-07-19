@@ -48,7 +48,15 @@ function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}
 export function createSpoolHandler(config: SpoolConfig) {
   const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = config;
 
-    // Helper function to make authenticated requests to Spool API with timeout
+  // Helper function to add CORS headers
+  function addCorsHeaders(response: NextResponse) {
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return response;
+  }
+
+  // Helper function to make authenticated requests to Spool API with timeout
   async function spoolFetch(endpoint: string, options: RequestInit = {}) {
     const url = `${baseUrl}/api/spool/${siteId}${endpoint}`;
     return fetchWithTimeout(url, {
@@ -62,6 +70,11 @@ export function createSpoolHandler(config: SpoolConfig) {
   }
 
   return {
+    // OPTIONS /api/spool/[...route] - Handle CORS preflight requests
+    async OPTIONS() {
+      return addCorsHeaders(new NextResponse(null, { status: 200 }));
+    },
+
     // GET /api/spool/[...route] - Fetch content or collections
     async GET(request: NextRequest) {
       try {
@@ -73,20 +86,20 @@ export function createSpoolHandler(config: SpoolConfig) {
         const resourcePath = pathSegments.slice(3).join('/');
         
         if (!resourcePath) {
-          return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+          return addCorsHeaders(NextResponse.json({ error: 'Invalid path' }, { status: 400 }));
         }
 
         // --- Rate limiting ---
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
         if (isRateLimited(ip)) {
-          return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+          return addCorsHeaders(NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 }));
         }
 
         // --- Response cache ---
         const cacheKey = `${resourcePath}${url.search}`;
         const cached = getCached(cacheKey);
         if (cached) {
-          return NextResponse.json(cached);
+          return addCorsHeaders(NextResponse.json(cached));
         }
 
         // Handle different request types
@@ -95,7 +108,7 @@ export function createSpoolHandler(config: SpoolConfig) {
           const collectionsResponse = await spoolFetch('/collections');
           const collections = await collectionsResponse.json();
           setCache(cacheKey, collections);
-          return NextResponse.json(collections);
+          return addCorsHeaders(NextResponse.json(collections));
         }
 
         if (resourcePath.startsWith('content/')) {
@@ -106,17 +119,17 @@ export function createSpoolHandler(config: SpoolConfig) {
           const contentResponse = await spoolFetch(`/content/${contentPath}${queryString}`);
           const content = await contentResponse.json();
           setCache(cacheKey, content);
-          return NextResponse.json(content);
+          return addCorsHeaders(NextResponse.json(content));
         }
 
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return addCorsHeaders(NextResponse.json({ error: 'Not found' }, { status: 404 }));
 
       } catch (error) {
         console.error('Spool GET error:', error);
-        return NextResponse.json(
+        return addCorsHeaders(NextResponse.json(
           { error: 'Internal server error' },
           { status: 500 }
-        );
+        ));
       }
     },
 
@@ -151,7 +164,7 @@ export function createSpoolHandler(config: SpoolConfig) {
             revalidatePath('/');
           }
           
-          return NextResponse.json(result);
+          return addCorsHeaders(NextResponse.json(result));
         }
 
         if (resourcePath.startsWith('content/')) {
@@ -164,17 +177,17 @@ export function createSpoolHandler(config: SpoolConfig) {
           });
           
           const result = await createResponse.json();
-          return NextResponse.json(result);
+          return addCorsHeaders(NextResponse.json(result));
         }
 
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return addCorsHeaders(NextResponse.json({ error: 'Not found' }, { status: 404 }));
 
       } catch (error) {
         console.error('Spool POST error:', error);
-        return NextResponse.json(
+        return addCorsHeaders(NextResponse.json(
           { error: 'Internal server error' },
           { status: 500 }
-        );
+        ));
       }
     },
 
@@ -198,17 +211,17 @@ export function createSpoolHandler(config: SpoolConfig) {
           });
           
           const result = await updateResponse.json();
-          return NextResponse.json(result);
+          return addCorsHeaders(NextResponse.json(result));
         }
 
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return addCorsHeaders(NextResponse.json({ error: 'Not found' }, { status: 404 }));
 
       } catch (error) {
         console.error('Spool PUT error:', error);
-        return NextResponse.json(
+        return addCorsHeaders(NextResponse.json(
           { error: 'Internal server error' },
           { status: 500 }
-        );
+        ));
       }
     },
 
@@ -239,17 +252,17 @@ export function createSpoolHandler(config: SpoolConfig) {
             revalidatePath('/');
           }
           
-          return NextResponse.json(result);
+          return addCorsHeaders(NextResponse.json(result));
         }
 
-        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        return addCorsHeaders(NextResponse.json({ error: 'Not found' }, { status: 404 }));
 
       } catch (error) {
         console.error('Spool DELETE error:', error);
-        return NextResponse.json(
+        return addCorsHeaders(NextResponse.json(
           { error: 'Internal server error' },
           { status: 500 }
-        );
+        ));
       }
     }
   };

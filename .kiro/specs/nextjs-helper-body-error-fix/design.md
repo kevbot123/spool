@@ -2,223 +2,288 @@
 
 ## Overview
 
-This design addresses the "Body is unusable" error in the SpoolCMS Next.js helper package. The core issue is in the content fetching utility at `@spoolcms/nextjs/dist/utils/content.js:63` where the HTTP response body is being consumed multiple times, which violates the Fetch API specification. The fix involves restructuring the error handling to ensure the response body is only read once and implementing proper fallback behavior.
+This design creates a robust, industry-standard headless CMS integration that works seamlessly with Next.js server components while maintaining backward compatibility with client components. The solution implements proper request deduplication, environment detection, and caching strategies that match the behavior of leading headless CMS products like Contentful and Strapi.
 
 ## Architecture
 
-The fix involves modifications to the Next.js helper package, specifically the content fetching utility. The current architecture has these components:
+### Core Components
 
-- **Content Utility Function** - Located in `packages/nextjs/src/utils/content.ts`
-- **Error Handling Logic** - Currently problematic, attempts to read response body multiple times
-- **Response Processing** - Needs to be restructured to consume body only once
+1. **Environment Detection Layer** - Automatically detects server vs client context
+2. **Request Deduplication Engine** - Prevents duplicate requests using React's cache() API
+3. **Unified Configuration System** - Handles environment variables across contexts
+4. **Error Handling & Retry Logic** - Robust error handling with appropriate fallbacks
+5. **Next.js Integration Layer** - Proper integration with Next.js caching and revalidation
 
-The design maintains the existing API interface while fixing the underlying implementation.
+### Request Flow
+
+```
+Component Request → Environment Detection → Configuration Resolution → Request Deduplication → API Call → Response Caching → Component Render
+```
 
 ## Components and Interfaces
 
-### Current Problematic Pattern
+### 1. Environment Detection
 
 ```typescript
-// Bad (current implementation):
-const response = await fetch(url);
-const data = await response.json(); // First consumption
-// ... some error handling that tries to read response.json() again // Second consumption = error
+interface EnvironmentContext {
+  isServer: boolean;
+  isClient: boolean;
+  isDevelopment: boolean;
+  isProduction: boolean;
+}
+
+function detectEnvironment(): EnvironmentContext;
 ```
 
-### Fixed Implementation Design
+**Purpose:** Automatically detect the execution context to choose appropriate behavior patterns.
+
+**Implementation:** Use `typeof window`, `process.env.NODE_ENV`, and other environment indicators.
+
+### 2. Configuration Resolution
 
 ```typescript
-// Good (fixed implementation):
-const response = await fetch(url);
-
-// Check response status before consuming body
-if (!response.ok) {
-  throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+interface SpoolConfig {
+  apiKey: string;
+  siteId: string;
+  baseUrl?: string;
 }
 
-// Only consume body once
-const data = await response.json();
-return data;
+interface ResolvedConfig extends SpoolConfig {
+  apiKey: string;
+  siteId: string;
+  baseUrl: string;
+  environment: EnvironmentContext;
+}
+
+function resolveConfig(config: SpoolConfig): ResolvedConfig;
 ```
 
-### Enhanced Error Handling Structure
+**Purpose:** Resolve configuration from multiple sources (direct config, environment variables) based on execution context.
+
+**Implementation:** 
+- Server context: Use `process.env.SPOOL_API_KEY` and `process.env.SPOOL_SITE_ID`
+- Client context: Use `process.env.NEXT_PUBLIC_SPOOL_API_KEY` and `process.env.NEXT_PUBLIC_SPOOL_SITE_ID`
+- Fallback to provided config values
+
+### 3. Request Deduplication Engine
 
 ```typescript
-interface ContentFetchResult<T> {
-  data: T[];
-  error?: string;
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  promise?: Promise<T>;
 }
 
-async function fetchContent<T>(url: string): Promise<T[]> {
-  try {
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      console.error(`SpoolCMS API error: HTTP ${response.status} ${response.statusText}`);
-      return []; // Graceful fallback
-    }
-    
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
-    
-  } catch (error) {
-    console.error('SpoolCMS content fetch failed:', error);
-    return []; // Always return empty array on error
-  }
+interface RequestDeduplicator {
+  get<T>(key: string): CacheEntry<T> | null;
+  set<T>(key: string, data: T): void;
+  setPromise<T>(key: string, promise: Promise<T>): void;
+  clear(): void;
 }
 ```
 
-### Response Body Consumption Strategy
+**Purpose:** Prevent duplicate requests and provide appropriate caching for both server and client contexts.
 
-The design ensures response bodies are consumed exactly once:
+**Implementation:**
+- Server context: Use React's `cache()` API for request deduplication
+- Client context: Use in-memory Map with TTL for caching
+- Development mode: More aggressive deduplication to handle hot reloading
 
-1. **Status Check First**: Check `response.ok` before reading body
-2. **Single Consumption**: Read `response.json()` only once
-3. **Error Boundaries**: Wrap all operations in try-catch
-4. **Graceful Fallbacks**: Return empty arrays instead of throwing
+### 4. Content Fetcher
+
+```typescript
+interface ContentFetcher {
+  fetchContent<T>(
+    config: ResolvedConfig,
+    collection: string,
+    slug?: string,
+    options?: ContentOptions
+  ): Promise<T>;
+}
+
+interface ContentOptions {
+  renderHtml?: boolean;
+  revalidate?: number;
+  cache?: 'force-cache' | 'no-store' | 'default';
+}
+```
+
+**Purpose:** Handle the actual API requests with proper error handling and retry logic.
+
+**Implementation:**
+- Use Next.js fetch with appropriate cache settings
+- Implement exponential backoff for retries
+- Handle network errors gracefully
+- Support Next.js revalidation patterns
+
+### 5. Public API
+
+```typescript
+// Main API function that works in both server and client contexts
+export async function getSpoolContent<T = any>(
+  config: SpoolConfig,
+  collection: string,
+  slug?: string,
+  options?: ContentOptions
+): Promise<T>;
+
+// Hook for client components (optional, for React patterns)
+export function useSpoolContent<T = any>(
+  collection: string,
+  slug?: string,
+  options?: ContentOptions
+): {
+  data: T | null;
+  loading: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
+};
+```
 
 ## Data Models
 
-No changes to data models are required. The fix maintains the existing API contract:
+### Content Response Format
 
 ```typescript
-// Existing interface (unchanged)
-interface ContentItem {
+interface SpoolContentItem {
   id: string;
-  slug: string;
   title: string;
-  content: any;
+  slug: string;
+  status: 'draft' | 'published';
   published_at: string;
-  // ... other fields
+  updated_at: string;
+  data: Record<string, any>;
 }
 
-// Helper function signature (unchanged)
-export async function getContent(
-  siteId: string, 
-  collection: string, 
-  options?: ContentOptions
-): Promise<ContentItem[]>
+type SpoolContentResponse<T> = T extends string 
+  ? SpoolContentItem | null  // Single item by slug
+  : SpoolContentItem[];      // Collection of items
+```
+
+### Error Handling
+
+```typescript
+interface SpoolError extends Error {
+  code: 'NETWORK_ERROR' | 'AUTH_ERROR' | 'NOT_FOUND' | 'RATE_LIMITED' | 'SERVER_ERROR';
+  status?: number;
+  retryable: boolean;
+}
 ```
 
 ## Error Handling
 
-### HTTP Error Handling
+### Error Categories
 
-1. **4xx Client Errors**:
-   - Log error with status code
-   - Return empty array
-   - Don't attempt to read response body
+1. **Network Errors** - Connection issues, timeouts
+2. **Authentication Errors** - Invalid API keys
+3. **Not Found Errors** - Missing content or collections
+4. **Rate Limiting** - Too many requests
+5. **Server Errors** - Internal server issues
 
-2. **5xx Server Errors**:
-   - Log error with status code
-   - Return empty array
-   - Don't attempt to read response body
+### Error Handling Strategy
 
-3. **Network Errors**:
-   - Log network error details
-   - Return empty array
-   - Handle fetch rejections
-
-### JSON Parsing Error Handling
-
-```typescript
-try {
-  const data = await response.json();
-  return Array.isArray(data) ? data : [];
-} catch (parseError) {
-  console.error('SpoolCMS JSON parse error:', parseError);
-  return [];
-}
-```
-
-### Race Condition Prevention
-
-The fix prevents race conditions by:
-
-1. **Atomic Operations**: Each fetch operation is self-contained
-2. **No Shared State**: No global variables that could cause conflicts
-3. **Proper Async Handling**: Await all promises properly
-4. **Error Isolation**: Errors in one call don't affect others
+1. **Retry Logic** - Exponential backoff for retryable errors
+2. **Fallback Values** - Return empty arrays/null for missing content
+3. **Error Boundaries** - Proper error propagation for React error boundaries
+4. **Development Warnings** - Clear error messages in development mode
 
 ## Testing Strategy
 
 ### Unit Tests
 
-1. **Response Body Consumption Tests**:
-   - Test successful response handling
-   - Test error response handling without double consumption
-   - Test JSON parsing error handling
-   - Test network error handling
-
-2. **Error Boundary Tests**:
-   - Test HTTP 4xx responses return empty array
-   - Test HTTP 5xx responses return empty array
-   - Test malformed JSON returns empty array
-   - Test network failures return empty array
+1. **Environment Detection** - Test server/client context detection
+2. **Configuration Resolution** - Test environment variable resolution
+3. **Request Deduplication** - Test caching behavior in different contexts
+4. **Error Handling** - Test all error scenarios and retry logic
 
 ### Integration Tests
 
-1. **Real API Tests**:
-   - Test against actual SpoolCMS API endpoints
-   - Test with valid and invalid site IDs
-   - Test with existing and non-existent collections
-   - Test concurrent requests
+1. **Server Component Integration** - Test with actual Next.js server components
+2. **Client Component Integration** - Test with React hooks and client components
+3. **Build Process Integration** - Test with generateStaticParams and build-time fetching
+4. **Development Mode** - Test hot reloading and development server behavior
 
-2. **Error Simulation Tests**:
-   - Mock HTTP errors and verify graceful handling
-   - Mock network timeouts and verify fallback behavior
-   - Mock malformed responses and verify parsing safety
+### Performance Tests
 
-### Load Testing
+1. **Request Deduplication** - Verify no duplicate requests in concurrent scenarios
+2. **Memory Usage** - Test cache cleanup and memory management
+3. **Build Performance** - Test impact on build times with static generation
 
-1. **Concurrent Request Tests**:
-   - Test multiple simultaneous requests
-   - Verify no race conditions occur
-   - Test helper reliability under load
+## Implementation Plan
 
-## Implementation Notes
+### Phase 1: Core Infrastructure
+- Environment detection system
+- Configuration resolution
+- Basic request deduplication
 
-### Backward Compatibility
+### Phase 2: Server Component Support
+- React cache() integration
+- Next.js fetch integration
+- Server-side error handling
 
-The fix maintains complete backward compatibility:
+### Phase 3: Client Component Support
+- Client-side caching
+- React hooks implementation
+- Client-side error handling
 
-- Same function signatures
-- Same return types
-- Same behavior for successful requests
-- Only error handling behavior changes (improves reliability)
+### Phase 4: Advanced Features
+- Retry logic with exponential backoff
+- Advanced caching strategies
+- Performance optimizations
 
-### Performance Considerations
+### Phase 5: Documentation & Examples
+- Update integration guide
+- Add comprehensive examples
+- Migration guide from client-only approach
 
-The fix has minimal performance impact:
+## Next.js Integration
 
-- Removes redundant response body reads
-- Adds minimal error checking overhead
-- Improves reliability without sacrificing speed
+### Server Components
 
-### Development Environment
+```typescript
+// ✅ This should work seamlessly
+export default async function BlogPage() {
+  const posts = await getSpoolContent(spoolConfig, 'blog');
+  return <BlogList posts={posts} />;
+}
+```
 
-The fix works consistently across all environments:
+### Static Generation
 
-- Local development
-- Staging environments
-- Production deployments
-- Different Node.js versions
+```typescript
+// ✅ This should work for build-time generation
+export async function generateStaticParams() {
+  const posts = await getSpoolContent(spoolConfig, 'blog');
+  return posts.map(post => ({ slug: post.slug }));
+}
+```
 
-## Security Considerations
+### Client Components
 
-The fix improves security by:
+```typescript
+// ✅ This should work for interactive features
+'use client';
+export default function InteractiveBlog() {
+  const { data: posts, loading } = useSpoolContent('blog');
+  return loading ? <Loading /> : <BlogList posts={posts} />;
+}
+```
 
-1. **Error Information Disclosure**: Logs errors server-side only, doesn't expose internal details to client
-2. **Graceful Degradation**: Prevents crashes that could expose system information
-3. **Input Validation**: Ensures returned data is always an array
+## Performance Considerations
 
-## Migration Strategy
+### Request Deduplication
+- Use React's cache() for server-side deduplication
+- Implement TTL-based caching for client-side
+- Handle concurrent requests properly
 
-This is a package update with no breaking changes:
+### Memory Management
+- Automatic cache cleanup based on TTL
+- Prevent memory leaks in long-running applications
+- Efficient storage of cached responses
 
-1. **Update Package**: Publish new version of `@spoolcms/nextjs`
-2. **Update Documentation**: Document the improved error handling
-3. **Test Deployment**: Verify marketing sites work reliably
-4. **Monitor Logs**: Watch for any remaining issues
+### Network Optimization
+- Proper HTTP caching headers
+- Request batching where possible
+- Compression support
 
-The fix is backward compatible, so existing implementations will automatically benefit from the improved reliability.
+This design ensures Spool CMS matches the developer experience of industry-leading headless CMS products while providing the flexibility and performance developers expect from modern Next.js applications.

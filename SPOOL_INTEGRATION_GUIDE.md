@@ -17,11 +17,20 @@ First, install the Spool Next.js package and run the setup command from the root
 # 1. Install the package
 npm install @spoolcms/nextjs
 
-# 2. Run the setup command to create your API route
-npx create-spool-route
+# 2. Create your API route manually
 ```
 
-This command automatically creates the file `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router) for you.
+Create the file `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router):
+
+**`app/api/spool/[...route]/route.ts`**
+```typescript
+import { createSpoolHandler } from '@spoolcms/nextjs';
+
+export const { GET, POST, PUT, DELETE } = createSpoolHandler({
+  apiKey: process.env.SPOOL_API_KEY!,
+  siteId: process.env.SPOOL_SITE_ID!,
+});
+```
 
 ---
 
@@ -123,12 +132,26 @@ Image fields now return **either** a plain URL string (legacy items) **or** an o
 }
 ```
 
-To make this seamless in Next.js you can import the helper exported by `@spoolcms/nextjs`:
+To handle this in your components, create a simple helper function:
 
-```ts
-import { img } from '@spoolcms/nextjs';
+```typescript
+// In your lib/spool.ts file
+export function getSpoolImage(imageField: string | { original?: string; thumb?: string; small?: string } | undefined, size: 'thumb' | 'small' | 'original' = 'original'): string {
+  if (!imageField) return '';
+  
+  if (typeof imageField === 'string') {
+    return imageField;
+  }
+  
+  if (typeof imageField === 'object') {
+    return imageField[size] || imageField.original || '';
+  }
+  
+  return '';
+}
 
-<Image src={img(item.headerImage, 'thumb')} width={160} height={90} />
+// Usage in your components:
+<Image src={getSpoolImage(item.headerImage, 'thumb')} width={160} height={90} />
 ```
 
 • Pass the image field value (string _or_ object) and the desired size (`'thumb' | 'small' | 'original'`).
@@ -190,7 +213,58 @@ const postWithHtml = await getSpoolContent(spoolConfig, 'blog', 'my-post', { ren
 
 ---
 
-## 6. Example: Building a Blog
+## 6. Client vs Server Components
+
+**Important:** When using Spool content fetching in Next.js App Router, you need to choose between server and client components carefully to avoid infinite loops.
+
+### Server Components (Recommended for Static Content)
+
+Use server components when you want to fetch data at build time or on the server:
+
+```typescript
+// ✅ Good: Server component (default in App Router)
+export default async function BlogPage() {
+  const posts = await getSpoolContent(spoolConfig, 'blog');
+  return <div>{/* render posts */}</div>;
+}
+```
+
+### Client Components (Required for Interactive Content)
+
+Use client components when you need interactivity, state, or want to fetch data on the client side:
+
+```typescript
+'use client';
+
+import { useEffect, useState } from 'react';
+
+// ✅ Good: Client component with proper state management
+export default function BlogPage() {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchPosts() {
+      try {
+        const data = await getSpoolContent(spoolConfig, 'blog');
+        setPosts(data);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPosts();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+  return <div>{/* render posts */}</div>;
+}
+```
+
+> **⚠️ Warning:** Avoid calling `getSpoolContent` directly in server components during development if you experience infinite loops. Convert to a client component with `useEffect` instead.
+
+---
+
+## 7. Example: Building a Blog
 
 Here is a complete example for creating a blog list and detail pages.
 
