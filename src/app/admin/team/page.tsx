@@ -400,9 +400,9 @@ export default function TeamPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 mt-3">
             <div>
-              <Label htmlFor="invite-email">Add email addresses</Label>
+              <Label htmlFor="invite-email" className="pb-2">Add email addresses</Label>
               <div className="flex gap-2">
                 <Input
                   id="invite-email"
@@ -459,7 +459,7 @@ export default function TeamPage() {
             </div>
 
             <div>
-              <Label htmlFor="invite-role">Role</Label>
+              <Label htmlFor="invite-role" className="pb-2">Role</Label>
               <Select value={role} onValueChange={(value: any) => setRole(value)}>
                 <SelectTrigger>
                   <SelectValue />

@@ -27,7 +27,7 @@ export function SiteSwitcher() {
   };
 
   const handleCreateSite = () => {
-    router.push('/admin/setup');
+    router.push('/setup');
   };
 
   const getSiteInitials = (name: string) => {

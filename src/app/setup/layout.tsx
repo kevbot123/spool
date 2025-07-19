@@ -1,16 +1,15 @@
 import { ReactNode } from 'react';
 import { Metadata } from 'next';
-import AdminLayoutClient from './AdminLayoutClient';
 import { SiteProvider } from '@/context/SiteContext';
 import { SetupGuard } from '@/components/SetupGuard';
 
 export const metadata: Metadata = {
-  title: 'CMS Admin',
-  description: 'Content Management System Admin Panel',
+  title: 'Setup - Spool CMS',
+  description: 'Set up your first site with Spool CMS',
   robots: 'noindex, nofollow'
 };
 
-export default function AdminLayout({
+export default function SetupLayout({
   children
 }: {
   children: ReactNode;
@@ -18,9 +17,9 @@ export default function AdminLayout({
   return (
     <SiteProvider>
       <SetupGuard>
-        <AdminLayoutClient>
+        <div className="min-h-screen bg-white">
           {children}
-        </AdminLayoutClient>
+        </div>
       </SetupGuard>
     </SiteProvider>
   );

@@ -143,7 +143,7 @@ export function TeamSwitcher() {
   };
 
   const handleCreateSite = () => {
-    router.push('/admin/setup');
+    router.push('/setup');
   };
 
   const handleSignOut = async () => {
