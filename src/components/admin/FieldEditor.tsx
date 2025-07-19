@@ -118,6 +118,7 @@ export function FieldEditor({
       }
 
       const result = await response.json();
+      // Prefer the full sizes object for new uploads, fallback to URL for compatibility
       const imageValue = result.sizes ?? result.url;
       setEditValue(imageValue);
       onSave(imageValue);
@@ -409,7 +410,8 @@ function renderValue(field: FieldConfig, value: any, referenceOptions?: { label:
     }
 
     case 'image': {
-      const src = typeof value === 'string' ? value : value?.thumb ?? value?.original ?? '';
+      // Use the smallest available size for table display performance
+      const src = typeof value === 'string' ? value : value?.thumb ?? value?.small ?? value?.original ?? '';
       return (
         <div className="w-[100px] h-[36px] overflow-hidden rounded border border-gray-200 bg-gray-50">
           {src && <img src={src} alt="thumbnail" className="object-cover w-full h-full" loading="lazy" />}

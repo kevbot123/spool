@@ -21,4 +21,12 @@ export interface SpoolCollection {
   slug: string;
   schema: Record<string, any>;
   created_at: string;
-} 
+}
+
+export interface ImageSizes {
+  original: string;
+  thumb: string;
+  small: string;
+}
+
+export type ImageSize = 'thumb' | 'small' | 'original'; 

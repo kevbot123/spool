@@ -150,7 +150,7 @@ for (const f of schemaFields) {
                     const bufferArr = await blob.arrayBuffer();
                     const safeFileName = (value.split('/').pop()?.split('?')[0] || 'image.jpg').replace(/[^a-zA-Z0-9.-]/g, '_');
                     const urls = await uploadImageWithSizes(storageAdmin, siteId, safeFileName, blob.type, Buffer.from(bufferArr));
-                    payload.data[fieldName] = urls.original;
+                    payload.data[fieldName] = urls; // Store the full urls object with all sizes
                   } catch (e: any) {
                     console.error(`Failed to process dedicated image for row ${rowNum}: ${e.message}`);
                     importResult.errors.push({ row: rowNum, message: `Image download failed for ${value}` });

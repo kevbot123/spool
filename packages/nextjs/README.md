@@ -118,14 +118,36 @@ Image fields now return **either** a plain URL string (legacy items) **or** an o
 
 To make this seamless in Next.js you can import the helper exported by `@spoolcms/nextjs`:
 
-```ts
+```tsx
 import { img } from '@spoolcms/nextjs';
 
+// Use thumbnail for fast loading in lists
 <Image src={img(item.headerImage, 'thumb')} width={160} height={90} />
+
+// Use small for medium-sized displays  
+<Image src={img(item.headerImage, 'small')} width={480} height={270} />
+
+// Use original for full-size displays
+<Image src={img(item.headerImage, 'original')} width={1200} height={675} />
+```
+
+**Additional utilities:**
+
+```tsx
+import { getImageSizes, hasMultipleSizes } from '@spoolcms/nextjs';
+
+// Get all available sizes
+const sizes = getImageSizes(item.headerImage);
+// Returns: { original: "...", thumb: "...", small: "..." } or null
+
+// Check if image has multiple sizes (vs legacy single URL)
+const hasMultiple = hasMultipleSizes(item.headerImage);
+// Returns: true for new images, false for legacy single URLs
 ```
 
 • Pass the image field value (string _or_ object) and the desired size (`'thumb' | 'small' | 'original'`).
 • Falls back gracefully so existing content keeps working.
+• The admin interface automatically uses thumbnails for fast table rendering.
 
 ---
 
