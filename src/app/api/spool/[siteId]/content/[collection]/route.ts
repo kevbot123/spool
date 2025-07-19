@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getMarkdownProcessor } from '@/lib/cms/markdown';
+import { corsJsonResponse, handleOptionsRequest } from '@/lib/cors';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +27,11 @@ async function verifySiteAccess(siteId: string, apiKey: string) {
   return site;
 }
 
+// OPTIONS /api/spool/[siteId]/content/[collection] - Handle preflight requests
+export async function OPTIONS() {
+  return handleOptionsRequest();
+}
+
 // GET /api/spool/[siteId]/content/[collection] - List all content items in collection
 export async function GET(
   request: NextRequest,
@@ -35,12 +41,12 @@ export async function GET(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     const url = new URL(request.url);
@@ -58,7 +64,7 @@ export async function GET(
       .single();
 
     if (collectionError || !collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Collection not found' }, { status: 404 });
     }
 
     // Get content items
@@ -78,7 +84,7 @@ export async function GET(
 
     if (contentError) {
       console.error('Error fetching content:', contentError);
-      return NextResponse.json({ error: 'Failed to fetch content' }, { status: 500 });
+      return corsJsonResponse({ error: 'Failed to fetch content' }, { status: 500 });
     }
 
     const markdownProcessor = getMarkdownProcessor();
@@ -101,7 +107,7 @@ export async function GET(
       })
     );
 
-    return NextResponse.json({
+    return corsJsonResponse({
       collection: {
         name: collection.name,
         slug: collection.slug,
@@ -117,7 +123,7 @@ export async function GET(
 
   } catch (error) {
     console.error('Error in content API:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );
@@ -133,18 +139,18 @@ export async function POST(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     const { slug, data, status = 'draft' } = await request.json();
 
     if (!slug || !data) {
-      return NextResponse.json({ error: 'Slug and data are required' }, { status: 400 });
+      return corsJsonResponse({ error: 'Slug and data are required' }, { status: 400 });
     }
 
     // Get collection
@@ -156,7 +162,7 @@ export async function POST(
       .single();
 
     if (collectionError || !collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Collection not found' }, { status: 404 });
     }
 
     // Create content item
@@ -175,17 +181,17 @@ export async function POST(
 
     if (contentError) {
       console.error('Error creating content:', contentError);
-      return NextResponse.json({ error: 'Failed to create content' }, { status: 500 });
+      return corsJsonResponse({ error: 'Failed to create content' }, { status: 500 });
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       item: contentItem
     });
 
   } catch (error) {
     console.error('Error creating content:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );

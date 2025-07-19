@@ -126,7 +126,7 @@ function resolveBaseUrl(configBaseUrl?: string, environment?: EnvironmentContext
   }
   
   // Default to production Spool CMS
-  return 'https://spoolcms.com';
+  return 'https://www.spoolcms.com';
 }
 
 /**

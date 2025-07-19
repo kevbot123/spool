@@ -53,6 +53,7 @@ NEXT_PUBLIC_SITE_URL="https://yoursite.com"
 > - Be sure to copy the **entire** API key from your Spool dashboard, including the `spool_` prefix.
 > - **`NEXT_PUBLIC_SITE_URL` is required** - used for SEO metadata generation and production deployments.
 > - The package automatically connects to `spoolcms.com` - no additional URL configuration needed!
+> - **CORS is handled automatically** - your localhost development and production deployments will work seamlessly without any additional configuration.
 
 ---
 
@@ -213,54 +214,62 @@ const postWithHtml = await getSpoolContent(spoolConfig, 'blog', 'my-post', { ren
 
 ---
 
-## 6. Client vs Server Components
+## 6. Server Components (Recommended Approach)
 
-**Important:** When using Spool content fetching in Next.js App Router, you need to choose between server and client components carefully to avoid infinite loops.
+**Spool CMS is optimized for Next.js App Router server components.** This provides the best performance, SEO, and developer experience.
 
-### Server Components (Recommended for Static Content)
+### Server Components (Default and Recommended)
 
-Use server components when you want to fetch data at build time or on the server:
+Use server components for all content fetching - this is the standard approach:
 
 ```typescript
-// ✅ Good: Server component (default in App Router)
+// ✅ Recommended: Server component (default in App Router)
 export default async function BlogPage() {
   const posts = await getSpoolContent(spoolConfig, 'blog');
-  return <div>{/* render posts */}</div>;
+  return (
+    <div>
+      {posts.map(post => (
+        <article key={post.id}>
+          <h2>{post.title}</h2>
+          <p>{post.data.description}</p>
+        </article>
+      ))}
+    </div>
+  );
 }
 ```
 
-### Client Components (Required for Interactive Content)
+**Benefits of Server Components:**
+- ✅ **Better SEO** - Content is rendered on the server
+- ✅ **Faster loading** - No client-side JavaScript needed for content
+- ✅ **Automatic caching** - Next.js handles caching automatically
+- ✅ **No CORS issues** - Server-to-server communication
 
-Use client components when you need interactivity, state, or want to fetch data on the client side:
+### Client Components (Only When Needed)
+
+Only use client components when you need browser-specific features like:
+- User interactions (forms, buttons)
+- Browser APIs (localStorage, geolocation)
+- Real-time updates (WebSockets)
 
 ```typescript
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-// ✅ Good: Client component with proper state management
-export default function BlogPage() {
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ✅ Client component for interactivity only
+export default function BlogInteraction({ post }) {
+  const [liked, setLiked] = useState(false);
 
-  useEffect(() => {
-    async function fetchPosts() {
-      try {
-        const data = await getSpoolContent(spoolConfig, 'blog');
-        setPosts(data);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchPosts();
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
-  return <div>{/* render posts */}</div>;
+  return (
+    <button onClick={() => setLiked(!liked)}>
+      {liked ? '❤️' : '🤍'} Like this post
+    </button>
+  );
 }
 ```
 
-> **⚠️ Warning:** Avoid calling `getSpoolContent` directly in server components during development if you experience infinite loops. Convert to a client component with `useEffect` instead.
+> **💡 Best Practice:** Fetch content in server components and pass it as props to client components that need interactivity.
 
 ---
 

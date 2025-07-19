@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getMarkdownProcessor } from '@/lib/cms/markdown';
+import { corsJsonResponse, handleOptionsRequest } from '@/lib/cors';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,6 +24,11 @@ async function verifySiteAccess(siteId: string, apiKey: string) {
   return site;
 }
 
+// OPTIONS /api/spool/[siteId]/content/[collection]/[slug] - Handle preflight requests
+export async function OPTIONS() {
+  return handleOptionsRequest();
+}
+
 // GET /api/spool/[siteId]/content/[collection]/[slug] - Get specific content item
 export async function GET(
   request: NextRequest,
@@ -32,12 +38,12 @@ export async function GET(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     // Get collection
@@ -49,7 +55,7 @@ export async function GET(
       .single();
 
     if (collectionError || !collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Collection not found' }, { status: 404 });
     }
 
     // Get content item
@@ -62,7 +68,7 @@ export async function GET(
       .single();
 
     if (contentError || !contentItem) {
-      return NextResponse.json({ error: 'Content not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Content not found' }, { status: 404 });
     }
 
     const url = new URL(request.url);
@@ -88,11 +94,11 @@ export async function GET(
       data: processedData,
     };
 
-    return NextResponse.json(filledItem);
+    return corsJsonResponse(filledItem);
 
   } catch (error) {
     console.error('Error fetching content item:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );
@@ -108,18 +114,18 @@ export async function PUT(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     const { data, status } = await request.json();
 
     if (!data) {
-      return NextResponse.json({ error: 'Data is required' }, { status: 400 });
+      return corsJsonResponse({ error: 'Data is required' }, { status: 400 });
     }
 
     // Get collection
@@ -131,7 +137,7 @@ export async function PUT(
       .single();
 
     if (collectionError || !collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Collection not found' }, { status: 404 });
     }
 
     // Update content item
@@ -158,17 +164,17 @@ export async function PUT(
 
     if (contentError) {
       console.error('Error updating content:', contentError);
-      return NextResponse.json({ error: 'Failed to update content' }, { status: 500 });
+      return corsJsonResponse({ error: 'Failed to update content' }, { status: 500 });
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       item: contentItem
     });
 
   } catch (error) {
     console.error('Error updating content:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );
@@ -184,12 +190,12 @@ export async function POST(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     // Get collection
@@ -201,7 +207,7 @@ export async function POST(
       .single();
 
     if (collectionError || !collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Collection not found' }, { status: 404 });
     }
 
     // Publish content item
@@ -220,7 +226,7 @@ export async function POST(
 
     if (contentError) {
       console.error('Error publishing content:', contentError);
-      return NextResponse.json({ error: 'Failed to publish content' }, { status: 500 });
+      return corsJsonResponse({ error: 'Failed to publish content' }, { status: 500 });
     }
 
     // Trigger revalidation on user's Next.js site
@@ -248,7 +254,7 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       item: contentItem,
       revalidated: !!site.domain
@@ -256,7 +262,7 @@ export async function POST(
 
   } catch (error) {
     console.error('Error publishing content:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );
@@ -272,12 +278,12 @@ export async function DELETE(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     // Get collection
@@ -289,7 +295,7 @@ export async function DELETE(
       .single();
 
     if (collectionError || !collection) {
-      return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      return corsJsonResponse({ error: 'Collection not found' }, { status: 404 });
     }
 
     // Delete content item
@@ -302,17 +308,17 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('Error deleting content:', deleteError);
-      return NextResponse.json({ error: 'Failed to delete content' }, { status: 500 });
+      return corsJsonResponse({ error: 'Failed to delete content' }, { status: 500 });
     }
 
-    return NextResponse.json({
+    return corsJsonResponse({
       success: true,
       message: 'Content deleted successfully'
     });
 
   } catch (error) {
     console.error('Error deleting content:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );

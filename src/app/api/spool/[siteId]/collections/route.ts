@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { corsJsonResponse, handleOptionsRequest } from '@/lib/cors';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,6 +23,11 @@ async function verifySiteAccess(siteId: string, apiKey: string) {
   return site;
 }
 
+// OPTIONS /api/spool/[siteId]/collections - Handle preflight requests
+export async function OPTIONS() {
+  return handleOptionsRequest();
+}
+
 // GET /api/spool/[siteId]/collections - Get all collections configuration
 export async function GET(
   request: NextRequest,
@@ -31,12 +37,12 @@ export async function GET(
     const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '');
     
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key required' }, { status: 401 });
+      return corsJsonResponse({ error: 'API key required' }, { status: 401 });
     }
 
     const site = await verifySiteAccess(params.siteId, apiKey);
     if (!site) {
-      return NextResponse.json({ error: 'Invalid site or API key' }, { status: 401 });
+      return corsJsonResponse({ error: 'Invalid site or API key' }, { status: 401 });
     }
 
     // Get all collections for this site
@@ -48,7 +54,7 @@ export async function GET(
 
     if (collectionsError) {
       console.error('Error fetching collections:', collectionsError);
-      return NextResponse.json({ error: 'Failed to fetch collections' }, { status: 500 });
+      return corsJsonResponse({ error: 'Failed to fetch collections' }, { status: 500 });
     }
 
     // Format collections for the frontend
@@ -63,7 +69,7 @@ export async function GET(
       updatedAt: collection.updated_at
     })) || [];
 
-    return NextResponse.json({
+    return corsJsonResponse({
       collections: formattedCollections,
       site: {
         id: params.siteId,
@@ -73,7 +79,7 @@ export async function GET(
 
   } catch (error) {
     console.error('Error in collections API:', error);
-    return NextResponse.json(
+    return corsJsonResponse(
       { error: 'Internal server error' }, 
       { status: 500 }
     );
