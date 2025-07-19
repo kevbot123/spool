@@ -165,6 +165,9 @@ export function DetailPanel({
   // Local copy of collection to allow live updates
   const [localCollection, setLocalCollection] = useState<CollectionConfig>(collection);
 
+  // Reference options state
+  const [referenceOptions, setReferenceOptions] = useState<Map<string, { label: string; value: string }[]>>(new Map());
+
   // Helper function to get field values - useCollectionData already merges draft data
   const getFieldValue = useCallback((fieldName: string) => {
     // Handle system fields (top-level)
@@ -182,6 +185,48 @@ export function DetailPanel({
   useEffect(() => {
     setIsOpen(true);
   }, []);
+
+  // Fetch options for all reference fields in the collection
+  useEffect(() => {
+    const fetchAllReferenceOptions = async () => {
+      if (!currentSite) return; // Don't fetch if no site is selected
+      
+      const newOptions = new Map<string, { label: string; value: string }[]>();
+      const collectionsToFetch = new Set<string>();
+
+      // Find all unique reference collections
+      localCollection.fields.forEach(field => {
+        if ((field.type === 'reference' || field.type === 'multi-reference') && field.referenceCollection) {
+          collectionsToFetch.add(field.referenceCollection);
+        }
+      });
+
+      // Fetch options for each unique collection
+      for (const collectionSlug of collectionsToFetch) {
+        try {
+          const res = await fetch(`/api/admin/content/${collectionSlug}?limit=1000&siteId=${currentSite.id}`); // Include siteId
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json?.items)) {
+              const opts = json.items.map((item: any) => ({ 
+                label: item.title || item.slug || item.id, 
+                value: item.id 
+              }));
+              newOptions.set(collectionSlug, opts);
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch reference options for ${collectionSlug}`, error);
+        }
+      }
+      
+      setReferenceOptions(newOptions);
+    };
+
+    if (localCollection.fields && currentSite) {
+      fetchAllReferenceOptions();
+    }
+  }, [localCollection, currentSite]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -541,7 +586,9 @@ export function DetailPanel({
                             authToken,
                             updateField, // Use the unified updateField function
                             currentItem.id,
-                            getFieldValue
+                            getFieldValue,
+                            currentSite?.id,
+                            referenceOptions
                           )}
                         </div>
                       </div>
@@ -586,7 +633,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Title'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id, referenceOptions)}
                           </div>
                         ))}
 
@@ -598,7 +645,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'SEO Description'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id, referenceOptions)}
                           </div>
                         ))}
 
@@ -641,7 +688,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Title'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id, referenceOptions)}
                           </div>
                         ))}
 
@@ -653,7 +700,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Description'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id, referenceOptions)}
                           </div>
                         ))}
 
@@ -665,7 +712,7 @@ export function DetailPanel({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               {field.label || 'OG Image'}
                             </label>
-                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id)}
+                            {renderField(field, authToken, updateField, currentItem.id, getFieldValue, currentSite?.id, referenceOptions)}
                           </div>
                         ))}
 
@@ -814,6 +861,7 @@ function renderField(
   itemId: string,
   getFieldValue: (fieldName: string) => any,
   siteId?: string | null,
+  referenceOptions?: Map<string, { label: string; value: string }[]>,
 ) {
   const value = getFieldValue(field.name);
   
@@ -876,7 +924,7 @@ function renderField(
           value={value || ''}
           onValueChange={(newValue) => updateField(itemId, field.name, newValue)}
         >
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full text-sm">
             <SelectValue placeholder={field.placeholder} />
           </SelectTrigger>
           <SelectContent>
@@ -900,12 +948,21 @@ function renderField(
       );
     
     case 'reference':
-      // Reference fields would need additional logic for fetching options
       return (
         <NotionSelect
           value={value || ''}
           onChange={(newValue) => updateField(itemId, field.name, newValue)}
-          options={[]} // Would need to fetch reference options
+          options={field.referenceCollection ? (referenceOptions?.get(field.referenceCollection) || []) : []}
+          placeholder={field.placeholder}
+        />
+      );
+    
+    case 'multi-reference':
+      return (
+        <NotionMultiSelect
+          value={value || []}
+          onChange={(newValue) => updateField(itemId, field.name, newValue)}
+          options={field.referenceCollection ? (referenceOptions?.get(field.referenceCollection) || []) : []}
           placeholder={field.placeholder}
         />
       );
