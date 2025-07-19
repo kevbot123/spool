@@ -36,18 +36,14 @@ Next, add your Spool credentials to your local environment file (`.env.local`). 
 SPOOL_API_KEY="your_spool_api_key"
 SPOOL_SITE_ID="your_spool_site_id"
 
-# Spool CMS URL (required) - where your Spool CMS instance is running
-SPOOL_BASE_URL="http://localhost:3000"
-
-# Your site URL (required for production) - used for SEO and auto-detection
+# Your site URL (required for production) - used for SEO and metadata generation
 NEXT_PUBLIC_SITE_URL="https://yoursite.com"
 ```
 
 > **Important Notes:**
 > - Be sure to copy the **entire** API key from your Spool dashboard, including the `spool_` prefix.
-> - **`SPOOL_BASE_URL` is required** - this must match the exact URL where your Spool CMS instance is running (including the correct port for localhost).
 > - **`NEXT_PUBLIC_SITE_URL` is required** - used for SEO metadata generation and production deployments.
-> - If your Next.js dev server runs on a different port (e.g., 3001), update `SPOOL_BASE_URL` accordingly.
+> - The package automatically connects to `spoolcms.com` - no additional URL configuration needed!
 
 ---
 
@@ -66,7 +62,6 @@ import { SpoolConfig } from '@spoolcms/nextjs/types';
 export const spoolConfig: SpoolConfig = {
   apiKey: process.env.SPOOL_API_KEY!,
   siteId: process.env.SPOOL_SITE_ID!,
-  baseUrl: process.env.SPOOL_BASE_URL!,
 };
 ```
 
@@ -411,12 +406,12 @@ export default async function BlogPage() {
 
 ### Common Issues
 
-1.  **"Body is unusable" errors**: This usually happens when the helper can't connect to your Spool CMS instance. Make sure `SPOOL_BASE_URL` in your `.env.local` file matches exactly where your Spool CMS is running (including the correct port).
+1.  **"Body is unusable" errors**: This usually happens when the helper can't connect to Spool CMS. The package automatically connects to `spoolcms.com` - ensure your internet connection is working and the service is available.
 
 2.  **Empty content or connection errors**: 
-    - Verify your `SPOOL_BASE_URL` is correct and your Spool CMS instance is running
     - Check that `SPOOL_API_KEY` and `SPOOL_SITE_ID` are correct
     - Ensure content is published (not draft) in the Spool admin
+    - Verify that `spoolcms.com` is accessible from your deployment environment
 
 3.  **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
 

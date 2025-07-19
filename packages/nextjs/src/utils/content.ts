@@ -8,11 +8,15 @@ interface CacheEntry<T> {
   promise: Promise<T>;
 }
 
-const REQUEST_DEDUP_WINDOW_MS = 5_000; // 5 seconds – enough for build/dev usage
-const RESPONSE_TTL_MS = 60_000; // 1 minute response cache to stop loops
+const REQUEST_DEDUP_WINDOW_MS = 60_000; // 60 seconds – prevent loops
+const RESPONSE_TTL_MS = 300_000; // 5 minutes response cache to stop loops
 
 // Keeps in-flight promises and fulfilled responses for a short TTL
 const requestCache: Map<string, CacheEntry<any> | { timestamp: number; data: any }> = new Map();
+
+// Global request counter to prevent infinite loops
+const requestCounter: Map<string, {count: number, timestamp: number}> = new Map();
+const MAX_REQUESTS_PER_URL = 10; // Maximum requests per minute per URL
 
 // Export for testing
 export const __testing__ = {
@@ -32,6 +36,34 @@ async function fetchWithDedup<T>(key: string, fetcher: () => Promise<Response>):
   }
 
   const now = Date.now();
+  
+  // Prevent infinite request loops
+  const counter = requestCounter.get(key) || { count: 0, timestamp: now };
+  
+  // Reset counter after a minute
+  if (now - counter.timestamp > 60000) {
+    counter.count = 0;
+    counter.timestamp = now;
+  }
+  
+  counter.count++;
+  requestCounter.set(key, counter);
+  
+  // If too many requests, return cached data or empty result (but be more lenient in development)
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const requestLimit = isDevelopment ? MAX_REQUESTS_PER_URL * 2 : MAX_REQUESTS_PER_URL;
+  
+  if (counter.count > requestLimit) {
+    console.warn(`SpoolCMS: Too many requests to ${key} (${counter.count}/${requestLimit}) - returning cached or empty result`);
+    const cached = requestCache.get(key);
+    if (cached && 'data' in cached) {
+      return cached.data as T;
+    }
+    // Return empty result based on URL pattern - single item vs collection
+    const isSlugRequest = key.split('/').length > 6; // /api/spool/{siteId}/content/{collection}/{slug}
+    return (isSlugRequest ? null : []) as T;
+  }
+
   const cached = requestCache.get(key);
 
   // If a resolved data cache entry exists and is fresh, return it immediately
@@ -79,19 +111,13 @@ function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}
 
 // Smart default for Spool API base URL
 function getDefaultSpoolApiBase(): string {
-  // If explicitly set, use that
+  // If explicitly set, use that (for backward compatibility)
   if (process.env.SPOOL_API_BASE || process.env.SPOOL_BASE_URL) {
     return process.env.SPOOL_API_BASE || process.env.SPOOL_BASE_URL!;
   }
   
-  // Auto-detect based on environment
-  if (process.env.NODE_ENV === 'production') {
-    // In production, try to use the same domain as the site
-    return process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-  }
-  
-  // Default to localhost for development
-  return 'http://localhost:3000';
+  // Default to production Spool CMS
+  return 'https://spoolcms.com';
 }
 
 const SPOOL_API_BASE = getDefaultSpoolApiBase();
