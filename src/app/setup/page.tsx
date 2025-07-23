@@ -393,8 +393,8 @@ export default async function BlogPost({ params }) {
   return (
     <article>
       <h1>{post.title}</h1>
-      {post.data.body_html && (
-        <div dangerouslySetInnerHTML={{ __html: post.data.body_html }} />
+      {post.body_html && (
+        <div dangerouslySetInnerHTML={{ __html: post.body_html }} />
       )}
     </article>
   );

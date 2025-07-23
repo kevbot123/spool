@@ -177,30 +177,39 @@ You can add any custom fields you like on top of these defaults.
 
 ## 5. Handling Markdown Content
 
-Spool makes it easy to work with markdown. Whenever you have a field in your collection of type `markdown` (e.g., a field named `body`), you can request that Spool process it into HTML on the server.
+Spool makes working with markdown incredibly intuitive! When you have a markdown field in your collection, Spool creates smart field objects that default to HTML but provide access to raw markdown when needed.
 
-1.  **Store the Raw Markdown**: The original markdown content is always preserved in the field you created (e.g., `post.data.body`).
-2.  **Generate HTML On-Demand**: To receive the processed HTML, pass `{ renderHtml: true }` as the last argument to the `getSpoolContent` function. Spool will then add a new field to your data object with an `_html` suffix (e.g., `post.data.body_html`).
+### Smart Markdown Fields
 
-This means you only pay the performance cost of markdown processing when you actually need the HTML.
-
-**Example:**
+When you request HTML processing with `{ renderHtml: true }`, markdown fields become smart objects:
 
 ```typescript
-// To get just the raw markdown (default behavior):
-const postWithMarkdown = await getSpoolContent(spoolConfig, 'blog', 'my-post');
-// postWithMarkdown.data.body_html will be undefined
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
 
-// To get the processed HTML:
-const postWithHtml = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+// ✅ Default behavior: HTML (perfect for rendering)
+<div dangerouslySetInnerHTML={{ __html: post.body }} />
 
-// postWithHtml.data.body contains the raw markdown string
-// postWithHtml.data.body_html contains the processed HTML string
+// ✅ Explicit HTML access
+<div dangerouslySetInnerHTML={{ __html: post.body.html }} />
 
-// To render the content in React:
-<div
-  dangerouslySetInnerHTML={{ __html: postWithHtml.data.body_html }}
-/>
+// ✅ Raw markdown access (when you need it)
+const rawMarkdown = post.body.markdown;
+```
+
+### Before vs After
+
+**Before (complex):**
+```typescript
+// Had to remember the _html suffix
+<div dangerouslySetInnerHTML={{ __html: post.body_html }} />
+const rawMarkdown = post.body; // Different field for raw markdown
+```
+
+**After (intuitive):**
+```typescript
+// Just use the field directly - defaults to HTML!
+<div dangerouslySetInnerHTML={{ __html: post.body }} />
+const rawMarkdown = post.body.markdown; // Easy access to raw markdown
 ```
 
 ---

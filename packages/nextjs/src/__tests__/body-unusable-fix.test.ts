@@ -56,7 +56,14 @@ describe('Body is unusable error fix', () => {
     });
 
     const result = await getSpoolContent(config, 'blog', 'test-post');
-    expect(result).toEqual(mockData);
+    
+    // Should return flattened structure
+    expect(result.id).toBe('1');
+    expect(result.slug).toBe('test-post');
+    expect(result.title).toBe('Test Post');
+    expect(result.body).toBe('Test content');
+    expect(result.data.title).toBe('Test Post');
+    expect(result.data.body).toBe('Test content');
 
     // Should have made 2 fetch calls (failed + retry)
     expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -98,7 +105,14 @@ describe('Body is unusable error fix', () => {
     });
 
     const result = await getSpoolContent(config, 'blog', 'test-post');
-    expect(result).toEqual(mockData);
+    
+    // Should return flattened structure
+    expect(result.id).toBe('1');
+    expect(result.slug).toBe('test-post');
+    expect(result.title).toBe('Test Post');
+    expect(result.body).toBe('Test content');
+    expect(result.data.title).toBe('Test Post');
+    expect(result.data.body).toBe('Test content');
 
     // Should have made 2 fetch calls (failed + retry)
     expect(mockFetch).toHaveBeenCalledTimes(2);

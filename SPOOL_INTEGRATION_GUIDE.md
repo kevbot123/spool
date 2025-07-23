@@ -99,6 +99,48 @@ import { spoolConfig } from '@/lib/spool';
 const post = await getSpoolContent(spoolConfig, 'blog', 'my-first-post');
 ```
 
+## 🎯 Unified Field Access
+
+Spool provides a unified way to access all fields on your content items. Whether it's a system field (like `title`, `slug`, `created_at`) or a custom field you defined in your collection schema (like `body`, `description`, `author`), you can access them all directly on the item:
+
+```typescript
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
+
+// ✅ All fields accessible with the same pattern
+console.log(post.title);       // System field
+console.log(post.slug);        // System field  
+console.log(post.created_at);  // System field
+console.log(post.body);        // Custom field
+console.log(post.description); // Custom field
+console.log(post.author);      // Custom field
+```
+
+**Before (confusing):**
+```typescript
+// System fields
+post.title
+post.slug
+post.created_at
+
+// Custom fields - different pattern!
+post.data.body
+post.data.description  
+post.data.author
+```
+
+**After (unified):**
+```typescript
+// All fields use the same pattern
+post.title
+post.slug
+post.created_at
+post.body
+post.description
+post.author
+```
+
+> **Backward Compatibility**: The old `post.data.field` pattern still works for existing code, but we recommend migrating to the unified approach for better developer experience.
+
 ### Fetching Collection Schemas (`getSpoolCollections`)
 
 If you need the schema or metadata for your collections, use `getSpoolCollections`.
@@ -184,27 +226,61 @@ You can add any custom fields you like on top of these defaults.
 
 ---
 
-## 5. Handling Markdown Content
+## 5. Handling Markdown Content ✨
 
-Spool makes it easy to work with markdown. Whenever you have a field in your collection of type `markdown` (e.g., a field named `body`), you can request that Spool process it into HTML on the server.
+Spool makes working with markdown incredibly intuitive! When you have a markdown field in your collection (e.g., `body`), Spool creates smart field objects that default to HTML but provide access to the raw markdown when needed.
 
-1.  **Store the Raw Markdown**: The original markdown content is always preserved in the field you created (e.g., `post.data.body`).
-2.  **Generate HTML On-Demand**: To receive the processed HTML, pass `{ renderHtml: true }` as the last argument to the `getSpoolContent` function. Spool will then add a new field to your data object with an `_html` suffix (e.g., `post.data.body_html`).
+### Smart Markdown Fields
 
-This means you only pay the performance cost of markdown processing when you actually need the HTML.
-
-**Example:**
+When you request HTML processing with `{ renderHtml: true }`, markdown fields become smart objects:
 
 ```typescript
-// To get just the raw markdown (default behavior):
-const postWithMarkdown = await getSpoolContent(spoolConfig, 'blog', 'my-post');
-// postWithMarkdown.data.body_html will be undefined
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
 
-// To get the processed HTML:
-const postWithHtml = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+// ✅ Default behavior: HTML (perfect for rendering)
+<div dangerouslySetInnerHTML={{ __html: post.body }} />
 
-// postWithHtml.data.body contains the raw markdown string
-// postWithHtml.data.body_html contains the processed HTML string
+// ✅ Explicit HTML access
+<div dangerouslySetInnerHTML={{ __html: post.body.html }} />
+
+// ✅ Raw markdown access (when you need it)
+const rawMarkdown = post.body.markdown;
+// or
+const rawMarkdown = post.body.raw;
+```
+
+### Before vs After
+
+**Before (complex):**
+```typescript
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+
+// Had to remember the _html suffix
+<div dangerouslySetInnerHTML={{ __html: post.data.body_html }} />
+
+// Raw markdown was in a different field
+const rawMarkdown = post.data.body;
+```
+
+**After (intuitive):**
+```typescript
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+
+// Just use the field directly - defaults to HTML!
+<div dangerouslySetInnerHTML={{ __html: post.body }} />
+
+// Raw markdown is easily accessible
+const rawMarkdown = post.body.markdown;
+```
+
+### How It Works
+
+1. **Without `renderHtml`**: Markdown fields are regular strings containing raw markdown
+2. **With `renderHtml: true`**: Markdown fields become smart objects that:
+   - Default to HTML when used as strings
+   - Provide `.html` property for explicit HTML access
+   - Provide `.markdown` and `.raw` properties for raw markdown access
+   - Work seamlessly with template literals and string operations
 
 // To render the content in React:
 <div
@@ -231,7 +307,7 @@ export default async function BlogPage() {
       {posts.map(post => (
         <article key={post.id}>
           <h2>{post.title}</h2>
-          <p>{post.data.description}</p>
+          <p>{post.description}</p>
         </article>
       ))}
     </div>
@@ -301,12 +377,12 @@ export default async function BlogIndexPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {posts.map((post: any) => (
           <Link href={`/blog/${post.slug}`} key={post.id} className="block border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-            {post.data.ogImage && (
-              <img src={post.data.ogImage} alt={post.title} className="w-full h-48 object-cover" />
+            {post.ogImage && (
+              <img src={post.ogImage} alt={post.title} className="w-full h-48 object-cover" />
             )}
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-2">{post.title || 'Untitled'}</h2>
-              <p className="text-gray-600 mb-4">{post.data.description}</p>
+              <p className="text-gray-600 mb-4">{post.description}</p>
               <div className="text-sm text-gray-500">
                 <span>{new Date(post.published_at).toLocaleDateString()}</span>
               </div>
@@ -353,15 +429,15 @@ export default async function BlogPostPage({ params }: PageProps) {
         Published on {new Date(post.published_at).toLocaleDateString()}
       </div>
       
-      {post.data.ogImage && (
-        <img src={post.data.ogImage} alt={post.title} className="w-full h-96 object-cover rounded-lg mb-8" />
+      {post.ogImage && (
+        <img src={post.ogImage} alt={post.title} className="w-full h-96 object-cover rounded-lg mb-8" />
       )}
       
-      {/* 2. Render the auto-generated HTML */}
-      {post.data.body_html && (
+      {/* 2. Render the markdown as HTML - now much simpler! */}
+      {post.body && (
         <div
           className="prose lg:prose-xl max-w-none"
-          dangerouslySetInnerHTML={{ __html: post.data.body_html }}
+          dangerouslySetInnerHTML={{ __html: post.body }}
         />
       )}
     </article>

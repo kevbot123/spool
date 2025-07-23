@@ -5,7 +5,7 @@ import { detectEnvironment } from './environment';
 
 // Content fetching options
 export interface ContentOptions {
-  renderHtml?: boolean;
+  renderHtml?: boolean; // Default: true (always render HTML for better DX)
   revalidate?: number;
   cache?: 'force-cache' | 'no-store' | 'default';
 }
@@ -163,10 +163,87 @@ async function withRetry<T>(
   throw lastError!;
 }
 
+/**
+ * Create a smart markdown field object that defaults to HTML but provides access to raw markdown
+ */
+function createMarkdownField(rawMarkdown: string, htmlContent?: string): any {
+  const html = htmlContent || rawMarkdown;
+  
+  // Create a simple object with the HTML as the default value
+  const markdownField = {
+    // Default string conversion returns HTML
+    toString: () => html,
+    valueOf: () => html,
+    toJSON: () => html,
+    
+    // Explicit access to different formats
+    html: html,
+    markdown: rawMarkdown,
+    raw: rawMarkdown,
+    
+    // Make it work with template literals and string coercion
+    [Symbol.toPrimitive]: (hint: string) => {
+      if (hint === 'string' || hint === 'default') {
+        return html;
+      }
+      return html;
+    }
+  };
+
+  return markdownField;
+}
+
+/**
+ * Flatten content item structure to provide unified field access
+ * Merges data fields with top-level fields, with data fields taking precedence
+ * Creates smart markdown field objects for better developer experience
+ */
+function flattenContentItem(item: any): any {
+  if (!item || typeof item !== 'object') {
+    return item;
+  }
+
+  const { data, ...systemFields } = item;
+  
+  // If there's no data object, return as-is
+  if (!data || typeof data !== 'object') {
+    return item;
+  }
+
+  // Process data fields to create smart markdown objects
+  const processedData = { ...data };
+  
+  // Find markdown fields and create smart objects
+  Object.keys(data).forEach(fieldName => {
+    const htmlFieldName = `${fieldName}_html`;
+    
+    // If we have both markdown and HTML versions, create a smart field
+    if (data[fieldName] && data[htmlFieldName]) {
+      processedData[fieldName] = createMarkdownField(data[fieldName], data[htmlFieldName]);
+      // Remove the _html field since it's now accessible via field.html
+      delete processedData[htmlFieldName];
+    }
+  });
+
+  // Merge system fields with processed data fields, data fields take precedence
+  const flattened = {
+    ...systemFields,
+    ...processedData,
+    // Keep original data object for backward compatibility (marked as deprecated)
+    data: {
+      ...data,
+      __deprecated: 'Access fields directly on the item instead of item.data.field'
+    }
+  };
+
+  return flattened;
+}
+
 // Export for testing
 export const __testing__ = {
   clearCache: () => globalCache.clear(),
   disableCache: false,
+  flattenContentItem,
 };
 
 /**
@@ -187,7 +264,10 @@ export async function getSpoolContent<T = any>(
     ? `/api/spool/${resolvedConfig.siteId}/content/${collection}/${slug}`
     : `/api/spool/${resolvedConfig.siteId}/content/${collection}`;
 
-  if (options?.renderHtml) {
+  // Always request HTML for markdown fields by default (better DX)
+  // Users can opt out by setting renderHtml: false
+  const shouldRenderHtml = options?.renderHtml !== false;
+  if (shouldRenderHtml) {
     endpoint += '?_html=true';
   }
   
@@ -235,18 +315,20 @@ export async function getSpoolContent<T = any>(
     // Handle different response formats
     if (slug) {
       // Single item - return just the item (could be null if not found)
-      return (data as any)?.item ?? data ?? null;
+      const item = (data as any)?.item ?? data ?? null;
+      return item ? flattenContentItem(item) as T : null as T;
     }
     
     // Collection request – always return an array for consistency
+    let items: any[] = [];
     if (Array.isArray(data)) {
-      return data as T;
+      items = data;
+    } else if (Array.isArray((data as any)?.items)) {
+      items = (data as any).items;
     }
-    if (Array.isArray((data as any)?.items)) {
-      return (data as any).items as T;
-    }
-    // If API returned an empty object or unexpected shape, fall back to []
-    return [] as T;
+    
+    // Flatten each item in the collection
+    return items.map(item => flattenContentItem(item)) as T;
     
   } catch (error) {
     if (error instanceof SpoolError) {
