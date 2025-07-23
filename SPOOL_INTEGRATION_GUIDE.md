@@ -228,64 +228,52 @@ You can add any custom fields you like on top of these defaults.
 
 ## 5. Handling Markdown Content ✨
 
-Spool makes working with markdown incredibly intuitive! When you have a markdown field in your collection (e.g., `body`), Spool creates smart field objects that default to HTML but provide access to the raw markdown when needed.
+Spool makes working with markdown incredibly simple and React-friendly! When you have a markdown field in your collection (e.g., `body`), Spool automatically provides both HTML and raw markdown in a fully serializable format.
 
-### Smart Markdown Fields
+### Simple Markdown Fields
 
-When you request HTML processing with `{ renderHtml: true }`, markdown fields become smart objects:
+Markdown fields are now fully compatible with React's serialization requirements:
 
 ```typescript
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
 
-// ✅ Default behavior: HTML (perfect for rendering)
+// ✅ Default behavior: HTML (perfect for rendering, fully serializable)
 <div dangerouslySetInnerHTML={{ __html: post.body }} />
 
-// ✅ Explicit HTML access
-<div dangerouslySetInnerHTML={{ __html: post.body.html }} />
-
 // ✅ Raw markdown access (when you need it)
-const rawMarkdown = post.body.markdown;
-// or
-const rawMarkdown = post.body.raw;
+const rawMarkdown = post.body_markdown;
 ```
 
 ### Before vs After
 
-**Before (complex):**
+**Before (complex and caused React errors):**
 ```typescript
 const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
 
-// Had to remember the _html suffix
-<div dangerouslySetInnerHTML={{ __html: post.data.body_html }} />
+// ❌ This caused "Only plain objects can be passed to Client Components" errors
+<div dangerouslySetInnerHTML={{ __html: post.body.html }} />
 
-// Raw markdown was in a different field
-const rawMarkdown = post.data.body;
+// Raw markdown access was confusing
+const rawMarkdown = post.body.markdown;
 ```
 
-**After (intuitive):**
+**After (simple and React-compatible):**
 ```typescript
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
+const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
 
-// Just use the field directly - defaults to HTML!
+// ✅ Just use the field directly - it's HTML and fully serializable!
 <div dangerouslySetInnerHTML={{ __html: post.body }} />
 
-// Raw markdown is easily accessible
-const rawMarkdown = post.body.markdown;
+// ✅ Raw markdown is easily accessible
+const rawMarkdown = post.body_markdown;
 ```
 
 ### How It Works
 
-1. **Without `renderHtml`**: Markdown fields are regular strings containing raw markdown
-2. **With `renderHtml: true`**: Markdown fields become smart objects that:
-   - Default to HTML when used as strings
-   - Provide `.html` property for explicit HTML access
-   - Provide `.markdown` and `.raw` properties for raw markdown access
-   - Work seamlessly with template literals and string operations
-
-// To render the content in React:
-<div
-  dangerouslySetInnerHTML={{ __html: postWithHtml.data.body_html }}
-/>
+1. **Markdown fields contain HTML by default** - ready for rendering
+2. **Raw markdown is available** via the `_markdown` suffix (e.g., `body_markdown`)
+3. **Fully serializable** - works perfectly with Next.js App Router and React Server Components
+4. **No more complex objects** - just simple strings that work everywhere
 ```
 
 ---
@@ -415,8 +403,8 @@ interface PageProps {
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = params;
   
-  // 1. Fetch the single post using the slug from the URL, requesting HTML
-  const post = await getSpoolContent(spoolConfig, 'blog', slug, { renderHtml: true });
+  // 1. Fetch the single post using the slug from the URL
+  const post = await getSpoolContent(spoolConfig, 'blog', slug);
 
   if (!post) {
     return notFound();
@@ -433,7 +421,7 @@ export default async function BlogPostPage({ params }: PageProps) {
         <img src={post.ogImage} alt={post.title} className="w-full h-96 object-cover rounded-lg mb-8" />
       )}
       
-      {/* 2. Render the markdown as HTML - now much simpler! */}
+      {/* 2. Render the markdown as HTML - simple and React-compatible! */}
       {post.body && (
         <div
           className="prose lg:prose-xl max-w-none"

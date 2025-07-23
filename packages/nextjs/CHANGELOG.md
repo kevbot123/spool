@@ -2,6 +2,13 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [0.2.5] - 2025-01-22
+
+### Fixed
+- **React Serialization**: Fixed "Only plain objects can be passed to Client Components" error by making markdown fields fully serializable
+- **Simplified API**: Changed from object-based to string-based approach for better Next.js App Router compatibility
+- **Updated Documentation**: Updated examples to use the new serializable approach
+
 ## [0.2.4] - 2025-01-22
 
 ### Improved

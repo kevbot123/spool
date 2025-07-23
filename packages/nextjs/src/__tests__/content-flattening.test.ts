@@ -259,11 +259,11 @@ describe('Content Item Flattening', () => {
       const result = await getSpoolContent(config, 'blog', 'test-post', { renderHtml: true });
 
       expect(result.title).toBe('Test Post');
-      // body should now be a smart markdown field that defaults to HTML
-      expect(String(result.body)).toBe('<h1>Heading</h1><p>Content</p>');
-      expect(result.body.markdown).toBe('# Heading\n\nContent');
-      expect(result.body.html).toBe('<h1>Heading</h1><p>Content</p>');
-      // body_html should be removed since it's now accessible via body.html
+      // body should now default to HTML (React-serializable)
+      expect(result.body).toBe('<h1>Heading</h1><p>Content</p>');
+      // Raw markdown should be accessible via _markdown field
+      expect(result.body_markdown).toBe('# Heading\n\nContent');
+      // body_html should be removed since body now contains HTML
       expect(result.body_html).toBeUndefined();
     });
   });

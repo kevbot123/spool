@@ -163,35 +163,7 @@ async function withRetry<T>(
   throw lastError!;
 }
 
-/**
- * Create a smart markdown field object that defaults to HTML but provides access to raw markdown
- */
-function createMarkdownField(rawMarkdown: string, htmlContent?: string): any {
-  const html = htmlContent || rawMarkdown;
-  
-  // Create a simple object with the HTML as the default value
-  const markdownField = {
-    // Default string conversion returns HTML
-    toString: () => html,
-    valueOf: () => html,
-    toJSON: () => html,
-    
-    // Explicit access to different formats
-    html: html,
-    markdown: rawMarkdown,
-    raw: rawMarkdown,
-    
-    // Make it work with template literals and string coercion
-    [Symbol.toPrimitive]: (hint: string) => {
-      if (hint === 'string' || hint === 'default') {
-        return html;
-      }
-      return html;
-    }
-  };
 
-  return markdownField;
-}
 
 /**
  * Flatten content item structure to provide unified field access
@@ -217,10 +189,13 @@ function flattenContentItem(item: any): any {
   Object.keys(data).forEach(fieldName => {
     const htmlFieldName = `${fieldName}_html`;
     
-    // If we have both markdown and HTML versions, create a smart field
+    // If we have both markdown and HTML versions, use HTML as default and store markdown separately
     if (data[fieldName] && data[htmlFieldName]) {
-      processedData[fieldName] = createMarkdownField(data[fieldName], data[htmlFieldName]);
-      // Remove the _html field since it's now accessible via field.html
+      // Use HTML as the default value (React-serializable)
+      processedData[fieldName] = data[htmlFieldName];
+      // Store markdown in a separate field for access when needed
+      processedData[`${fieldName}_markdown`] = data[fieldName];
+      // Remove the _html field since the main field now contains HTML
       delete processedData[htmlFieldName];
     }
   });

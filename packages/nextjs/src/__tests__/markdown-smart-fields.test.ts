@@ -7,7 +7,7 @@ import { __testing__ } from '../utils/content';
 const { flattenContentItem } = __testing__;
 
 describe('Smart Markdown Fields', () => {
-  it('should create smart markdown field objects', () => {
+  it('should create React-serializable markdown fields', () => {
     const item = {
       id: '123',
       data: {
@@ -22,15 +22,12 @@ describe('Smart Markdown Fields', () => {
     // Regular field should work normally
     expect(flattened.title).toBe('Regular field');
 
-    // Markdown field should be a smart object
-    expect(typeof flattened.body).toBe('object');
-    expect(flattened.body.html).toBe('<h1>Hello World</h1><p>This is <strong>markdown</strong>.</p>');
-    expect(flattened.body.markdown).toBe('# Hello World\n\nThis is **markdown**.');
-    expect(flattened.body.raw).toBe('# Hello World\n\nThis is **markdown**.');
+    // Markdown field should default to HTML (React-serializable string)
+    expect(typeof flattened.body).toBe('string');
+    expect(flattened.body).toBe('<h1>Hello World</h1><p>This is <strong>markdown</strong>.</p>');
 
-    // Default behavior should return HTML
-    expect(String(flattened.body)).toBe('<h1>Hello World</h1><p>This is <strong>markdown</strong>.</p>');
-    expect(flattened.body.toString()).toBe('<h1>Hello World</h1><p>This is <strong>markdown</strong>.</p>');
+    // Raw markdown should be accessible via _markdown field
+    expect(flattened.body_markdown).toBe('# Hello World\n\nThis is **markdown**.');
 
     // The _html field should be removed
     expect(flattened.body_html).toBeUndefined();
@@ -47,8 +44,9 @@ describe('Smart Markdown Fields', () => {
 
     const flattened = flattenContentItem(item);
 
-    // Should remain a regular string
+    // Should remain a regular string with raw markdown
     expect(typeof flattened.body).toBe('string');
     expect(flattened.body).toBe('# Hello World');
+    expect(flattened.body_markdown).toBeUndefined();
   });
 });
