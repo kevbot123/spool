@@ -2,6 +2,53 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [0.3.0] - 2025-01-22
+
+### Removed (Breaking Changes)
+- **Sitemap Helpers**: Removed `getSpoolSitemapEntries`, `getAllSpoolSitemapEntries`, and `createSpoolSitemap` functions
+- **getSpoolSitemap**: Removed deprecated sitemap endpoint function
+
+### Philosophy Change
+- **Simplified Approach**: Follow industry standards - let Next.js handle sitemaps, Spool provides content
+- **Less Vendor Lock-in**: Use standard Next.js patterns instead of Spool-specific abstractions
+- **Easier Maintenance**: Fewer features to maintain, focus on core CMS functionality
+
+### Migration
+- Replace sitemap helpers with simple `getSpoolContent` calls in your `app/sitemap.ts` file
+- See updated integration guide for the 6-line sitemap implementation
+
+## [0.2.8] - 2025-01-22
+
+### Added
+- **Simplified Sitemap Helper**: New `createSpoolSitemap` function for one-line sitemap creation
+- **Automatic Homepage**: Automatically includes homepage in sitemap if not provided
+- **Better Documentation**: Added explanation of automatic updates and webhook integration
+
+### Improved
+- **Developer Experience**: Most sites can now create a complete sitemap with just a few lines of code
+- **Automatic Updates**: Clear documentation on how sitemaps update when content is published
+
+## [0.2.7] - 2025-01-22
+
+### Added
+- **Next.js Sitemap Integration**: New `getSpoolSitemapEntries` and `getAllSpoolSitemapEntries` helpers for better sitemap integration
+- **Industry Standard Approach**: Integrate Spool content into Next.js native sitemap system instead of conflicting separate endpoint
+
+### Deprecated
+- **getSpoolSitemap**: Deprecated in favor of Next.js native sitemap integration (still works but not recommended)
+
+### Improved
+- **Better SEO**: Comprehensive sitemaps that include both static pages and CMS content
+- **No Conflicts**: Works seamlessly with Next.js built-in sitemap features
+- **More Flexible**: Full control over sitemap structure, priorities, and change frequencies
+
+## [0.2.6] - 2025-01-22
+
+### Fixed
+- **SEO Metadata Bug**: Fixed `generateSpoolMetadata` function not using `content.title` properly
+- **Unified Field Access**: Updated metadata generation to work with the new unified field access pattern
+- **Title Fallback**: Now correctly prioritizes `content.seoTitle` → `content.title` → 'Untitled'
+
 ## [0.2.5] - 2025-01-22
 
 ### Fixed

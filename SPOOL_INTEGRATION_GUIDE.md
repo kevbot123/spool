@@ -485,21 +485,73 @@ export async function generateMetadata({ params }: PageProps) {
 
 ### Sitemap Generation
 
-**`app/sitemap.xml/route.ts`**
+Use Next.js's native sitemap system to include your Spool content alongside static pages.
+
+**`app/sitemap.ts`** (Next.js App Router)
 ```typescript
-import { getSpoolSitemap } from '@spoolcms/nextjs';
+import { MetadataRoute } from 'next';
+import { getSpoolContent } from '@spoolcms/nextjs';
 import { spoolConfig } from '@/lib/spool';
 
-export async function GET() {
-  const sitemap = await getSpoolSitemap(spoolConfig);
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://yoursite.com';
   
-  return new Response(sitemap, {
-    headers: {
-      'Content-Type': 'application/xml',
+  // Get your blog posts
+  const posts = await getSpoolContent(spoolConfig, 'blog');
+  
+  return [
+    // Static pages
+    {
+      url: baseUrl,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 1,
     },
-  });
+    {
+      url: `${baseUrl}/about`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    // Blog posts from Spool
+    ...posts.map((post: any) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
+      lastModified: new Date(post.updated_at),
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
+  ];
 }
 ```
+
+#### Automatic Updates
+
+**The sitemap automatically updates when new content is published!** Here's how:
+
+1. **Dynamic Generation**: Next.js calls your sitemap function when needed
+2. **Live Data**: `getSpoolContent` fetches current content from Spool API
+3. **ISR Support**: Works with Incremental Static Regeneration for performance
+
+**For instant updates in production**, add this to your webhook handler:
+```typescript
+// In your webhook route (app/api/webhooks/spool/route.ts)
+import { revalidatePath } from 'next/cache';
+
+export async function POST(request: Request) {
+  // ... webhook verification ...
+  
+  // Revalidate sitemap when content changes
+  revalidatePath('/sitemap.xml');
+  
+  return new Response('OK');
+}
+```
+
+**Benefits of this approach:**
+- ✅ **Simple and clear** - just standard Next.js + Spool API calls
+- ✅ **Complete sitemap** - includes both static pages and CMS content
+- ✅ **Automatic updates** - reflects new content immediately
+- ✅ **No vendor lock-in** - uses standard Next.js patterns
 
 ### Robots.txt Generation
 
@@ -560,11 +612,13 @@ export default async function BlogPage() {
     - Ensure content is published (not draft) in the Spool admin
     - Verify that `spoolcms.com` is accessible from your deployment environment
 
-3.  **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
+3.  **SEO metadata showing "Untitled"**: Make sure you're using version 0.2.6 or later of `@spoolcms/nextjs`. Earlier versions had a bug where `generateSpoolMetadata` wasn't properly reading the `title` field.
 
-4.  **API authentication errors**: If you receive a `401 Unauthorized` error, double-check that you are sending the *full* API key, including the `spool_` prefix.
+4.  **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
 
-5.  **Build errors**: Ensure all environment variables are set in your deployment environment
+5.  **API authentication errors**: If you receive a `401 Unauthorized` error, double-check that you are sending the *full* API key, including the `spool_` prefix.
+
+6.  **Build errors**: Ensure all environment variables are set in your deployment environment
 
 ### Debug Mode
 

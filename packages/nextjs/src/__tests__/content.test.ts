@@ -1,4 +1,4 @@
-import { getSpoolContent, getSpoolCollections, getSpoolSitemap, getSpoolRobots } from '../utils/content';
+import { getSpoolContent, getSpoolCollections, getSpoolRobots } from '../utils/content';
 import { SpoolConfig } from '../types';
 
 // Mock fetch globally
@@ -261,50 +261,7 @@ describe('SpoolCMS Content Utilities', () => {
     });
   });
 
-  describe('getSpoolSitemap', () => {
-    it('should return sitemap XML on success', async () => {
-      const mockSitemap = '<?xml version="1.0" encoding="UTF-8"?><urlset>...</urlset>';
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: async () => mockSitemap,
-      } as Response);
-
-      const result = await getSpoolSitemap(mockConfig);
-
-      expect(result).toBe(mockSitemap);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.spoolcms.com/api/spool/test-site-id/sitemap',
-        expect.objectContaining({
-          headers: {
-            'Authorization': 'Bearer test-api-key',
-          },
-        })
-      );
-    });
-
-    it('should return empty string on HTTP error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      } as Response);
-
-      const result = await getSpoolSitemap(mockConfig);
-
-      expect(result).toBe('');
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS Sitemap API error: HTTP 404 Not Found');
-    });
-
-    it('should return empty string on network error', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await getSpoolSitemap(mockConfig);
-
-      expect(result).toBe('');
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS sitemap fetch failed:', expect.any(Error));
-    });
-  });
 
   describe('getSpoolRobots', () => {
     it('should return robots.txt content on success', async () => {

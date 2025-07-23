@@ -390,50 +390,7 @@ export async function getSpoolCollections(config: SpoolConfig) {
   }
 }
 
-/**
- * Generate sitemap for your site
- */
-export async function getSpoolSitemap(config: SpoolConfig): Promise<string> {
-  const resolvedConfig = resolveConfig(config);
-  
-  try {
-    const response = await enhancedFetch(`${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/sitemap`, {
-      headers: {
-        'Authorization': `Bearer ${resolvedConfig.apiKey}`,
-      },
-    });
-    
-    try {
-      return await response.text();
-    } catch (textError) {
-      // Handle "Body is unusable" error by retrying without cache
-      if ((textError as any).message?.includes('unusable') || (textError as any).message?.includes('disturbed')) {
-        const retryResponse = await enhancedFetch(`${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/sitemap`, {
-          headers: {
-            'Authorization': `Bearer ${resolvedConfig.apiKey}`,
-          },
-          cache: 'no-store',
-        });
-        return await retryResponse.text();
-      }
-      throw textError;
-    }
-    
-  } catch (error) {
-    if (error instanceof SpoolError) {
-      // Log API errors for debugging
-      if (resolvedConfig.environment.isDevelopment) {
-        console.error(`SpoolCMS Sitemap API error: ${error.message}`);
-      }
-    } else {
-      // Log other errors for debugging
-      if (resolvedConfig.environment.isDevelopment) {
-        console.error('SpoolCMS sitemap fetch failed:', error);
-      }
-    }
-    return ''; // Return empty sitemap instead of throwing
-  }
-}
+
 
 /**
  * Generate robots.txt for your site
@@ -491,18 +448,18 @@ export function generateSpoolMetadata(options: {
 }) {
   const { content, collection, path, siteUrl } = options;
   
-  const title = content.data?.seoTitle || content.data?.title || 'Untitled';
-  const description = content.data?.seoDescription || content.data?.description || content.data?.excerpt || '';
-  const canonicalUrl = content.data?.canonicalUrl || `${siteUrl}${path}`;
-  const ogImage = content.data?.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
+  const title = content.seoTitle || content.title || 'Untitled';
+  const description = content.seoDescription || content.description || content.excerpt || '';
+  const canonicalUrl = content.canonicalUrl || `${siteUrl}${path}`;
+  const ogImage = content.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
   
   return {
     title,
     description,
     canonical: canonicalUrl,
     openGraph: {
-      title: content.data?.ogTitle || title,
-      description: content.data?.ogDescription || description,
+      title: content.ogTitle || title,
+      description: content.ogDescription || description,
       url: canonicalUrl,
       siteName: siteUrl,
       images: [

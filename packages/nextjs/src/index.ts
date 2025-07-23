@@ -3,7 +3,6 @@ export { createSpoolHandler } from './handlers/spool-handler';
 export { 
   getSpoolContent, 
   getSpoolCollections, 
-  getSpoolSitemap, 
   getSpoolRobots, 
   generateSpoolMetadata,
   SpoolError
