@@ -212,7 +212,23 @@ export async function getSpoolContent<T = any>(
           cache: options?.cache,
         });
         
-        return response.json();
+        try {
+          return await response.json();
+        } catch (jsonError) {
+          // Handle "Body is unusable" error by retrying without cache
+          if ((jsonError as any).message?.includes('unusable') || (jsonError as any).message?.includes('disturbed')) {
+            // Clear cache and retry
+            globalCache.clear();
+            const retryResponse = await enhancedFetch(url, {
+              headers: {
+                'Authorization': `Bearer ${resolvedConfig.apiKey}`,
+              },
+              cache: 'no-store', // Force no cache on retry
+            });
+            return await retryResponse.json();
+          }
+          throw jsonError;
+        }
       });
     });
     
@@ -239,9 +255,14 @@ export async function getSpoolContent<T = any>(
         return (slug ? null : []) as T;
       }
       
-      // For development, log the error for debugging
+      // Log API errors for debugging
       if (resolvedConfig.environment.isDevelopment) {
-        console.error('SpoolCMS error:', error.message);
+        console.error(`SpoolCMS API error: ${error.message}`);
+      }
+    } else {
+      // Log other errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error('SpoolCMS content fetch failed:', error);
       }
     }
     
@@ -267,7 +288,23 @@ export async function getSpoolCollections(config: SpoolConfig) {
           },
         });
         
-        return response.json();
+        try {
+          return await response.json();
+        } catch (jsonError) {
+          // Handle "Body is unusable" error by retrying without cache
+          if ((jsonError as any).message?.includes('unusable') || (jsonError as any).message?.includes('disturbed')) {
+            // Clear cache and retry
+            globalCache.clear();
+            const retryResponse = await enhancedFetch(url, {
+              headers: {
+                'Authorization': `Bearer ${resolvedConfig.apiKey}`,
+              },
+              cache: 'no-store', // Force no cache on retry
+            });
+            return await retryResponse.json();
+          }
+          throw jsonError;
+        }
       });
     });
     
@@ -281,8 +318,16 @@ export async function getSpoolCollections(config: SpoolConfig) {
     return [];
     
   } catch (error) {
-    if (resolvedConfig.environment.isDevelopment) {
-      console.error('SpoolCMS collections fetch failed:', error);
+    if (error instanceof SpoolError) {
+      // Log API errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error(`SpoolCMS Collections API error: ${error.message}`);
+      }
+    } else {
+      // Log other errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error('SpoolCMS collections fetch failed:', error);
+      }
     }
     return [];
   }
@@ -301,11 +346,33 @@ export async function getSpoolSitemap(config: SpoolConfig): Promise<string> {
       },
     });
     
-    return response.text();
+    try {
+      return await response.text();
+    } catch (textError) {
+      // Handle "Body is unusable" error by retrying without cache
+      if ((textError as any).message?.includes('unusable') || (textError as any).message?.includes('disturbed')) {
+        const retryResponse = await enhancedFetch(`${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/sitemap`, {
+          headers: {
+            'Authorization': `Bearer ${resolvedConfig.apiKey}`,
+          },
+          cache: 'no-store',
+        });
+        return await retryResponse.text();
+      }
+      throw textError;
+    }
     
   } catch (error) {
-    if (resolvedConfig.environment.isDevelopment) {
-      console.error('SpoolCMS sitemap fetch failed:', error);
+    if (error instanceof SpoolError) {
+      // Log API errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error(`SpoolCMS Sitemap API error: ${error.message}`);
+      }
+    } else {
+      // Log other errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error('SpoolCMS sitemap fetch failed:', error);
+      }
     }
     return ''; // Return empty sitemap instead of throwing
   }
@@ -324,11 +391,33 @@ export async function getSpoolRobots(config: SpoolConfig): Promise<string> {
       },
     });
     
-    return response.text();
+    try {
+      return await response.text();
+    } catch (textError) {
+      // Handle "Body is unusable" error by retrying without cache
+      if ((textError as any).message?.includes('unusable') || (textError as any).message?.includes('disturbed')) {
+        const retryResponse = await enhancedFetch(`${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/robots`, {
+          headers: {
+            'Authorization': `Bearer ${resolvedConfig.apiKey}`,
+          },
+          cache: 'no-store',
+        });
+        return await retryResponse.text();
+      }
+      throw textError;
+    }
     
   } catch (error) {
-    if (resolvedConfig.environment.isDevelopment) {
-      console.error('SpoolCMS robots fetch failed:', error);
+    if (error instanceof SpoolError) {
+      // Log API errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error(`SpoolCMS Robots API error: ${error.message}`);
+      }
+    } else {
+      // Log other errors for debugging
+      if (resolvedConfig.environment.isDevelopment) {
+        console.error('SpoolCMS robots fetch failed:', error);
+      }
     }
     return ''; // Return empty robots.txt instead of throwing
   }

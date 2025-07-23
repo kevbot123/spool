@@ -118,11 +118,26 @@ const serverCachedFetch = async (url: string, options: RequestInit): Promise<Res
   
   // Simple 5-minute cache for server-side requests
   if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-    return cached.data;
+    // Return a new Response with the cached data to avoid "Body is unusable" error
+    return new Response(JSON.stringify(cached.data), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
   
   const response = await fetch(url, options);
-  serverCache.set(cacheKey, { data: response.clone(), timestamp: Date.now() });
+  
+  // Only cache successful responses
+  if (response.ok) {
+    try {
+      // Parse and cache the JSON data, not the Response object
+      const data = await response.clone().json();
+      serverCache.set(cacheKey, { data, timestamp: Date.now() });
+    } catch (error) {
+      // If JSON parsing fails, don't cache
+      console.warn('Failed to parse response for caching:', error);
+    }
+  }
   
   return response;
 };

@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Save, RefreshCw, Globe, Key } from 'lucide-react';
+import { Copy, Save, RefreshCw, Globe, Key, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSite } from '@/context/SiteContext';
 import { useAdminHeader } from '@/context/AdminHeaderContext';
@@ -41,6 +43,8 @@ export default function SiteSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
 
   // Form state
   const [name, setName] = useState('');
@@ -216,6 +220,33 @@ export default function SiteSettingsPage() {
     instagramUrl,
     refreshSites,
   ]);
+
+  const handleDeleteSite = async () => {
+    if (!currentSite) return;
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`/api/admin/sites/${currentSite.id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete site');
+      }
+      await refreshSites();
+      toast.success('Site deleted');
+      if (data.remainingSiteCount === 0) {
+        localStorage.removeItem('selectedSiteId');
+        router.push('/setup');
+      } else {
+        router.push('/admin');
+      }
+    } catch (error) {
+      console.error('Error deleting site:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete site');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleRegenerateApiKey = async () => {
     if (!currentSite || !settings) return;
@@ -473,7 +504,38 @@ export default function SiteSettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Danger Zone */}
+        <Card className="py-6 border border-red-600">
+          <CardHeader>
+            <CardTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Danger Zone
+            </CardTitle>
+            <CardDescription className="text-red-600">
+              Deleting a site is permanent and cannot be undone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DestructiveActionDialog
+              trigger={
+                <Button variant="destructive" disabled={isDeleting}>
+                  {isDeleting ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Delete Site
+                </Button>
+              }
+              title={`Delete site "${settings.name}"?`}
+              description="This will permanently delete the site and all of its data. Type the phrase 'delete forever' to confirm."
+              confirmInputText="delete forever"
+              confirmText="Delete"
+              onConfirm={handleDeleteSite}
+            />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
-} 
+}

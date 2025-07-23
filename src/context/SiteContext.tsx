@@ -85,6 +85,27 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
 
       setSites(allSites);
 
+      // If user has no sites, redirect to setup page
+      if (allSites.length === 0) {
+        // Avoid redirect loop
+        if (!pathname.startsWith('/setup')) {
+          router.push('/setup');
+        }
+        setCurrentSite(null);
+        return;
+      }
+
+      // If currentSite was deleted, reset to first available
+      if (currentSite && !allSites.find(s => s.id === currentSite.id)) {
+        if (allSites.length > 0) {
+          setCurrentSite(allSites[0]);
+          localStorage.setItem('selectedSiteId', allSites[0].id);
+        } else {
+          setCurrentSite(null);
+          localStorage.removeItem('selectedSiteId');
+        }
+      }
+
       // Set current site from localStorage or default to first site
       const savedSiteId = localStorage.getItem('selectedSiteId');
       if (savedSiteId) {

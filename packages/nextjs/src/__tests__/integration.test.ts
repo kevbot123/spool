@@ -4,6 +4,18 @@ import { SpoolConfig } from '../types';
 // Mock fetch globally
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
+// Mock environment to simulate development mode for error logging
+jest.mock('../utils/environment', () => ({
+  detectEnvironment: () => ({
+    isServer: true,
+    isClient: false,
+    isDevelopment: true,
+    isProduction: false,
+    isReactStrictMode: false,
+  }),
+  getEnvironmentCacheKey: () => 'server-dev',
+}));
+
 describe('SpoolCMS Integration Tests', () => {
   const mockConfig: SpoolConfig = {
     apiKey: 'test-api-key',
@@ -13,6 +25,13 @@ describe('SpoolCMS Integration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock console.error
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    // Restore console.error
+    jest.restoreAllMocks();
   });
 
   describe('Real-world error scenarios', () => {
@@ -224,7 +243,7 @@ describe('SpoolCMS Integration Tests', () => {
       expect(result).toEqual([{ id: '1', title: 'Post' }]);
       // Should use default baseUrl
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/api/spool/test-site-id/content/blog',
+        'https://www.spoolcms.com/api/spool/test-site-id/content/blog',
         expect.any(Object)
       );
     });
