@@ -392,50 +392,7 @@ export async function getSpoolCollections(config: SpoolConfig) {
 
 
 
-/**
- * Generate robots.txt for your site
- */
-export async function getSpoolRobots(config: SpoolConfig): Promise<string> {
-  const resolvedConfig = resolveConfig(config);
-  
-  try {
-    const response = await enhancedFetch(`${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/robots`, {
-      headers: {
-        'Authorization': `Bearer ${resolvedConfig.apiKey}`,
-      },
-    });
-    
-    try {
-      return await response.text();
-    } catch (textError) {
-      // Handle "Body is unusable" error by retrying without cache
-      if ((textError as any).message?.includes('unusable') || (textError as any).message?.includes('disturbed')) {
-        const retryResponse = await enhancedFetch(`${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/robots`, {
-          headers: {
-            'Authorization': `Bearer ${resolvedConfig.apiKey}`,
-          },
-          cache: 'no-store',
-        });
-        return await retryResponse.text();
-      }
-      throw textError;
-    }
-    
-  } catch (error) {
-    if (error instanceof SpoolError) {
-      // Log API errors for debugging
-      if (resolvedConfig.environment.isDevelopment) {
-        console.error(`SpoolCMS Robots API error: ${error.message}`);
-      }
-    } else {
-      // Log other errors for debugging
-      if (resolvedConfig.environment.isDevelopment) {
-        console.error('SpoolCMS robots fetch failed:', error);
-      }
-    }
-    return ''; // Return empty robots.txt instead of throwing
-  }
-}
+
 
 /**
  * Generate metadata for Next.js App Router

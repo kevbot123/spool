@@ -1,4 +1,4 @@
-import { img, getImageSizes, hasMultipleSizes } from '../utils/image';
+import { img } from '../utils/image';
 import type { ImageSizes } from '../types';
 
 describe('Image utilities', () => {
@@ -40,49 +40,6 @@ describe('Image utilities', () => {
 
     it('should return empty string for invalid objects', () => {
       expect(img({} as ImageSizes)).toBe('');
-    });
-  });
-
-  describe('getImageSizes()', () => {
-    it('should return null for null/undefined values', () => {
-      expect(getImageSizes(null)).toBeNull();
-      expect(getImageSizes(undefined)).toBeNull();
-    });
-
-    it('should return legacy format for string URLs', () => {
-      const result = getImageSizes(mockLegacyUrl);
-      expect(result).toEqual({
-        original: mockLegacyUrl,
-        thumb: mockLegacyUrl,
-        small: mockLegacyUrl,
-      });
-    });
-
-    it('should return the sizes object as-is for image objects', () => {
-      expect(getImageSizes(mockImageSizes)).toBe(mockImageSizes);
-    });
-
-    it('should return null for invalid objects', () => {
-      expect(getImageSizes({} as any)).toBeNull();
-    });
-  });
-
-  describe('hasMultipleSizes()', () => {
-    it('should return false for null/undefined values', () => {
-      expect(hasMultipleSizes(null)).toBe(false);
-      expect(hasMultipleSizes(undefined)).toBe(false);
-    });
-
-    it('should return false for legacy string URLs', () => {
-      expect(hasMultipleSizes(mockLegacyUrl)).toBe(false);
-    });
-
-    it('should return true for image objects', () => {
-      expect(hasMultipleSizes(mockImageSizes)).toBe(true);
-    });
-
-    it('should return false for invalid objects', () => {
-      expect(hasMultipleSizes({} as any)).toBe(false);
     });
   });
 });

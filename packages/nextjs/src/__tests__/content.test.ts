@@ -1,4 +1,4 @@
-import { getSpoolContent, getSpoolCollections, getSpoolRobots } from '../utils/content';
+import { getSpoolContent, getSpoolCollections } from '../utils/content';
 import { SpoolConfig } from '../types';
 
 // Mock fetch globally
@@ -263,50 +263,7 @@ describe('SpoolCMS Content Utilities', () => {
 
 
 
-  describe('getSpoolRobots', () => {
-    it('should return robots.txt content on success', async () => {
-      const mockRobots = 'User-agent: *\nDisallow: /admin/';
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: async () => mockRobots,
-      } as Response);
-
-      const result = await getSpoolRobots(mockConfig);
-
-      expect(result).toBe(mockRobots);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.spoolcms.com/api/spool/test-site-id/robots',
-        expect.objectContaining({
-          headers: {
-            'Authorization': 'Bearer test-api-key',
-          },
-        })
-      );
-    });
-
-    it('should return empty string on HTTP error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-      } as Response);
-
-      const result = await getSpoolRobots(mockConfig);
-
-      expect(result).toBe('');
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS Robots API error: HTTP 403 Forbidden');
-    });
-
-    it('should return empty string on network error', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await getSpoolRobots(mockConfig);
-
-      expect(result).toBe('');
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS robots fetch failed:', expect.any(Error));
-    });
-  });
 
   describe('Response body consumption bug prevention', () => {
     it('should not attempt to read response body multiple times', async () => {

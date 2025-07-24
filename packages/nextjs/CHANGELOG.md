@@ -2,6 +2,23 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [0.4.0] - 2025-01-22
+
+### Removed (Breaking Changes)
+- **Robots.txt Generation**: Removed `getSpoolRobots()` function - robots.txt should be static
+- **Client-Side Hooks**: Removed `useSpoolContent()` and `useSpoolCollections()` React hooks
+- **Image Helper Functions**: Removed `getImageSizes()` and `hasMultipleSizes()` - kept only `img()`
+
+### Philosophy
+- **Simplified for AI Development**: Focused on essential features for developers building fast with AI
+- **Reduced Complexity**: Fewer functions to learn, cleaner API surface
+- **Server-First**: Optimized for Next.js server components (preferred for SEO)
+
+### Migration
+- Replace `getSpoolRobots()` with static `robots.txt` file
+- Replace client hooks with server-side `getSpoolContent()` calls
+- Replace `getImageSizes()` and `hasMultipleSizes()` with direct `img()` usage
+
 ## [0.3.0] - 2025-01-22
 
 ### Removed (Breaking Changes)

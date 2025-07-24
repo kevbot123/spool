@@ -32,11 +32,6 @@ const items = [
     icon: UserRoundPlus,
   },
   {
-    title: 'Sitemap',
-    url: '/trash',
-    icon: MapPinned,
-  },
-  {
     title: 'Redirects',
     url: '/admin/redirects',
     icon: FileJson,

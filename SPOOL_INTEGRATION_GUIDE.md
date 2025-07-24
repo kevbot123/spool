@@ -175,26 +175,15 @@ Image fields now return **either** a plain URL string (legacy items) **or** an o
 }
 ```
 
-To handle this in your components, create a simple helper function:
+Use the built-in `img()` helper to easily access different image sizes:
 
 ```typescript
-// In your lib/spool.ts file
-export function getSpoolImage(imageField: string | { original?: string; thumb?: string; small?: string } | undefined, size: 'thumb' | 'small' | 'original' = 'original'): string {
-  if (!imageField) return '';
-  
-  if (typeof imageField === 'string') {
-    return imageField;
-  }
-  
-  if (typeof imageField === 'object') {
-    return imageField[size] || imageField.original || '';
-  }
-  
-  return '';
-}
+import { img } from '@spoolcms/nextjs';
 
 // Usage in your components:
-<Image src={getSpoolImage(item.headerImage, 'thumb')} width={160} height={90} />
+<Image src={img(item.headerImage)} width={1200} height={675} />           // original (default)
+<Image src={img(item.headerImage, 'small')} width={480} height={270} />   // 480px optimized
+<Image src={img(item.headerImage, 'thumb')} width={160} height={90} />    // 160px thumbnail
 ```
 
 • Pass the image field value (string _or_ object) and the desired size (`'thumb' | 'small' | 'original'`).
@@ -552,24 +541,6 @@ export async function POST(request: Request) {
 - ✅ **Complete sitemap** - includes both static pages and CMS content
 - ✅ **Automatic updates** - reflects new content immediately
 - ✅ **No vendor lock-in** - uses standard Next.js patterns
-
-### Robots.txt Generation
-
-**`app/robots.txt/route.ts`**
-```typescript
-import { getSpoolRobots } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
-
-export async function GET() {
-  const robots = await getSpoolRobots(spoolConfig);
-  
-  return new Response(robots, {
-    headers: {
-      'Content-Type': 'text/plain',
-    },
-  });
-}
-```
 
 ---
 
