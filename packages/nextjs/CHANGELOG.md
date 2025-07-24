@@ -2,6 +2,13 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [0.4.1] - 2025-01-22
+
+### Fixed
+- **Image Thumbnail Processing**: Restored missing logic to convert image URL strings to objects with thumbnail URLs
+- **Image Object Generation**: Now properly generates `thumb` and `small` URLs from original image URLs
+- **Regression Fix**: Fixed issue where image thumbnails stopped working after simplification changes
+
 ## [0.4.0] - 2025-01-22
 
 ### Removed (Breaking Changes)

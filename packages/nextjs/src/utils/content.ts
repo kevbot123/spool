@@ -182,7 +182,7 @@ function flattenContentItem(item: any): any {
     return item;
   }
 
-  // Process data fields to create smart markdown objects
+  // Process data fields to create smart markdown objects and image objects
   const processedData = { ...data };
   
   // Find markdown fields and create smart objects
@@ -197,6 +197,29 @@ function flattenContentItem(item: any): any {
       processedData[`${fieldName}_markdown`] = data[fieldName];
       // Remove the _html field since the main field now contains HTML
       delete processedData[htmlFieldName];
+    }
+  });
+
+  // Process image fields to create image objects with thumbnail URLs
+  Object.keys(processedData).forEach(fieldName => {
+    const fieldValue = processedData[fieldName];
+    
+    // Check if this looks like an image URL string
+    if (typeof fieldValue === 'string' && 
+        (fieldValue.includes('/media/') || fieldValue.includes('storage')) &&
+        (fieldValue.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
+      
+      // Generate thumbnail URLs by modifying the original URL
+      const originalUrl = fieldValue;
+      const thumbUrl = originalUrl.replace(/(\.[^.]+)$/, '_thumb.webp');
+      const smallUrl = originalUrl.replace(/(\.[^.]+)$/, '_small.webp');
+      
+      // Replace the string with an image object
+      processedData[fieldName] = {
+        original: originalUrl,
+        thumb: thumbUrl,
+        small: smallUrl
+      };
     }
   });
 
