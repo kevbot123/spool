@@ -243,7 +243,7 @@ describe('SpoolCMS Integration Tests', () => {
       expect(result).toEqual([{ id: '1', title: 'Post' }]);
       // Should use default baseUrl
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.spoolcms.com/api/spool/test-site-id/content/blog',
+        'https://www.spoolcms.com/api/spool/test-site-id/content/blog?_html=true',
         expect.any(Object)
       );
     });

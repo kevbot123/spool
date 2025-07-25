@@ -2,6 +2,16 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [0.4.2] - 2025-01-22
+
+### Fixed
+- **Image URL Format**: Fixed thumbnail URL generation to use clean format (`filename_thumb.webp` instead of `filename.ext_thumb.webp`)
+- **URL Pattern Matching**: Updated regex to properly remove file extensions before adding thumbnail suffixes
+
+### Migration
+- Added migration script to rename existing thumbnail files to new clean format
+- Backend already generates new uploads in correct format
+
 ## [0.4.1] - 2025-01-22
 
 ### Fixed

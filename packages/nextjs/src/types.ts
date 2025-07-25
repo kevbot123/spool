@@ -1,6 +1,6 @@
 export interface SpoolConfig {
-  apiKey: string;
-  siteId: string;
+  apiKey?: string;
+  siteId?: string;
   baseUrl?: string;
 }
 

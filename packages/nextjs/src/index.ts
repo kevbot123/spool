@@ -4,6 +4,9 @@ export {
   getSpoolContent, 
   getSpoolCollections, 
   generateSpoolMetadata,
+  generateSpoolMetadataLegacy,
+  getSpoolStaticParams,
+  generateSpoolSitemap,
   SpoolError
 } from './utils/content';
 export { SpoolSEO } from './components/spool-seo';

@@ -5,6 +5,7 @@ import slugify from 'slugify';
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/lib/supabase/database.types';
+import { triggerContentWebhook } from '@/lib/webhooks';
 
 export class ContentManager {
   private supabase: SupabaseClient<Database>;
@@ -168,7 +169,19 @@ export class ContentManager {
       throw new Error(`Failed to create content: ${error.message}`);
     }
 
-    return this.mapDatabaseToContentItem(created);
+    const mappedItem = this.mapDatabaseToContentItem(created);
+    
+    // Trigger webhook for content creation
+    triggerContentWebhook(
+      this.supabase,
+      'content.created',
+      created.collections.site_id,
+      created.collections.slug,
+      created.id,
+      created.slug
+    );
+
+    return mappedItem;
   }
 
   async createContentBatch(
@@ -278,7 +291,21 @@ export class ContentManager {
       return null;
     }
 
-    return this.mapDatabaseToContentItem(updated);
+    const mappedItem = this.mapDatabaseToContentItem(updated);
+    
+    // Trigger webhook for content update
+    if (mappedItem) {
+      triggerContentWebhook(
+        this.supabase,
+        'content.updated',
+        updated.collections.site_id,
+        updated.collections.slug,
+        updated.id,
+        updated.slug
+      );
+    }
+
+    return mappedItem;
   }
 
 
@@ -345,7 +372,21 @@ export class ContentManager {
       throw new Error(`Failed to publish draft: ${error.message}`);
     }
 
-    return this.mapDatabaseToContentItem(updated);
+    const mappedItem = this.mapDatabaseToContentItem(updated);
+    
+    // Trigger webhook for content publication
+    if (mappedItem) {
+      triggerContentWebhook(
+        this.supabase,
+        'content.published',
+        updated.collections.site_id,
+        updated.collections.slug,
+        updated.id,
+        updated.slug
+      );
+    }
+
+    return mappedItem;
   }
 
   async deleteContent(collectionSlug: string, contentSlug: string): Promise<void> {
@@ -357,6 +398,22 @@ export class ContentManager {
 
   async deleteContentById(collectionSlug: string, id: string): Promise<void> {
     const supabase = this.supabase;
+    
+    // Get item info before deleting for webhook
+    const { data: itemToDelete, error: fetchError } = await supabase
+      .from('content_items')
+      .select(`
+        id,
+        slug,
+        collections!inner(slug, site_id)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !itemToDelete) {
+      throw new Error(`Content item not found: ${fetchError?.message}`);
+    }
+
     const { error } = await supabase
       .from('content_items')
       .delete()
@@ -365,6 +422,16 @@ export class ContentManager {
     if (error) {
       throw new Error(`Failed to delete content: ${error.message}`);
     }
+
+    // Trigger webhook for content deletion
+    triggerContentWebhook(
+      this.supabase,
+      'content.deleted',
+      itemToDelete.collections.site_id,
+      itemToDelete.collections.slug,
+      itemToDelete.id,
+      itemToDelete.slug
+    );
   }
 
   async searchContent(query: string, collectionSlugs?: string[], publishedOnly: boolean = false): Promise<ContentItem[]> {

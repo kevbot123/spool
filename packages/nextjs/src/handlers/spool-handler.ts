@@ -44,9 +44,23 @@ function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}
 /**
  * Create Spool API handlers for Next.js
  * This function returns HTTP handlers that manage content from Spool CMS
+ * 
+ * Auto-detects config from environment variables if not provided
  */
-export function createSpoolHandler(config: SpoolConfig) {
-  const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = config;
+export function createSpoolHandler(config?: SpoolConfig) {
+  // Auto-detect config from environment if not provided
+  const resolvedConfig = config || {
+    apiKey: process.env.SPOOL_API_KEY!,
+    siteId: process.env.SPOOL_SITE_ID!,
+    baseUrl: process.env.SPOOL_BASE_URL,
+  };
+  
+  const { apiKey, siteId, baseUrl = SPOOL_API_BASE } = resolvedConfig;
+  
+  // Validate required config
+  if (!apiKey || !siteId) {
+    throw new Error('SPOOL_API_KEY and SPOOL_SITE_ID environment variables are required');
+  }
 
   // Helper function to add CORS headers
   function addCorsHeaders(response: NextResponse) {

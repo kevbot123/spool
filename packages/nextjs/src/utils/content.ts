@@ -209,7 +209,7 @@ function flattenContentItem(item: any): any {
         (fieldValue.includes('/media/') || fieldValue.includes('storage')) &&
         (fieldValue.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
       
-      // Generate thumbnail URLs by modifying the original URL
+      // Generate thumbnail URLs by replacing extension with suffix + webp
       const originalUrl = fieldValue;
       const thumbUrl = originalUrl.replace(/(\.[^.]+)$/, '_thumb.webp');
       const smallUrl = originalUrl.replace(/(\.[^.]+)$/, '_small.webp');
@@ -247,13 +247,29 @@ export const __testing__ = {
 /**
  * Main function to get content from Spool CMS
  * Works seamlessly in both server and client components
+ * 
+ * Supports both old and new API:
+ * - getSpoolContent(config, 'blog') // Old way
+ * - getSpoolContent({ collection: 'blog' }) // New simplified way
  */
 export async function getSpoolContent<T = any>(
-  config: SpoolConfig,
-  collection: string,
+  configOrOptions: SpoolConfig | { collection: string; slug?: string; config?: SpoolConfig },
+  collection?: string,
   slug?: string,
   options?: ContentOptions
 ): Promise<T> {
+  // Handle new simplified API
+  if (typeof configOrOptions === 'object' && 'collection' in configOrOptions && !collection) {
+    const { collection: col, slug: sl, config: cfg, ...opts } = configOrOptions;
+    const resolvedConfig = cfg || {
+      apiKey: process.env.SPOOL_API_KEY!,
+      siteId: process.env.SPOOL_SITE_ID!,
+    };
+    return getSpoolContent(resolvedConfig, col, sl, opts as ContentOptions);
+  }
+  
+  // Handle legacy API
+  const config = configOrOptions as SpoolConfig;
   // Resolve configuration with environment detection
   const resolvedConfig = resolveConfig(config);
   
@@ -352,10 +368,104 @@ export async function getSpoolContent<T = any>(
 }
 
 /**
- * Helper function to get all collections from Spool CMS
+ * Generate static params for Next.js generateStaticParams - ONE LINE HELPER
+ * Supports both old and new API
  */
-export async function getSpoolCollections(config: SpoolConfig) {
-  const resolvedConfig = resolveConfig(config);
+export async function getSpoolStaticParams(
+  configOrOptions: SpoolConfig | { collection: string; config?: SpoolConfig },
+  collection?: string
+): Promise<{ slug: string }[]> {
+  // Handle new simplified API
+  if (typeof configOrOptions === 'object' && 'collection' in configOrOptions && !collection) {
+    const { collection: col, config: cfg } = configOrOptions;
+    const resolvedConfig = cfg || {
+      apiKey: process.env.SPOOL_API_KEY!,
+      siteId: process.env.SPOOL_SITE_ID!,
+    };
+    return getSpoolStaticParams(resolvedConfig, col);
+  }
+  
+  // Handle legacy API
+  const config = configOrOptions as SpoolConfig;
+  const items = await getSpoolContent<any[]>(config, collection!);
+  return Array.isArray(items) ? items.map(item => ({ slug: item.slug })) : [];
+}
+
+/**
+ * Generate sitemap for Next.js sitemap.ts - ONE LINE HELPER
+ * Supports both old and new API
+ */
+export async function generateSpoolSitemap(
+  configOrOptions: SpoolConfig | { 
+    collections: string[]; 
+    staticPages?: { url: string; priority?: number; changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never' }[];
+    config?: SpoolConfig;
+  },
+  options?: {
+    collections: string[];
+    staticPages?: { url: string; priority?: number; changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never' }[];
+  }
+): Promise<any[]> {
+  // Handle new simplified API
+  if (typeof configOrOptions === 'object' && 'collections' in configOrOptions && !options) {
+    const { collections, staticPages, config: cfg } = configOrOptions;
+    const resolvedConfig = cfg || {
+      apiKey: process.env.SPOOL_API_KEY!,
+      siteId: process.env.SPOOL_SITE_ID!,
+    };
+    return generateSpoolSitemap(resolvedConfig, { collections, staticPages });
+  }
+  
+  // Handle legacy API
+  const config = configOrOptions as SpoolConfig;
+  // Auto-detect site URL
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+                  'http://localhost:3000';
+  
+  const sitemap: any[] = [];
+  
+  // Add static pages
+  if (options.staticPages) {
+    sitemap.push(...options.staticPages.map(page => ({
+      url: `${siteUrl}${page.url}`,
+      lastModified: new Date(),
+      changeFrequency: page.changeFrequency || 'monthly',
+      priority: page.priority || 0.8,
+    })));
+  }
+  
+  // Add content from collections
+  for (const collection of options.collections) {
+    try {
+      const items = await getSpoolContent<any[]>(config, collection);
+      if (Array.isArray(items)) {
+        sitemap.push(...items.map(item => ({
+          url: `${siteUrl}/${collection}/${item.slug}`,
+          lastModified: new Date(item.updated_at || item.created_at),
+          changeFrequency: 'weekly' as const,
+          priority: 0.7,
+        })));
+      }
+    } catch (error) {
+      console.warn(`Failed to fetch ${collection} for sitemap:`, error);
+    }
+  }
+  
+  return sitemap;
+}
+
+/**
+ * Helper function to get all collections from Spool CMS
+ * Supports both old and new API
+ */
+export async function getSpoolCollections(config?: SpoolConfig) {
+  // Auto-detect config if not provided
+  const resolvedConfigInput = config || {
+    apiKey: process.env.SPOOL_API_KEY!,
+    siteId: process.env.SPOOL_SITE_ID!,
+  };
+  const resolvedConfig = resolveConfig(resolvedConfigInput);
   const url = `${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/collections`;
   const cacheKey = generateCacheKey(resolvedConfig.baseUrl, resolvedConfig.siteId, 'collections');
   
@@ -418,29 +528,31 @@ export async function getSpoolCollections(config: SpoolConfig) {
 
 
 /**
- * Generate metadata for Next.js App Router
+ * Generate metadata for Next.js App Router - SIMPLIFIED VERSION
+ * Auto-detects site URL, path, and everything else from Next.js context
  */
-export function generateSpoolMetadata(options: {
-  content: any;
-  collection: string;
-  path: string;
-  siteUrl: string;
-}) {
-  const { content, collection, path, siteUrl } = options;
+export function generateSpoolMetadata(content: any): any {
+  if (!content) {
+    return { title: 'Content Not Found' };
+  }
+  
+  // Auto-detect site URL from environment
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+                  'http://localhost:3000';
   
   const title = content.seoTitle || content.title || 'Untitled';
   const description = content.seoDescription || content.description || content.excerpt || '';
-  const canonicalUrl = content.canonicalUrl || `${siteUrl}${path}`;
+  
+  // Auto-generate OG image URL if not provided
   const ogImage = content.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
   
   return {
     title,
     description,
-    canonical: canonicalUrl,
     openGraph: {
       title: content.ogTitle || title,
       description: content.ogDescription || description,
-      url: canonicalUrl,
       siteName: siteUrl,
       images: [
         {
@@ -458,6 +570,20 @@ export function generateSpoolMetadata(options: {
       description: description,
       images: [ogImage],
     },
-    robots: content.data?.noIndex ? 'noindex,nofollow' : 'index,follow',
+    robots: content.noIndex ? 'noindex,nofollow' : 'index,follow',
   };
+}
+
+/**
+ * Legacy version for backward compatibility
+ * @deprecated Use generateSpoolMetadata(content) instead
+ */
+export function generateSpoolMetadataLegacy(options: {
+  content: any;
+  collection: string;
+  path: string;
+  siteUrl: string;
+}) {
+  console.warn('generateSpoolMetadata with options object is deprecated. Use generateSpoolMetadata(content) instead.');
+  return generateSpoolMetadata(options.content);
 } 

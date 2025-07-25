@@ -50,7 +50,7 @@ describe('SpoolCMS Content Utilities', () => {
 
       expect(result).toEqual(mockData);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.spoolcms.com/api/spool/test-site-id/content/blog',
+        'https://test.spoolcms.com/api/spool/test-site-id/content/blog?_html=true',
         expect.objectContaining({
           headers: {
             'Authorization': 'Bearer test-api-key',
@@ -71,7 +71,7 @@ describe('SpoolCMS Content Utilities', () => {
 
       expect(result).toEqual(mockData);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://test.spoolcms.com/api/spool/test-site-id/content/blog/post-1',
+        'https://test.spoolcms.com/api/spool/test-site-id/content/blog/post-1?_html=true',
         expect.objectContaining({
           headers: {
             'Authorization': 'Bearer test-api-key',
@@ -114,7 +114,7 @@ describe('SpoolCMS Content Utilities', () => {
       const result = await getSpoolContent(mockConfig, 'blog');
 
       expect(result).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS content fetch failed:', expect.any(Error));
+      expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Unexpected error: Network error');
     });
 
     it('should return null for slug request on network error', async () => {
@@ -123,7 +123,7 @@ describe('SpoolCMS Content Utilities', () => {
       const result = await getSpoolContent(mockConfig, 'blog', 'post-1');
 
       expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS content fetch failed:', expect.any(Error));
+      expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Unexpected error: Network error');
     });
 
     it('should return empty array for collection request on JSON parse error', async () => {
@@ -137,7 +137,7 @@ describe('SpoolCMS Content Utilities', () => {
       const result = await getSpoolContent(mockConfig, 'blog');
 
       expect(result).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS content fetch failed:', expect.any(Error));
+      expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Invalid JSON');
     });
 
     it('should handle different response formats for collections', async () => {
@@ -219,7 +219,7 @@ describe('SpoolCMS Content Utilities', () => {
       const result = await getSpoolCollections(mockConfig);
 
       expect(result).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS Collections API error: HTTP 500 Internal Server Error');
+      expect(console.error).toHaveBeenCalledWith('SpoolCMS Collections API error: Network error: Unable to connect to Spool CMS');
     });
 
     it('should return empty array on network error', async () => {
@@ -228,7 +228,7 @@ describe('SpoolCMS Content Utilities', () => {
       const result = await getSpoolCollections(mockConfig);
 
       expect(result).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS collections fetch failed:', expect.any(Error));
+      expect(console.error).toHaveBeenCalledWith('SpoolCMS Collections API error: Unexpected error: Network error');
     });
 
     it('should handle different response formats', async () => {
@@ -281,7 +281,7 @@ describe('SpoolCMS Content Utilities', () => {
 
       expect(result).toEqual([]);
       expect(mockResponse.json).not.toHaveBeenCalled(); // Should not try to read body on error
-      expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: HTTP 500 Internal Server Error');
+      expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Network error: Unable to connect to Spool CMS');
     });
 
     it('should handle concurrent requests without race conditions', async () => {

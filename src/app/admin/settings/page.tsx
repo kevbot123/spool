@@ -22,6 +22,7 @@ interface SiteSettings {
   subdomain: string | null;
   api_key: string;
   settings: {
+    webhook_url?: string;
     social_links?: {
       twitter?: string;
       facebook?: string;
@@ -49,6 +50,7 @@ export default function SiteSettingsPage() {
   // Form state
   const [name, setName] = useState('');
   const [domain, setDomain] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
   const [defaultTitle, setDefaultTitle] = useState('');
   const [defaultDescription, setDefaultDescription] = useState('');
   const [defaultOgImage, setDefaultOgImage] = useState('');
@@ -129,6 +131,7 @@ export default function SiteSettingsPage() {
         // Populate form fields
         setName(data.name || '');
         setDomain(data.domain || '');
+        setWebhookUrl(data.settings?.webhook_url || '');
         setDefaultTitle(data.settings?.seo?.default_title || '');
         setDefaultDescription(data.settings?.seo?.default_description || '');
         setDefaultOgImage(data.settings?.seo?.default_og_image || '');
@@ -164,6 +167,7 @@ export default function SiteSettingsPage() {
         domain: domain || null,
         settings: {
           ...settings.settings, // Preserve other settings
+          webhook_url: webhookUrl || undefined,
           social_links: {
             twitter: twitterUrl || undefined,
             facebook: facebookUrl || undefined,
@@ -211,6 +215,7 @@ export default function SiteSettingsPage() {
     settings,
     name,
     domain,
+    webhookUrl,
     defaultTitle,
     defaultDescription,
     defaultOgImage,
@@ -342,6 +347,35 @@ export default function SiteSettingsPage() {
                   type="url"
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Webhook Settings */}
+        <Card className="py-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Instant Updates
+            </CardTitle>
+            <CardDescription>
+              Configure webhook URL for real-time content updates in your Next.js app
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="webhook-url">Webhook URL</Label>
+              <Input
+                id="webhook-url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://yoursite.com/api/webhooks/spool"
+                type="url"
+              />
+              <p className="text-sm text-muted-foreground">
+                This URL will be called whenever content is updated, allowing your Next.js site to revalidate pages instantly.
+                Create the webhook endpoint at <code className="bg-muted px-1 rounded">app/api/webhooks/spool/route.ts</code> in your Next.js project.
+              </p>
             </div>
           </CardContent>
         </Card>

@@ -5,106 +5,201 @@ This guide provides all the necessary steps and code examples to integrate Spool
 **Core Features:**
 -   **Headless CMS:** Manage your content in the Spool admin dashboard.
 -   **Real-time API:** Fetch content instantly in your Next.js app.
--   **Simple Setup:** Get started with a single CLI command.
+-   **Simple Setup:** Get started in 5 minutes.
 
----
+## Setup Guide
 
-## 1. Installation & Setup
-
-First, install the Spool Next.js package and run the setup command from the root of your Next.js project.
-
+### 1. Install the package
 ```bash
-# 1. Install the package
 npm install @spoolcms/nextjs
-
-# 2. Create your API route manually
 ```
 
-Create the file `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router):
-
-**`app/api/spool/[...route]/route.ts`**
-```typescript
-import { createSpoolHandler } from '@spoolcms/nextjs';
-
-export const { GET, POST, PUT, DELETE } = createSpoolHandler({
-  apiKey: process.env.SPOOL_API_KEY!,
-  siteId: process.env.SPOOL_SITE_ID!,
-});
-```
-
----
-
-## 2. Environment Variables
-
-Next, add your Spool credentials to your local environment file (`.env.local`). You can find these keys in your Spool project settings.
+### 2. Add environment variables
+Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
 
 ```bash
 # .env.local
-
-# Spool CMS credentials (required)
 SPOOL_API_KEY="your_spool_api_key"
 SPOOL_SITE_ID="your_spool_site_id"
-
-# Your site URL (required for production) - used for SEO and metadata generation
 NEXT_PUBLIC_SITE_URL="https://yoursite.com"
 ```
+> **Important:** Copy the **entire** API key including the `spool_` prefix.
 
-> **Important Notes:**
-> - Be sure to copy the **entire** API key from your Spool dashboard, including the `spool_` prefix.
-> - **`NEXT_PUBLIC_SITE_URL` is required** - used for SEO metadata generation and production deployments.
-> - The package automatically connects to `spoolcms.com` - no additional URL configuration needed!
-> - **CORS is handled automatically** - your localhost development and production deployments will work seamlessly without any additional configuration.
+### 3. Create API route
+Create `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router):
+
+```typescript
+import { createSpoolHandler } from '@spoolcms/nextjs';
+
+export const { GET, POST, PUT, DELETE } = createSpoolHandler();
+```
+
+### 4. Create instant updates route
+Create `app/api/webhooks/spool/route.ts` for real-time content updates:
+
+```typescript
+import { revalidatePath } from 'next/cache';
+
+export async function POST(request: Request) {
+  // Revalidate your site when content changes in Spool
+  revalidatePath('/');
+  revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
+  
+  return new Response('OK');
+}
+```
+
+Then add your webhook URL (`https://yoursite.com/api/webhooks/spool`) in your Spool project settings under **Site Settings > Instant Updates**.
+
+**That's it!** Your Next.js site is now connected to Spool CMS with real-time updates.
 
 ---
 
-## 3. Core Concepts & API Helpers
+## Example: Building a Blog
 
-The `@spoolcms/nextjs` package provides simple helpers to fetch your content.
+Here is a complete example for creating a blog list and detail pages.
 
-### Shared Configuration (Recommended)
+> **Important Setup Notes:**
+> 1. **Dynamic Routes Required:** To enable individual post URLs like `/blog/your-post-slug` you **must** create a dynamic route folder `app/blog/[slug]` with its own `page.tsx`. Without this folder, Next.js will return a 404 even though the content exists in Spool.
+> 2. **Add Content First:** Before testing your frontend, make sure to add some content in your Spool admin dashboard and fill in at least the `title` field. Empty titles will cause your blog listing to appear broken.
 
-To avoid repeating your API key and Site ID, create a shared config file.
+### Blog Listing Page
 
-**`lib/spool.ts`**
-```typescript
-import { SpoolConfig } from '@spoolcms/nextjs/types';
+This page fetches all posts from the "blog" collection and displays them in a grid.
 
-export const spoolConfig: SpoolConfig = {
-  apiKey: process.env.SPOOL_API_KEY!,
-  siteId: process.env.SPOOL_SITE_ID!,
-};
-```
-
-### Fetching a List of Content (`getSpoolContent`)
-
-To get all items from a collection, call `getSpoolContent` with just the collection's slug.
-
+**`app/blog/page.tsx`**
 ```typescript
 import { getSpoolContent } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
+import Link from 'next/link';
 
-// Returns an array of all items in the 'blog' collection
-const posts = await getSpoolContent(spoolConfig, 'blog');
+export default async function BlogIndexPage() {
+  // 1. Fetch all posts from the 'blog' collection
+  const posts = await getSpoolContent({ collection: 'blog' });
+
+  return (
+    <div>
+      <h1>The Blog</h1>
+      <div>
+        {posts.map((post: any) => (
+          <Link href={`/blog/${post.slug}`} key={post.id}>
+            <article>
+              <img src={post.ogImage} alt={post.title} />
+              <div>
+                <h2>{post.title}</h2>
+                <p>{post.description}</p>
+                <div>{new Date(post.published_at).toLocaleDateString()}</div>
+              </div>
+            </article>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 ```
 
-### Fetching a Single Content Item (`getSpoolContent`)
+### Single Post Page
 
-To get a single item by its slug, provide the slug as the third argument.
+This page fetches a single post by its slug from the URL parameters.
+
+**`app/blog/[slug]/page.tsx`**
+```typescript
+import { getSpoolContent, generateSpoolMetadata, getSpoolStaticParams } from '@spoolcms/nextjs';
+import { notFound } from 'next/navigation';
+import { Metadata } from 'next';
+
+interface PageProps {
+  params: {
+    slug: string;
+  };
+}
+
+export default async function BlogPostPage({ params }: PageProps) {
+  const { slug } = params;
+  
+  // Fetch the single post using the slug from the URL
+  const post = await getSpoolContent({ collection: 'blog', slug });
+
+  if (!post) {
+    return notFound();
+  }
+
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <div>
+        Published {new Date(post.published_at).toLocaleDateString()}
+      </div>
+      
+      <img src={post.ogImage} alt={post.title} />
+      
+      {/* Markdown fields cane be rendered as HTML automatically - simple and React-compatible! */}
+      <div dangerouslySetInnerHTML={{ __html: post.body }} />
+    </article>
+  );
+}
+
+// Generate static paths (recommended for better SEO and performance)
+export async function generateStaticParams() {
+  return await getSpoolStaticParams({ collection: 'blog' }); // ONE LINE
+}
+
+// Generate metadata for SEO (App Router) - ONE LINE!
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const post = await getSpoolContent({ collection: 'blog', slug: params.slug });
+  return generateSpoolMetadata(post); // Auto-detects everything from Next.js context
+}
+```
+
+### Automatic SEO with App Router
+
+For Next.js App Router, use the `generateSpoolMetadata` helper (shown in the example above) - it's just one line:
 
 ```typescript
-import { getSpoolContent } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
+import { generateSpoolMetadata } from '@spoolcms/nextjs';
 
-// Returns the single post with the matching slug
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-first-post');
+export async function generateMetadata({ params }: PageProps) {
+  const post = await getSpoolContent({ collection: 'blog', slug: params.slug });
+  return generateSpoolMetadata(post); // Auto-detects path, site URL, everything!
+}
 ```
 
-## 🎯 Unified Field Access
+**What it auto-detects:**
+- ✅ **Site URL** - from `NEXT_PUBLIC_SITE_URL` or Next.js config
+- ✅ **Current path** - from Next.js routing context  
+- ✅ **Collection name** - from the content metadata
+- ✅ **All SEO fields** - title, description, Open Graph, Twitter cards
+
+### Sitemap Generation
+
+Use Next.js's native sitemap system to include Spool content alongside static pages.
+
+**`app/sitemap.ts`** (Next.js App Router)
+```typescript
+import { generateSpoolSitemap } from '@spoolcms/nextjs';
+
+export default async function sitemap() {
+  return await generateSpoolSitemap({
+    collections: ['blog', 'pages'], // Which collections to include
+    staticPages: [
+      { url: '/', priority: 1.0 },
+      { url: '/about', priority: 0.8 }
+    ]
+  });
+}
+```
+
+**That's it!** Auto-generates URLs, handles `lastModified` dates, sets appropriate priorities.
+
+---
+
+## Unified Field Access
 
 Spool provides a unified way to access all fields on your content items. Whether it's a system field (like `title`, `slug`, `created_at`) or a custom field you defined in your collection schema (like `body`, `description`, `author`), you can access them all directly on the item:
 
 ```typescript
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
+const post = await getSpoolContent({ collection: 'blog', slug: 'my-post' });
 
 // ✅ All fields accessible with the same pattern
 console.log(post.title);       // System field
@@ -115,31 +210,7 @@ console.log(post.description); // Custom field
 console.log(post.author);      // Custom field
 ```
 
-**Before (confusing):**
-```typescript
-// System fields
-post.title
-post.slug
-post.created_at
-
-// Custom fields - different pattern!
-post.data.body
-post.data.description  
-post.data.author
-```
-
-**After (unified):**
-```typescript
-// All fields use the same pattern
-post.title
-post.slug
-post.created_at
-post.body
-post.description
-post.author
-```
-
-> **Backward Compatibility**: The old `post.data.field` pattern still works for existing code, but we recommend migrating to the unified approach for better developer experience.
+No need to remember different patterns for different field types - everything is accessible directly on the content item.
 
 ### Fetching Collection Schemas (`getSpoolCollections`)
 
@@ -147,15 +218,14 @@ If you need the schema or metadata for your collections, use `getSpoolCollection
 
 ```typescript
 import { getSpoolCollections } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
 
 // Returns an array of all collection objects (id, name, slug, schema)
-const collections = await getSpoolCollections(spoolConfig);
+const collections = await getSpoolCollections();
 ```
 
 ---
 
-## 4. Handling Images & Thumbnails
+## Handling Images & Thumbnails
 
 Spool automatically generates two extra sizes for every uploaded image:
 
@@ -191,23 +261,23 @@ import { img } from '@spoolcms/nextjs';
 
 ---
 
-## 5. Default Fields in Every Collection
+## Default Fields in Every Collection
 
 Every new collection you create in Spool automatically includes a set of foundational fields so you always have sensible SEO metadata and publication info without any extra configuration.
 
-| **Field**        | **Location**  | **Type**                  | **Notes**                                                                |
-|------------------|---------------|---------------------------|--------------------------------------------------------------------------|
-| `description`    | `item.data`   | string                    | Optional short summary (used in lists & default meta description)        |
-| `seoTitle`       | `item.data`   | string                    | Optional. Overrides `title` for search engines                           |
-| `seoDescription` | `item.data`   | string                    | Optional. Overrides `description` for search engines                     |
-| `ogTitle`        | `item.data`   | string                    | Optional. Title for social sharing (Open Graph)                          |
-| `ogDescription`  | `item.data`   | string                    | Optional. Description for social sharing (Open Graph)                    |
-| `ogImage`        | `item.data`   | image URL\*               | Optional. Social preview / hero image                                    |
-| `title`          | top-level     | string                    | **Required.** Main headline for the item                                 |
-| `slug`           | top-level     | string                    | **Required.** URL-friendly identifier set when creating the item         |
-| `status`         | top-level     | `draft` \| `published`    | Defaults to `draft`. Controls visibility                                 |
-| `published_at`   | top-level     | datetime                  | Automatic. Set the first time `status` becomes `published`               |
-| `updated_at`     | top-level     | datetime                  | Automatic. Updated every time you modify the item                        |
+| **Field**        | **Type**                  | **Notes**                                                                |
+|------------------|---------------------------|--------------------------------------------------------------------------|
+| `title`          | string                    | **Required.** Main headline for the item                                 |
+| `slug`           | string                    | **Required.** URL-friendly identifier set when creating the item         |
+| `description`    | string                    | Optional short summary (used in lists & default meta description)        |
+| `seoTitle`       | string                    | Optional. Overrides `title` for search engines                           |
+| `seoDescription` | string                    | Optional. Overrides `description` for search engines                     |
+| `ogTitle`        | string                    | Optional. Title for social sharing (Open Graph)                          |
+| `ogDescription`  | string                    | Optional. Description for social sharing (Open Graph)                    |
+| `ogImage`        | image URL\*               | Optional. Social preview / hero image                                    |
+| `status`         | `draft` \| `published`    | Defaults to `draft`. Controls visibility                                 |
+| `published_at`   | datetime                  | Automatic. Set the first time `status` becomes `published`               |
+| `updated_at`     | datetime                  | Automatic. Updated every time you modify the item                        |
 
 \* `ogImage` is returned as a full URL string when you request content.
 
@@ -215,16 +285,16 @@ You can add any custom fields you like on top of these defaults.
 
 ---
 
-## 5. Handling Markdown Content ✨
+## Handling Markdown Content ✨
 
 Spool makes working with markdown incredibly simple and React-friendly! When you have a markdown field in your collection (e.g., `body`), Spool automatically provides both HTML and raw markdown in a fully serializable format.
 
 ### Simple Markdown Fields
 
-Markdown fields are now fully compatible with React's serialization requirements:
+Markdown fields are fully compatible with React's serialization requirements:
 
 ```typescript
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
+const post = await getSpoolContent({ collection: 'blog', slug: 'my-post' });
 
 // ✅ Default behavior: HTML (perfect for rendering, fully serializable)
 <div dangerouslySetInnerHTML={{ __html: post.body }} />
@@ -233,41 +303,16 @@ const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
 const rawMarkdown = post.body_markdown;
 ```
 
-### Before vs After
-
-**Before (complex and caused React errors):**
-```typescript
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post', { renderHtml: true });
-
-// ❌ This caused "Only plain objects can be passed to Client Components" errors
-<div dangerouslySetInnerHTML={{ __html: post.body.html }} />
-
-// Raw markdown access was confusing
-const rawMarkdown = post.body.markdown;
-```
-
-**After (simple and React-compatible):**
-```typescript
-const post = await getSpoolContent(spoolConfig, 'blog', 'my-post');
-
-// ✅ Just use the field directly - it's HTML and fully serializable!
-<div dangerouslySetInnerHTML={{ __html: post.body }} />
-
-// ✅ Raw markdown is easily accessible
-const rawMarkdown = post.body_markdown;
-```
-
 ### How It Works
 
 1. **Markdown fields contain HTML by default** - ready for rendering
 2. **Raw markdown is available** via the `_markdown` suffix (e.g., `body_markdown`)
 3. **Fully serializable** - works perfectly with Next.js App Router and React Server Components
-4. **No more complex objects** - just simple strings that work everywhere
-```
+4. **Simple strings** - no complex objects to deal with
 
 ---
 
-## 6. Server Components (Recommended Approach)
+## Server Components (Recommended Approach)
 
 **Spool CMS is optimized for Next.js App Router server components.** This provides the best performance, SEO, and developer experience.
 
@@ -278,7 +323,7 @@ Use server components for all content fetching - this is the standard approach:
 ```typescript
 // ✅ Recommended: Server component (default in App Router)
 export default async function BlogPage() {
-  const posts = await getSpoolContent(spoolConfig, 'blog');
+  const posts = await getSpoolContent({ collection: 'blog' });
   return (
     <div>
       {posts.map(post => (
@@ -326,229 +371,7 @@ export default function BlogInteraction({ post }) {
 
 ---
 
-## 7. Example: Building a Blog
-
-Here is a complete example for creating a blog list and detail pages.
-
-> **Important Setup Notes:**
-> 1. **Dynamic Routes Required:** To enable individual post URLs like `/blog/your-post-slug` you **must** create a dynamic route folder `app/blog/[slug]` with its own `page.tsx`. Without this folder, Next.js will return a 404 even though the content exists in Spool.
-> 2. **Add Content First:** Before testing your frontend, make sure to add some content in your Spool admin dashboard and fill in at least the `title` field. Empty titles will cause your blog listing to appear broken.
-
-### Blog Listing Page
-
-This page fetches all posts from the "blog" collection and displays them in a grid.
-
-**`app/blog/page.tsx`**
-```typescript
-import { getSpoolContent } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
-import Link from 'next/link';
-
-export default async function BlogIndexPage() {
-  // 1. Fetch all posts from the 'blog' collection
-  const posts = await getSpoolContent(spoolConfig, 'blog');
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-8">From the Blog</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {posts.map((post: any) => (
-          <Link href={`/blog/${post.slug}`} key={post.id} className="block border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-            {post.ogImage && (
-              <img src={post.ogImage} alt={post.title} className="w-full h-48 object-cover" />
-            )}
-            <div className="p-6">
-              <h2 className="text-2xl font-bold mb-2">{post.title || 'Untitled'}</h2>
-              <p className="text-gray-600 mb-4">{post.description}</p>
-              <div className="text-sm text-gray-500">
-                <span>{new Date(post.published_at).toLocaleDateString()}</span>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-```
-
-### Single Post Page
-
-This page fetches a single post by its slug from the URL parameters.
-
-**`app/blog/[slug]/page.tsx`**
-```typescript
-import { getSpoolContent, generateSpoolMetadata } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
-import { notFound } from 'next/navigation';
-import { Metadata } from 'next';
-
-interface PageProps {
-  params: {
-    slug: string;
-  };
-}
-
-export default async function BlogPostPage({ params }: PageProps) {
-  const { slug } = params;
-  
-  // 1. Fetch the single post using the slug from the URL
-  const post = await getSpoolContent(spoolConfig, 'blog', slug);
-
-  if (!post) {
-    return notFound();
-  }
-
-  return (
-    <article className="container mx-auto px-4 py-8">
-      <h1 className="text-5xl font-extrabold mb-4">{post.title}</h1>
-      <div className="text-gray-500 mb-8">
-        Published on {new Date(post.published_at).toLocaleDateString()}
-      </div>
-      
-      {post.ogImage && (
-        <img src={post.ogImage} alt={post.title} className="w-full h-96 object-cover rounded-lg mb-8" />
-      )}
-      
-      {/* 2. Render the markdown as HTML - simple and React-compatible! */}
-      {post.body && (
-        <div
-          className="prose lg:prose-xl max-w-none"
-          dangerouslySetInnerHTML={{ __html: post.body }}
-        />
-      )}
-    </article>
-  );
-}
-
-// Optional: Generate static paths for better performance
-export async function generateStaticParams() {
-  const posts = await getSpoolContent(spoolConfig, 'blog');
-  return posts.map((post: any) => ({
-    slug: post.slug,
-  }));
-}
-
-// Generate metadata for SEO (App Router)
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = params;
-  const post = await getSpoolContent(spoolConfig, 'blog', slug);
-  
-  if (!post) {
-    return {
-      title: 'Post Not Found'
-    };
-  }
-  
-  return generateSpoolMetadata({
-    content: post,
-    collection: 'blog',
-    path: `/blog/${slug}`,
-    siteUrl: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-  });
-}
-```
-
----
-
-## 7. SEO and Metadata
-
-### Automatic SEO with App Router
-
-For Next.js App Router, use the `generateSpoolMetadata` helper:
-
-```typescript
-import { generateSpoolMetadata } from '@spoolcms/nextjs';
-
-export async function generateMetadata({ params }: PageProps) {
-  const post = await getSpoolContent(spoolConfig, 'blog', params.slug);
-  
-  return generateSpoolMetadata({
-    content: post,
-    collection: 'blog',
-    path: `/blog/${params.slug}`,
-    siteUrl: 'https://yoursite.com'
-  });
-}
-```
-
-### Sitemap Generation
-
-Use Next.js's native sitemap system to include your Spool content alongside static pages.
-
-**`app/sitemap.ts`** (Next.js App Router)
-```typescript
-import { MetadataRoute } from 'next';
-import { getSpoolContent } from '@spoolcms/nextjs';
-import { spoolConfig } from '@/lib/spool';
-
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://yoursite.com';
-  
-  // Get your blog posts
-  const posts = await getSpoolContent(spoolConfig, 'blog');
-  
-  return [
-    // Static pages
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 1,
-    },
-    {
-      url: `${baseUrl}/about`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    // Blog posts from Spool
-    ...posts.map((post: any) => ({
-      url: `${baseUrl}/blog/${post.slug}`,
-      lastModified: new Date(post.updated_at),
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-    })),
-  ];
-}
-```
-
-#### Automatic Updates
-
-**The sitemap automatically updates when new content is published!** Here's how:
-
-1. **Dynamic Generation**: Next.js calls your sitemap function when needed
-2. **Live Data**: `getSpoolContent` fetches current content from Spool API
-3. **ISR Support**: Works with Incremental Static Regeneration for performance
-
-**For instant updates in production**, add this to your webhook handler:
-```typescript
-// In your webhook route (app/api/webhooks/spool/route.ts)
-import { revalidatePath } from 'next/cache';
-
-export async function POST(request: Request) {
-  // ... webhook verification ...
-  
-  // Revalidate sitemap when content changes
-  revalidatePath('/sitemap.xml');
-  
-  return new Response('OK');
-}
-```
-
-**Benefits of this approach:**
-- ✅ **Simple and clear** - just standard Next.js + Spool API calls
-- ✅ **Complete sitemap** - includes both static pages and CMS content
-- ✅ **Automatic updates** - reflects new content immediately
-- ✅ **No vendor lock-in** - uses standard Next.js patterns
-
----
-
-## 8. Advanced Features
-
-### Real-time Content Updates
-
-When content is published in the Spool admin, your Next.js site automatically revalidates the affected pages using Next.js's `revalidatePath` function.
+## Advanced Features
 
 ### Draft Content
 
@@ -561,7 +384,7 @@ import { getSpoolContent } from '@spoolcms/nextjs';
 
 export default async function BlogPage() {
   try {
-    const posts = await getSpoolContent(spoolConfig, 'blog');
+    const posts = await getSpoolContent({ collection: 'blog' });
     // Handle success
   } catch (error) {
     console.error('Failed to fetch posts:', error);
@@ -570,9 +393,11 @@ export default async function BlogPage() {
 }
 ```
 
+
+
 ---
 
-## 9. Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -583,7 +408,7 @@ export default async function BlogPage() {
     - Ensure content is published (not draft) in the Spool admin
     - Verify that `spoolcms.com` is accessible from your deployment environment
 
-3.  **SEO metadata showing "Untitled"**: Make sure you're using version 0.2.6 or later of `@spoolcms/nextjs`. Earlier versions had a bug where `generateSpoolMetadata` wasn't properly reading the `title` field.
+3.  **SEO metadata showing "Untitled"**: Make sure your content has a `title` field set in the Spool admin dashboard.
 
 4.  **404 errors**: Make sure your dynamic route folder structure matches your URL pattern
 
@@ -596,10 +421,10 @@ export default async function BlogPage() {
 Add debug logging to see what's happening:
 
 ```typescript
-const posts = await getSpoolContent(spoolConfig, 'blog');
+const posts = await getSpoolContent({ collection: 'blog' });
 console.log('Fetched posts:', posts.length);
 ```
 
 ---
 
-This guide should provide a complete reference for using Spool as a headless CMS with Next.js. The setup process is now simplified to just 3 commands and works seamlessly with both App Router and Pages Router. 
+This guide should provide a complete reference for using Spool as a headless CMS with Next.js. The setup process is now simplified to just 5 steps and works seamlessly with both App Router and Pages Router.
