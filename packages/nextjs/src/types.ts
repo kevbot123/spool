@@ -11,16 +11,14 @@ export interface ImageObject {
   small: string;
 }
 
-// Main content interface that matches the flattened API response
-export interface SpoolContent {
+// Base content interface with common fields
+interface SpoolContentBase {
   // System fields
   id: string;
   slug: string;
   title: string;
-  status: 'draft' | 'published';
   created_at: string;
   updated_at: string;
-  published_at?: string;
   
   // SEO fields (available on all content by default)
   description?: string;
@@ -44,8 +42,32 @@ export interface SpoolContent {
   [key: string]: any;
 }
 
+// Draft content - published_at is undefined
+export interface SpoolDraftContent extends SpoolContentBase {
+  status: 'draft';
+  published_at?: undefined;
+}
+
+// Published content - published_at is guaranteed to exist
+export interface SpoolPublishedContent extends SpoolContentBase {
+  status: 'published';
+  published_at: string;
+}
+
+// Union type for all content
+export type SpoolContent = SpoolDraftContent | SpoolPublishedContent;
+
+// Type guards for narrowing content types
+export function isPublishedContent(content: SpoolContent): content is SpoolPublishedContent {
+  return content.status === 'published';
+}
+
+export function isDraftContent(content: SpoolContent): content is SpoolDraftContent {
+  return content.status === 'draft';
+}
+
 // Specific content types for better DX
-export interface BlogPost extends SpoolContent {
+export interface BlogPost extends SpoolContentBase {
   body: string;
   body_markdown?: string;
   author?: string;
@@ -54,10 +76,21 @@ export interface BlogPost extends SpoolContent {
   excerpt?: string;
 }
 
-export interface Page extends SpoolContent {
+export interface Page extends SpoolContentBase {
   body: string;
   body_markdown?: string;
   template?: string;
+}
+
+// Published versions of specific types
+export interface PublishedBlogPost extends BlogPost {
+  status: 'published';
+  published_at: string;
+}
+
+export interface PublishedPage extends Page {
+  status: 'published';
+  published_at: string;
 }
 
 // Legacy interface for backward compatibility

@@ -201,7 +201,7 @@ Spool provides comprehensive TypeScript support with proper type definitions for
 ### Automatic Type Safety
 
 ```typescript
-import { getSpoolContent, SpoolContent } from '@spoolcms/nextjs';
+import { getSpoolContent, SpoolContent, isPublishedContent } from '@spoolcms/nextjs';
 
 // ✅ Automatically typed as SpoolContent[] - no need for explicit typing!
 const posts = await getSpoolContent({ collection: 'blog' });
@@ -212,47 +212,61 @@ posts[0].body;         // string | undefined
 posts[0].author;       // string | undefined
 posts[0].tags;         // string[] | undefined
 posts[0].ogImage;      // string | ImageObject | undefined
-posts[0].published_at; // string | undefined
+
+// ✅ Type-safe published_at handling
+if (isPublishedContent(posts[0])) {
+  posts[0].published_at; // string (guaranteed to exist for published content)
+} else {
+  posts[0].published_at; // undefined (draft content)
+}
 ```
 
-### SpoolContent Interface
+### SpoolContent Types
 
-The main `SpoolContent` interface includes all common fields:
+Spool provides accurate TypeScript types that reflect the actual behavior:
 
 ```typescript
-interface SpoolContent {
-  // System fields
-  id: string;
-  slug: string;
-  title: string;
-  status: 'draft' | 'published';
-  created_at: string;
-  updated_at: string;
-  published_at?: string;
-  
-  // SEO fields
-  description?: string;
-  seoTitle?: string;
-  seoDescription?: string;
-  ogTitle?: string;
-  ogDescription?: string;
-  ogImage?: string | ImageObject;
-  
-  // Common content fields
-  body?: string;
-  body_markdown?: string;
-  author?: string;
-  tags?: string[];
-  featured?: boolean;
-  
-  // Custom fields
-  [key: string]: any;
+// Draft content - published_at is undefined
+interface SpoolDraftContent {
+  status: 'draft';
+  published_at?: undefined;
+  // ... other fields
+}
+
+// Published content - published_at is guaranteed to exist
+interface SpoolPublishedContent {
+  status: 'published';
+  published_at: string; // Always present for published content
+  // ... other fields
+}
+
+// Union type
+type SpoolContent = SpoolDraftContent | SpoolPublishedContent;
+```
+
+### Type Guards for Safe Access
+
+```typescript
+import { isPublishedContent, isDraftContent } from '@spoolcms/nextjs';
+
+const post = await getSpoolContent({ collection: 'blog', slug: 'my-post' });
+
+if (isPublishedContent(post)) {
+  // TypeScript knows published_at exists
+  const publishDate = new Date(post.published_at); // ✅ No undefined check needed
+  console.log(`Published on ${publishDate.toLocaleDateString()}`);
+}
+
+if (isDraftContent(post)) {
+  // TypeScript knows this is a draft
+  console.log('This post is still a draft');
+  // post.published_at is undefined here
 }
 ```
 
 ### Custom Content Types
 
-Extend SpoolContent for collection-specific typing:
+Create your own interfaces for collection-specific fields:
 
 ```typescript
 interface Product extends SpoolContent {
@@ -263,16 +277,31 @@ interface Product extends SpoolContent {
 }
 
 const products = await getSpoolContent<Product[]>({ collection: 'products' });
-// Now you get full type safety for custom fields too!
+
+// Type-safe access to custom fields
+products[0].price;    // number
+products[0].category; // string
+products[0].inStock;  // boolean
+
+// Still get the published_at type safety
+if (isPublishedContent(products[0])) {
+  products[0].published_at; // string (guaranteed)
+}
 ```
 
 ### Built-in Specialized Types
 
-- `SpoolContent` - Main content interface with all common fields
+- `SpoolContent` - Union type for draft and published content
+- `SpoolDraftContent` - Draft content (published_at is undefined)
+- `SpoolPublishedContent` - Published content (published_at guaranteed)
 - `BlogPost` - Blog-specific interface with body, author, tags
 - `Page` - Page-specific interface with body and template
+- `PublishedBlogPost` - Published blog post with guaranteed published_at
+- `PublishedPage` - Published page with guaranteed published_at
 - `ImageObject` - Image object with original, thumb, small sizes
 - `SpoolMetadata` - Complete SEO metadata structure
+- `isPublishedContent()` - Type guard for published content
+- `isDraftContent()` - Type guard for draft content
 
 ---
 

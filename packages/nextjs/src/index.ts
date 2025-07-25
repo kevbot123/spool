@@ -23,12 +23,16 @@ export { img } from './utils/image';
 export type { 
   SpoolConfig, 
   SpoolContent,
+  SpoolDraftContent,
+  SpoolPublishedContent,
   SpoolContentLegacy,
   SpoolCollection, 
   SpoolCollectionSchema,
   SpoolField,
   BlogPost,
   Page,
+  PublishedBlogPost,
+  PublishedPage,
   ImageSizes, 
   ImageSize,
   ImageObject,
@@ -40,6 +44,9 @@ export type {
   SpoolContentSingle,
   CollectionContent
 } from './types';
+
+// Type guards
+export { isPublishedContent, isDraftContent } from './types';
 export type { ContentOptions } from './utils/content';
 export type { EnvironmentContext } from './utils/environment';
 export type { ResolvedConfig } from './utils/config';
