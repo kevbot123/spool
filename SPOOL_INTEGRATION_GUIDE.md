@@ -70,12 +70,12 @@ This page fetches all posts from the "blog" collection and displays them in a gr
 
 **`app/blog/page.tsx`**
 ```typescript
-import { getSpoolContent, BlogPost } from '@spoolcms/nextjs';
+import { getSpoolContent, SpoolContent } from '@spoolcms/nextjs';
 import Link from 'next/link';
 
 export default async function BlogIndexPage() {
-  // 1. Fetch all posts from the 'blog' collection with proper typing
-  const posts = await getSpoolContent<BlogPost[]>({ collection: 'blog' });
+  // 1. Fetch all posts from the 'blog' collection - automatically typed as SpoolContent[]
+  const posts = await getSpoolContent({ collection: 'blog' });
 
   return (
     <div>
@@ -105,7 +105,7 @@ This page fetches a single post by its slug from the URL parameters.
 
 **`app/blog/[slug]/page.tsx`**
 ```typescript
-import { getSpoolContent, generateSpoolMetadata, getSpoolStaticParams, BlogPost } from '@spoolcms/nextjs';
+import { getSpoolContent, generateSpoolMetadata, getSpoolStaticParams, SpoolContent } from '@spoolcms/nextjs';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 
@@ -118,8 +118,8 @@ interface PageProps {
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = params;
   
-  // Fetch the single post using the slug from the URL with proper typing
-  const post = await getSpoolContent<BlogPost>({ collection: 'blog', slug });
+  // Fetch the single post using the slug from the URL - automatically typed as SpoolContent
+  const post = await getSpoolContent({ collection: 'blog', slug });
 
   if (!post) {
     return notFound();
@@ -147,7 +147,7 @@ export async function generateStaticParams() {
 
 // Generate metadata for SEO (App Router) - ONE LINE!
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const post = await getSpoolContent<BlogPost>({ collection: 'blog', slug: params.slug });
+  const post = await getSpoolContent({ collection: 'blog', slug: params.slug });
   return generateSpoolMetadata(post); // Auto-detects everything from Next.js context
 }
 ```
@@ -198,25 +198,64 @@ export default async function sitemap() {
 
 Spool provides comprehensive TypeScript support with proper type definitions for all content and functions.
 
-### Built-in Content Types
+### Automatic Type Safety
 
 ```typescript
-import { BlogPost, Page, SpoolContent } from '@spoolcms/nextjs';
+import { getSpoolContent, SpoolContent } from '@spoolcms/nextjs';
 
-// Use built-in types for common collections
-const posts = await getSpoolContent<BlogPost[]>({ collection: 'blog' });
-const pages = await getSpoolContent<Page[]>({ collection: 'pages' });
+// ✅ Automatically typed as SpoolContent[] - no need for explicit typing!
+const posts = await getSpoolContent({ collection: 'blog' });
 
-// Or use the generic SpoolContent for custom collections
-const products = await getSpoolContent<SpoolContent[]>({ collection: 'products' });
+// ✅ Full autocomplete and type safety
+posts[0].title;        // string
+posts[0].body;         // string | undefined
+posts[0].author;       // string | undefined
+posts[0].tags;         // string[] | undefined
+posts[0].ogImage;      // string | ImageObject | undefined
+posts[0].published_at; // string | undefined
+```
+
+### SpoolContent Interface
+
+The main `SpoolContent` interface includes all common fields:
+
+```typescript
+interface SpoolContent {
+  // System fields
+  id: string;
+  slug: string;
+  title: string;
+  status: 'draft' | 'published';
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+  
+  // SEO fields
+  description?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string | ImageObject;
+  
+  // Common content fields
+  body?: string;
+  body_markdown?: string;
+  author?: string;
+  tags?: string[];
+  featured?: boolean;
+  
+  // Custom fields
+  [key: string]: any;
+}
 ```
 
 ### Custom Content Types
 
-Define your own interfaces for custom collections:
+Extend SpoolContent for collection-specific typing:
 
 ```typescript
-interface Product extends SpoolContentBase {
+interface Product extends SpoolContent {
   price: number;
   category: string;
   inStock: boolean;
@@ -224,17 +263,16 @@ interface Product extends SpoolContentBase {
 }
 
 const products = await getSpoolContent<Product[]>({ collection: 'products' });
-// Now you get full type safety and autocomplete!
+// Now you get full type safety for custom fields too!
 ```
 
-### Available Types
+### Built-in Specialized Types
 
-- `SpoolContent<T>` - Generic content interface
-- `BlogPost` - Blog post with body, author, tags, etc.
-- `Page` - Page content with body and template
-- `SpoolCollection` - Collection metadata and schema
-- `SpoolMetadata` - SEO metadata structure
-- All function parameter types with full IntelliSense
+- `SpoolContent` - Main content interface with all common fields
+- `BlogPost` - Blog-specific interface with body, author, tags
+- `Page` - Page-specific interface with body and template
+- `ImageObject` - Image object with original, thumb, small sizes
+- `SpoolMetadata` - Complete SEO metadata structure
 
 ---
 

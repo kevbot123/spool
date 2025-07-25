@@ -252,7 +252,7 @@ export const __testing__ = {
  * - getSpoolContent(config, 'blog') // Old way
  * - getSpoolContent({ collection: 'blog' }) // New simplified way
  */
-export async function getSpoolContent<T = any>(
+export async function getSpoolContent<T = SpoolContent>(
   options: GetSpoolContentOptions
 ): Promise<T> {
   const { collection, slug, config, ...contentOptions } = options;

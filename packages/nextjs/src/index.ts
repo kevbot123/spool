@@ -23,7 +23,6 @@ export { img } from './utils/image';
 export type { 
   SpoolConfig, 
   SpoolContent,
-  SpoolContentBase,
   SpoolContentLegacy,
   SpoolCollection, 
   SpoolCollectionSchema,
@@ -32,6 +31,7 @@ export type {
   Page,
   ImageSizes, 
   ImageSize,
+  ImageObject,
   GetSpoolContentOptions,
   GetSpoolStaticParamsOptions,
   GenerateSpoolSitemapOptions,

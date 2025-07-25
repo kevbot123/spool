@@ -4,8 +4,16 @@ export interface SpoolConfig {
   baseUrl?: string;
 }
 
-// Base content interface with system fields
-export interface SpoolContentBase {
+// Image object interface for ogImage and other image fields
+export interface ImageObject {
+  original: string;
+  thumb: string;
+  small: string;
+}
+
+// Main content interface that matches the flattened API response
+export interface SpoolContent {
+  // System fields
   id: string;
   slug: string;
   title: string;
@@ -14,20 +22,30 @@ export interface SpoolContentBase {
   updated_at: string;
   published_at?: string;
   
-  // SEO fields (available on all content)
+  // SEO fields (available on all content by default)
   description?: string;
   seoTitle?: string;
   seoDescription?: string;
   ogTitle?: string;
   ogDescription?: string;
-  ogImage?: string | ImageSizes;
+  ogImage?: string | ImageObject;
+  
+  // Common content fields
+  body?: string;
+  body_markdown?: string;
+  author?: string;
+  excerpt?: string;
+  tags?: string[];
+  featured?: boolean;
+  template?: string;
+  category?: string;
+  
+  // Allow any additional custom fields
+  [key: string]: any;
 }
 
-// Generic content interface that can be extended
-export type SpoolContent<T = Record<string, any>> = SpoolContentBase & T;
-
-// Common content types for better DX
-export interface BlogPost extends SpoolContentBase {
+// Specific content types for better DX
+export interface BlogPost extends SpoolContent {
   body: string;
   body_markdown?: string;
   author?: string;
@@ -36,7 +54,7 @@ export interface BlogPost extends SpoolContentBase {
   excerpt?: string;
 }
 
-export interface Page extends SpoolContentBase {
+export interface Page extends SpoolContent {
   body: string;
   body_markdown?: string;
   template?: string;
