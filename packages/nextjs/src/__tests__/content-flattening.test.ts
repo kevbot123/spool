@@ -148,7 +148,7 @@ describe('Content Item Flattening', () => {
         clone: jest.fn().mockReturnThis(),
       } as any);
 
-      const result = await getSpoolContent(config, 'blog', 'test-post');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
 
       // Should be able to access all fields directly
       expect(result.id).toBe('123');
@@ -190,7 +190,7 @@ describe('Content Item Flattening', () => {
         clone: jest.fn().mockReturnThis(),
       } as any);
 
-      const result = await getSpoolContent(config, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: config });
 
       expect(result).toHaveLength(2);
       
@@ -231,7 +231,7 @@ describe('Content Item Flattening', () => {
         clone: jest.fn().mockReturnThis(),
       } as any);
 
-      const result = await getSpoolContent(config, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: config });
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('1');
@@ -256,7 +256,7 @@ describe('Content Item Flattening', () => {
         clone: jest.fn().mockReturnThis(),
       } as any);
 
-      const result = await getSpoolContent(config, 'blog', 'test-post', { renderHtml: true });
+      const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', renderHtml: true, config: config });
 
       expect(result.title).toBe('Test Post');
       // body should now default to HTML (React-serializable)
@@ -297,7 +297,7 @@ describe('Content Item Flattening', () => {
         clone: jest.fn().mockReturnThis(),
       } as any);
 
-      const post = await getSpoolContent(config, 'blog', 'test-post');
+      const post = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
 
       // All fields should be accessible with the same pattern: post.fieldName
       expect(post.id).toBe('123');           // System field

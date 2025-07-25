@@ -16,7 +16,7 @@ describe('Body is unusable integration test', () => {
     };
 
     it('should fetch the Audienceful + Stripe post without Body is unusable error', async () => {
-      const result = await getSpoolContent(config, 'blog', 'boost-revenue-with-audienceful-stripe');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'boost-revenue-with-audienceful-stripe', config: config });
       
       expect(result).toBeTruthy();
       expect(result.data?.title).toBe('Boost Revenue with Audienceful + Stripe');
@@ -29,7 +29,7 @@ describe('Body is unusable integration test', () => {
       
       // Make multiple concurrent requests
       const promises = Array(5).fill(null).map(() => 
-        getSpoolContent(config, 'blog', slug)
+        getSpoolContent({ collection: 'blog', slug: slug, config: config })
       );
       
       const results = await Promise.all(promises);

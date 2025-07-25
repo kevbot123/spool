@@ -29,4 +29,29 @@ export interface ImageSizes {
   small: string;
 }
 
-export type ImageSize = 'thumb' | 'small' | 'original'; 
+export type ImageSize = 'thumb' | 'small' | 'original';
+
+// New simplified API types
+export interface GetSpoolContentOptions {
+  collection: string;
+  slug?: string;
+  config?: SpoolConfig;
+  renderHtml?: boolean;
+  revalidate?: number;
+  cache?: 'force-cache' | 'no-store' | 'default';
+}
+
+export interface GetSpoolStaticParamsOptions {
+  collection: string;
+  config?: SpoolConfig;
+}
+
+export interface GenerateSpoolSitemapOptions {
+  collections: string[];
+  staticPages?: {
+    url: string;
+    priority?: number;
+    changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
+  }[];
+  config?: SpoolConfig;
+} 

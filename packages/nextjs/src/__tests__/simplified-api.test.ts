@@ -73,7 +73,7 @@ describe('Simplified API', () => {
       } as Response);
 
       const config = { apiKey: 'test', siteId: 'test' };
-      const params = await getSpoolStaticParams(config, 'blog');
+      const params = await getSpoolStaticParams({ collection: 'blog', config });
 
       expect(params).toEqual([
         { slug: 'post-1' },
@@ -88,7 +88,7 @@ describe('Simplified API', () => {
       } as Response);
 
       const config = { apiKey: 'test', siteId: 'test' };
-      const params = await getSpoolStaticParams(config, 'blog');
+      const params = await getSpoolStaticParams({ collection: 'blog', config });
 
       expect(params).toEqual([]);
     });
@@ -107,12 +107,13 @@ describe('Simplified API', () => {
       } as Response);
 
       const config = { apiKey: 'test', siteId: 'test' };
-      const sitemap = await generateSpoolSitemap(config, {
+      const sitemap = await generateSpoolSitemap({
         collections: ['blog'],
         staticPages: [
           { url: '/', priority: 1.0 },
           { url: '/about', priority: 0.8 }
-        ]
+        ],
+        config
       });
 
       expect(sitemap).toHaveLength(4); // 2 static + 2 blog posts
@@ -149,7 +150,7 @@ describe('Simplified API', () => {
       } as Response);
 
       const config = { apiKey: 'test', siteId: 'test' };
-      const result = await getSpoolContent(config, 'blog', 'test-post');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', config });
 
       expect(result).toEqual(expect.objectContaining({
         title: 'Test Post',

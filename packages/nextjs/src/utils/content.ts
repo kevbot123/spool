@@ -252,26 +252,18 @@ export const __testing__ = {
  * - getSpoolContent(config, 'blog') // Old way
  * - getSpoolContent({ collection: 'blog' }) // New simplified way
  */
+import { GetSpoolContentOptions, GetSpoolStaticParamsOptions, GenerateSpoolSitemapOptions } from '../types';
+
 export async function getSpoolContent<T = any>(
-  configOrOptions: SpoolConfig | { collection: string; slug?: string; config?: SpoolConfig },
-  collection?: string,
-  slug?: string,
-  options?: ContentOptions
+  options: GetSpoolContentOptions
 ): Promise<T> {
-  // Handle new simplified API
-  if (typeof configOrOptions === 'object' && 'collection' in configOrOptions && !collection) {
-    const { collection: col, slug: sl, config: cfg, ...opts } = configOrOptions;
-    const resolvedConfig = cfg || {
-      apiKey: process.env.SPOOL_API_KEY!,
-      siteId: process.env.SPOOL_SITE_ID!,
-    };
-    return getSpoolContent(resolvedConfig, col, sl, opts as ContentOptions);
-  }
+  const { collection, slug, config, ...contentOptions } = options;
   
-  // Handle legacy API
-  const config = configOrOptions as SpoolConfig;
-  // Resolve configuration with environment detection
-  const resolvedConfig = resolveConfig(config);
+  // Use provided config or default from environment
+  const resolvedConfig = resolveConfig(config || {
+    apiKey: process.env.SPOOL_API_KEY!,
+    siteId: process.env.SPOOL_SITE_ID!,
+  });
   
   // Build endpoint URL
   let endpoint = slug 
@@ -280,7 +272,7 @@ export async function getSpoolContent<T = any>(
 
   // Always request HTML for markdown fields by default (better DX)
   // Users can opt out by setting renderHtml: false
-  const shouldRenderHtml = options?.renderHtml !== false;
+  const shouldRenderHtml = contentOptions?.renderHtml !== false;
   if (shouldRenderHtml) {
     endpoint += '?_html=true';
   }
@@ -291,7 +283,7 @@ export async function getSpoolContent<T = any>(
     resolvedConfig.siteId,
     collection,
     slug,
-    options
+    contentOptions
   );
   
   try {
@@ -372,22 +364,10 @@ export async function getSpoolContent<T = any>(
  * Supports both old and new API
  */
 export async function getSpoolStaticParams(
-  configOrOptions: SpoolConfig | { collection: string; config?: SpoolConfig },
-  collection?: string
+  options: GetSpoolStaticParamsOptions
 ): Promise<{ slug: string }[]> {
-  // Handle new simplified API
-  if (typeof configOrOptions === 'object' && 'collection' in configOrOptions && !collection) {
-    const { collection: col, config: cfg } = configOrOptions;
-    const resolvedConfig = cfg || {
-      apiKey: process.env.SPOOL_API_KEY!,
-      siteId: process.env.SPOOL_SITE_ID!,
-    };
-    return getSpoolStaticParams(resolvedConfig, col);
-  }
-  
-  // Handle legacy API
-  const config = configOrOptions as SpoolConfig;
-  const items = await getSpoolContent<any[]>(config, collection!);
+  const { collection, config } = options;
+  const items = await getSpoolContent<any[]>({ collection, config });
   return Array.isArray(items) ? items.map(item => ({ slug: item.slug })) : [];
 }
 
@@ -396,28 +376,9 @@ export async function getSpoolStaticParams(
  * Supports both old and new API
  */
 export async function generateSpoolSitemap(
-  configOrOptions: SpoolConfig | { 
-    collections: string[]; 
-    staticPages?: { url: string; priority?: number; changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never' }[];
-    config?: SpoolConfig;
-  },
-  options?: {
-    collections: string[];
-    staticPages?: { url: string; priority?: number; changeFrequency?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never' }[];
-  }
+  options: GenerateSpoolSitemapOptions
 ): Promise<any[]> {
-  // Handle new simplified API
-  if (typeof configOrOptions === 'object' && 'collections' in configOrOptions && !options) {
-    const { collections, staticPages, config: cfg } = configOrOptions;
-    const resolvedConfig = cfg || {
-      apiKey: process.env.SPOOL_API_KEY!,
-      siteId: process.env.SPOOL_SITE_ID!,
-    };
-    return generateSpoolSitemap(resolvedConfig, { collections, staticPages });
-  }
-  
-  // Handle legacy API
-  const config = configOrOptions as SpoolConfig;
+  const { collections, staticPages, config } = options;
   // Auto-detect site URL
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
@@ -426,8 +387,8 @@ export async function generateSpoolSitemap(
   const sitemap: any[] = [];
   
   // Add static pages
-  if (options.staticPages) {
-    sitemap.push(...options.staticPages.map(page => ({
+  if (staticPages) {
+    sitemap.push(...staticPages.map(page => ({
       url: `${siteUrl}${page.url}`,
       lastModified: new Date(),
       changeFrequency: page.changeFrequency || 'monthly',
@@ -436,9 +397,9 @@ export async function generateSpoolSitemap(
   }
   
   // Add content from collections
-  for (const collection of options.collections) {
+  for (const collection of collections) {
     try {
-      const items = await getSpoolContent<any[]>(config, collection);
+      const items = await getSpoolContent<any[]>({ collection, config });
       if (Array.isArray(items)) {
         sitemap.push(...items.map(item => ({
           url: `${siteUrl}/${collection}/${item.slug}`,

@@ -46,7 +46,7 @@ describe('SpoolCMS Content Utilities', () => {
         json: async () => mockData,
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual(mockData);
       expect(mockFetch).toHaveBeenCalledWith(
@@ -67,7 +67,7 @@ describe('SpoolCMS Content Utilities', () => {
         json: async () => mockData,
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog', 'post-1');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'post-1', config: mockConfig });
 
       expect(result).toEqual(mockData);
       expect(mockFetch).toHaveBeenCalledWith(
@@ -87,7 +87,7 @@ describe('SpoolCMS Content Utilities', () => {
         statusText: 'Not Found',
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       // TODO: Fix error logging test - skipping for now to focus on main bug fix
@@ -101,7 +101,7 @@ describe('SpoolCMS Content Utilities', () => {
         statusText: 'Not Found',
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog', 'non-existent');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'non-existent', config: mockConfig });
 
       expect(result).toBeNull();
       // TODO: Fix error logging test - skipping for now to focus on main bug fix
@@ -111,7 +111,7 @@ describe('SpoolCMS Content Utilities', () => {
     it('should return empty array for collection request on network error', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Unexpected error: Network error');
@@ -120,7 +120,7 @@ describe('SpoolCMS Content Utilities', () => {
     it('should return null for slug request on network error', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      const result = await getSpoolContent(mockConfig, 'blog', 'post-1');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'post-1', config: mockConfig });
 
       expect(result).toBeNull();
       expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Unexpected error: Network error');
@@ -134,7 +134,7 @@ describe('SpoolCMS Content Utilities', () => {
         },
       } as unknown as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: Invalid JSON');
@@ -147,7 +147,7 @@ describe('SpoolCMS Content Utilities', () => {
         json: async () => ({ items: [{ id: '1', title: 'Post 1' }] }),
       } as Response);
 
-      const result1 = await getSpoolContent(mockConfig, 'blog');
+      const result1 = await getSpoolContent({ collection: 'blog', config: mockConfig });
       expect(result1).toEqual([{ id: '1', title: 'Post 1' }]);
 
       // Test with direct array
@@ -156,7 +156,7 @@ describe('SpoolCMS Content Utilities', () => {
         json: async () => [{ id: '2', title: 'Post 2' }],
       } as Response);
 
-      const result2 = await getSpoolContent(mockConfig, 'posts');
+      const result2 = await getSpoolContent({ collection: 'posts', config: mockConfig });
       expect(result2).toEqual([{ id: '2', title: 'Post 2' }]);
 
       // Test with unexpected format
@@ -165,7 +165,7 @@ describe('SpoolCMS Content Utilities', () => {
         json: async () => ({ unexpected: 'format' }),
       } as Response);
 
-      const result3 = await getSpoolContent(mockConfig, 'other');
+      const result3 = await getSpoolContent({ collection: 'other', config: mockConfig });
       expect(result3).toEqual([]);
     });
 
@@ -175,7 +175,7 @@ describe('SpoolCMS Content Utilities', () => {
         json: async () => [{ id: '1', title: 'Post 1', content: '<p>HTML content</p>' }],
       } as Response);
 
-      await getSpoolContent(mockConfig, 'blog', undefined, { renderHtml: true });
+      await getSpoolContent({ collection: 'blog', renderHtml: true, config: mockConfig });
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://test.spoolcms.com/api/spool/test-site-id/content/blog?_html=true',
@@ -277,7 +277,7 @@ describe('SpoolCMS Content Utilities', () => {
       mockFetch.mockResolvedValueOnce(mockResponse as any);
 
       // This should not throw an error about body consumption
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(mockResponse.json).not.toHaveBeenCalled(); // Should not try to read body on error
@@ -304,9 +304,9 @@ describe('SpoolCMS Content Utilities', () => {
 
       // Make concurrent requests
       const promises = [
-        getSpoolContent(mockConfig, 'blog'),
-        getSpoolContent(mockConfig, 'posts'),
-        getSpoolContent(mockConfig, 'pages'),
+        getSpoolContent({ collection: 'blog', config: mockConfig }),
+        getSpoolContent({ collection: 'posts', config: mockConfig }),
+        getSpoolContent({ collection: 'pages', config: mockConfig }),
       ];
 
       const results = await Promise.all(promises);

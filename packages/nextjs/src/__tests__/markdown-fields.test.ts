@@ -35,7 +35,7 @@ describe('Markdown Fields', () => {
       clone: jest.fn().mockReturnThis()
     } as any);
 
-    const post = await getSpoolContent(config, 'blog', 'test-post');
+    const post = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
 
     // Should return HTML by default
     expect(typeof post.body).toBe('string');

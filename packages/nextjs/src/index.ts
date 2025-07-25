@@ -20,7 +20,16 @@ export { clearAllCaches } from './utils/cache';
 export { img } from './utils/image';
 
 // Types
-export type { SpoolConfig, SpoolContent, SpoolCollection, ImageSizes, ImageSize } from './types';
+export type { 
+  SpoolConfig, 
+  SpoolContent, 
+  SpoolCollection, 
+  ImageSizes, 
+  ImageSize,
+  GetSpoolContentOptions,
+  GetSpoolStaticParamsOptions,
+  GenerateSpoolSitemapOptions
+} from './types';
 export type { ContentOptions } from './utils/content';
 export type { EnvironmentContext } from './utils/environment';
 export type { ResolvedConfig } from './utils/config';

@@ -42,7 +42,7 @@ describe('SpoolCMS Integration Tests', () => {
         statusText: 'Too Many Requests',
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: HTTP 429 Too Many Requests');
@@ -55,7 +55,7 @@ describe('SpoolCMS Integration Tests', () => {
         statusText: 'Internal Server Error',
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: HTTP 500 Internal Server Error');
@@ -68,7 +68,7 @@ describe('SpoolCMS Integration Tests', () => {
         statusText: 'Unauthorized',
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS API error: HTTP 401 Unauthorized');
@@ -82,7 +82,7 @@ describe('SpoolCMS Integration Tests', () => {
         },
       } as unknown as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS content fetch failed:', expect.any(SyntaxError));
@@ -91,7 +91,7 @@ describe('SpoolCMS Integration Tests', () => {
     it('should handle network timeouts', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Request timeout'));
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS content fetch failed:', expect.any(Error));
@@ -100,7 +100,7 @@ describe('SpoolCMS Integration Tests', () => {
     it('should handle DNS resolution failures', async () => {
       mockFetch.mockRejectedValueOnce(new Error('getaddrinfo ENOTFOUND'));
 
-      const result = await getSpoolContent(mockConfig, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(result).toEqual([]);
       expect(console.error).toHaveBeenCalledWith('SpoolCMS content fetch failed:', expect.any(Error));
@@ -126,8 +126,8 @@ describe('SpoolCMS Integration Tests', () => {
 
       // Make concurrent requests
       const [blogContent, pageContent, collections] = await Promise.all([
-        getSpoolContent(mockConfig, 'blog'),
-        getSpoolContent(mockConfig, 'pages'),
+        getSpoolContent({ collection: 'blog', config: mockConfig }),
+        getSpoolContent({ collection: 'pages', config: mockConfig }),
         getSpoolCollections(mockConfig),
       ]);
 
@@ -151,9 +151,9 @@ describe('SpoolCMS Integration Tests', () => {
         .mockRejectedValueOnce(new Error('Network error'));
 
       const [success, notFound, networkError] = await Promise.all([
-        getSpoolContent(mockConfig, 'blog'),
-        getSpoolContent(mockConfig, 'nonexistent'),
-        getSpoolContent(mockConfig, 'error'),
+        getSpoolContent({ collection: 'blog', config: mockConfig }),
+        getSpoolContent({ collection: 'nonexistent', config: mockConfig }),
+        getSpoolContent({ collection: 'error', config: mockConfig }),
       ]);
 
       expect(success).toEqual([{ id: '1', title: 'Success' }]);
@@ -170,7 +170,7 @@ describe('SpoolCMS Integration Tests', () => {
         json: async () => [],
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'empty-collection');
+      const result = await getSpoolContent({ collection: 'empty-collection', config: mockConfig });
 
       expect(result).toEqual([]);
     });
@@ -181,7 +181,7 @@ describe('SpoolCMS Integration Tests', () => {
         json: async () => null,
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'blog', 'nonexistent-slug');
+      const result = await getSpoolContent({ collection: 'blog', slug: 'nonexistent-slug', config: mockConfig });
 
       expect(result).toBeNull();
     });
@@ -199,7 +199,7 @@ describe('SpoolCMS Integration Tests', () => {
         json: async () => largeArray,
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'large-collection');
+      const result = await getSpoolContent({ collection: 'large-collection', config: mockConfig });
 
       expect(result).toHaveLength(1000);
       expect(result[0]).toEqual(expect.objectContaining({
@@ -219,7 +219,7 @@ describe('SpoolCMS Integration Tests', () => {
         json: async () => unicodeData,
       } as Response);
 
-      const result = await getSpoolContent(mockConfig, 'unicode-collection');
+      const result = await getSpoolContent({ collection: 'unicode-collection', config: mockConfig });
 
       expect(result).toEqual(unicodeData);
     });
@@ -238,7 +238,7 @@ describe('SpoolCMS Integration Tests', () => {
         json: async () => [{ id: '1', title: 'Post' }],
       } as Response);
 
-      const result = await getSpoolContent(configWithoutBaseUrl, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: configWithoutBaseUrl });
 
       expect(result).toEqual([{ id: '1', title: 'Post' }]);
       // Should use default baseUrl
@@ -261,7 +261,7 @@ describe('SpoolCMS Integration Tests', () => {
         statusText: 'Unauthorized',
       } as Response);
 
-      const result = await getSpoolContent(configWithEmptyKey, 'blog');
+      const result = await getSpoolContent({ collection: 'blog', config: configWithEmptyKey });
 
       expect(result).toEqual([]);
       expect(mockFetch).toHaveBeenCalledWith(
@@ -281,7 +281,7 @@ describe('SpoolCMS Integration Tests', () => {
       mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const [blogPosts, collections] = await Promise.all([
-        getSpoolContent(mockConfig, 'blog'),
+        getSpoolContent({ collection: 'blog', config: mockConfig }),
         getSpoolCollections(mockConfig),
       ]);
 
@@ -302,8 +302,8 @@ describe('SpoolCMS Integration Tests', () => {
           json: async () => [{ id: '1', title: 'Post' }],
         } as Response);
 
-      const firstResult = await getSpoolContent(mockConfig, 'blog');
-      const secondResult = await getSpoolContent(mockConfig, 'blog');
+      const firstResult = await getSpoolContent({ collection: 'blog', config: mockConfig });
+      const secondResult = await getSpoolContent({ collection: 'blog', config: mockConfig });
 
       expect(firstResult).toEqual([]);
       expect(secondResult).toEqual([{ id: '1', title: 'Post' }]);
@@ -323,7 +323,7 @@ describe('SpoolCMS Integration Tests', () => {
         } as Response);
 
       const [content, collections] = await Promise.all([
-        getSpoolContent(mockConfig, 'blog'),
+        getSpoolContent({ collection: 'blog', config: mockConfig }),
         getSpoolCollections(mockConfig),
       ]);
 

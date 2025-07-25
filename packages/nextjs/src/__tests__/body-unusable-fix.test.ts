@@ -55,7 +55,7 @@ describe('Body is unusable error fix', () => {
       clone: jest.fn().mockReturnThis(),
     });
 
-    const result = await getSpoolContent(config, 'blog', 'test-post');
+    const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
     
     // Should return flattened structure
     expect(result.id).toBe('1');
@@ -104,7 +104,7 @@ describe('Body is unusable error fix', () => {
       clone: jest.fn().mockReturnThis(),
     });
 
-    const result = await getSpoolContent(config, 'blog', 'test-post');
+    const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
     
     // Should return flattened structure
     expect(result.id).toBe('1');
@@ -140,7 +140,7 @@ describe('Body is unusable error fix', () => {
     });
 
     // Should return null instead of throwing (error handling in getSpoolContent)
-    const result = await getSpoolContent(config, 'blog', 'test-post');
+    const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
     expect(result).toBeNull();
 
     // Should only make 1 fetch call (no retry for syntax errors)
