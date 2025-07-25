@@ -54,15 +54,19 @@ export interface SpoolPublishedContent extends SpoolContentBase {
   published_at: string;
 }
 
-// Union type for all content
-export type SpoolContent = SpoolDraftContent | SpoolPublishedContent;
+// Default SpoolContent type assumes published content (most common use case)
+// This means published_at is guaranteed to exist for typical usage
+export type SpoolContent = SpoolPublishedContent;
 
-// Type guards for narrowing content types
-export function isPublishedContent(content: SpoolContent): content is SpoolPublishedContent {
+// Union type for when you need both draft and published content
+export type SpoolContentWithDrafts = SpoolDraftContent | SpoolPublishedContent;
+
+// Type guards for narrowing content types (use with SpoolContentWithDrafts)
+export function isPublishedContent(content: SpoolContentWithDrafts): content is SpoolPublishedContent {
   return content.status === 'published';
 }
 
-export function isDraftContent(content: SpoolContent): content is SpoolDraftContent {
+export function isDraftContent(content: SpoolContentWithDrafts): content is SpoolDraftContent {
   return content.status === 'draft';
 }
 
@@ -149,6 +153,7 @@ export interface GetSpoolContentOptions {
   renderHtml?: boolean;
   revalidate?: number;
   cache?: 'force-cache' | 'no-store' | 'default';
+  includeDrafts?: boolean; // When true, returns SpoolContentWithDrafts
 }
 
 export interface GetSpoolStaticParamsOptions {

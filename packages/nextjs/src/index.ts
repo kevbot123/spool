@@ -23,6 +23,7 @@ export { img } from './utils/image';
 export type { 
   SpoolConfig, 
   SpoolContent,
+  SpoolContentWithDrafts,
   SpoolDraftContent,
   SpoolPublishedContent,
   SpoolContentLegacy,

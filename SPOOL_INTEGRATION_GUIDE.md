@@ -201,67 +201,64 @@ Spool provides comprehensive TypeScript support with proper type definitions for
 ### Automatic Type Safety
 
 ```typescript
-import { getSpoolContent, SpoolContent, isPublishedContent } from '@spoolcms/nextjs';
+import { getSpoolContent, SpoolContent } from '@spoolcms/nextjs';
 
-// ✅ Automatically typed as SpoolContent[] - no need for explicit typing!
+// ✅ Automatically typed as SpoolContent[] - only published content by default!
 const posts = await getSpoolContent({ collection: 'blog' });
 
-// ✅ Full autocomplete and type safety
+// ✅ Full autocomplete and type safety - published_at is guaranteed to exist
 posts[0].title;        // string
 posts[0].body;         // string | undefined
 posts[0].author;       // string | undefined
 posts[0].tags;         // string[] | undefined
 posts[0].ogImage;      // string | ImageObject | undefined
+posts[0].published_at; // string (always present - no undefined check needed!)
+posts[0].status;       // 'published' (always published)
 
-// ✅ Type-safe published_at handling
-if (isPublishedContent(posts[0])) {
-  posts[0].published_at; // string (guaranteed to exist for published content)
-} else {
-  posts[0].published_at; // undefined (draft content)
-}
+// ✅ Use published_at directly - no type guards needed!
+const publishDate = new Date(posts[0].published_at);
+console.log(`Published on ${publishDate.toLocaleDateString()}`);
 ```
 
-### SpoolContent Types
+### Default Behavior: Published Content Only
 
-Spool provides accurate TypeScript types that reflect the actual behavior:
+By default, `getSpoolContent` only returns published content, which means:
 
 ```typescript
-// Draft content - published_at is undefined
-interface SpoolDraftContent {
-  status: 'draft';
-  published_at?: undefined;
-  // ... other fields
-}
+// ✅ Default behavior - only published content
+const posts = await getSpoolContent({ collection: 'blog' });
 
-// Published content - published_at is guaranteed to exist
-interface SpoolPublishedContent {
-  status: 'published';
-  published_at: string; // Always present for published content
-  // ... other fields
-}
+// TypeScript knows these are all published posts
+posts[0].status;       // 'published' (always)
+posts[0].published_at; // string (guaranteed to exist)
 
-// Union type
-type SpoolContent = SpoolDraftContent | SpoolPublishedContent;
+// No type guards needed - use published_at directly!
+posts.forEach(post => {
+  console.log(`Published: ${new Date(post.published_at).toLocaleDateString()}`);
+});
 ```
 
-### Type Guards for Safe Access
+### Including Draft Content
+
+When you need draft content (e.g., in admin interfaces), use `includeDrafts: true`:
 
 ```typescript
-import { isPublishedContent, isDraftContent } from '@spoolcms/nextjs';
+import { getSpoolContent, SpoolContentWithDrafts, isPublishedContent } from '@spoolcms/nextjs';
 
-const post = await getSpoolContent({ collection: 'blog', slug: 'my-post' });
+// ✅ Include both draft and published content
+const allPosts = await getSpoolContent<SpoolContentWithDrafts[]>({ 
+  collection: 'blog', 
+  includeDrafts: true 
+});
 
-if (isPublishedContent(post)) {
-  // TypeScript knows published_at exists
-  const publishDate = new Date(post.published_at); // ✅ No undefined check needed
-  console.log(`Published on ${publishDate.toLocaleDateString()}`);
-}
-
-if (isDraftContent(post)) {
-  // TypeScript knows this is a draft
-  console.log('This post is still a draft');
-  // post.published_at is undefined here
-}
+// Now you need type guards since drafts are included
+allPosts.forEach(post => {
+  if (isPublishedContent(post)) {
+    console.log(`Published: ${new Date(post.published_at).toLocaleDateString()}`);
+  } else {
+    console.log(`Draft: ${post.title}`);
+  }
+});
 ```
 
 ### Custom Content Types
@@ -279,29 +276,27 @@ interface Product extends SpoolContent {
 const products = await getSpoolContent<Product[]>({ collection: 'products' });
 
 // Type-safe access to custom fields
-products[0].price;    // number
-products[0].category; // string
-products[0].inStock;  // boolean
+products[0].price;        // number
+products[0].category;     // string
+products[0].inStock;      // boolean
+products[0].published_at; // string (guaranteed - no type guard needed!)
 
-// Still get the published_at type safety
-if (isPublishedContent(products[0])) {
-  products[0].published_at; // string (guaranteed)
-}
+// Use published_at directly since only published content is returned
+const publishDate = new Date(products[0].published_at);
 ```
 
 ### Built-in Specialized Types
 
-- `SpoolContent` - Union type for draft and published content
+- `SpoolContent` - Published content only (default) - `published_at` guaranteed
+- `SpoolContentWithDrafts` - Union type including both draft and published content
 - `SpoolDraftContent` - Draft content (published_at is undefined)
 - `SpoolPublishedContent` - Published content (published_at guaranteed)
 - `BlogPost` - Blog-specific interface with body, author, tags
 - `Page` - Page-specific interface with body and template
-- `PublishedBlogPost` - Published blog post with guaranteed published_at
-- `PublishedPage` - Published page with guaranteed published_at
 - `ImageObject` - Image object with original, thumb, small sizes
 - `SpoolMetadata` - Complete SEO metadata structure
-- `isPublishedContent()` - Type guard for published content
-- `isDraftContent()` - Type guard for draft content
+- `isPublishedContent()` - Type guard for published content (when using `includeDrafts: true`)
+- `isDraftContent()` - Type guard for draft content (when using `includeDrafts: true`)
 
 ---
 

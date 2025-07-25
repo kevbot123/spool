@@ -268,11 +268,25 @@ export async function getSpoolContent<T = SpoolContent>(
     ? `/api/spool/${resolvedConfig.siteId}/content/${collection}/${slug}`
     : `/api/spool/${resolvedConfig.siteId}/content/${collection}`;
 
+  // Build query parameters
+  const queryParams = new URLSearchParams();
+  
   // Always request HTML for markdown fields by default (better DX)
   // Users can opt out by setting renderHtml: false
   const shouldRenderHtml = contentOptions?.renderHtml !== false;
   if (shouldRenderHtml) {
-    endpoint += '?_html=true';
+    queryParams.set('_html', 'true');
+  }
+  
+  // By default, only return published content (better DX for public sites)
+  // Users can opt in to include drafts with includeDrafts: true
+  if (!contentOptions?.includeDrafts) {
+    queryParams.set('status', 'published');
+  }
+  
+  // Add query parameters to endpoint if any exist
+  if (queryParams.toString()) {
+    endpoint += '?' + queryParams.toString();
   }
   
   const url = `${resolvedConfig.baseUrl}${endpoint}`;
