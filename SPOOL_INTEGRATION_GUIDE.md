@@ -70,18 +70,18 @@ This page fetches all posts from the "blog" collection and displays them in a gr
 
 **`app/blog/page.tsx`**
 ```typescript
-import { getSpoolContent } from '@spoolcms/nextjs';
+import { getSpoolContent, BlogPost } from '@spoolcms/nextjs';
 import Link from 'next/link';
 
 export default async function BlogIndexPage() {
-  // 1. Fetch all posts from the 'blog' collection
-  const posts = await getSpoolContent({ collection: 'blog' });
+  // 1. Fetch all posts from the 'blog' collection with proper typing
+  const posts = await getSpoolContent<BlogPost[]>({ collection: 'blog' });
 
   return (
     <div>
       <h1>The Blog</h1>
       <div>
-        {posts.map((post: any) => (
+        {posts.map((post) => (
           <Link href={`/blog/${post.slug}`} key={post.id}>
             <article>
               <img src={post.ogImage} alt={post.title} />
@@ -105,7 +105,7 @@ This page fetches a single post by its slug from the URL parameters.
 
 **`app/blog/[slug]/page.tsx`**
 ```typescript
-import { getSpoolContent, generateSpoolMetadata, getSpoolStaticParams } from '@spoolcms/nextjs';
+import { getSpoolContent, generateSpoolMetadata, getSpoolStaticParams, BlogPost } from '@spoolcms/nextjs';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 
@@ -118,8 +118,8 @@ interface PageProps {
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = params;
   
-  // Fetch the single post using the slug from the URL
-  const post = await getSpoolContent({ collection: 'blog', slug });
+  // Fetch the single post using the slug from the URL with proper typing
+  const post = await getSpoolContent<BlogPost>({ collection: 'blog', slug });
 
   if (!post) {
     return notFound();
@@ -134,7 +134,7 @@ export default async function BlogPostPage({ params }: PageProps) {
       
       <img src={post.ogImage} alt={post.title} />
       
-      {/* Markdown fields cane be rendered as HTML automatically - simple and React-compatible! */}
+      {/* Markdown fields can be rendered as HTML automatically - simple and React-compatible! */}
       <div dangerouslySetInnerHTML={{ __html: post.body }} />
     </article>
   );
@@ -147,7 +147,7 @@ export async function generateStaticParams() {
 
 // Generate metadata for SEO (App Router) - ONE LINE!
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const post = await getSpoolContent({ collection: 'blog', slug: params.slug });
+  const post = await getSpoolContent<BlogPost>({ collection: 'blog', slug: params.slug });
   return generateSpoolMetadata(post); // Auto-detects everything from Next.js context
 }
 ```
@@ -191,6 +191,50 @@ export default async function sitemap() {
 ```
 
 **That's it!** Auto-generates URLs, handles `lastModified` dates, sets appropriate priorities.
+
+---
+
+## TypeScript Support
+
+Spool provides comprehensive TypeScript support with proper type definitions for all content and functions.
+
+### Built-in Content Types
+
+```typescript
+import { BlogPost, Page, SpoolContent } from '@spoolcms/nextjs';
+
+// Use built-in types for common collections
+const posts = await getSpoolContent<BlogPost[]>({ collection: 'blog' });
+const pages = await getSpoolContent<Page[]>({ collection: 'pages' });
+
+// Or use the generic SpoolContent for custom collections
+const products = await getSpoolContent<SpoolContent[]>({ collection: 'products' });
+```
+
+### Custom Content Types
+
+Define your own interfaces for custom collections:
+
+```typescript
+interface Product extends SpoolContentBase {
+  price: number;
+  category: string;
+  inStock: boolean;
+  images: string[];
+}
+
+const products = await getSpoolContent<Product[]>({ collection: 'products' });
+// Now you get full type safety and autocomplete!
+```
+
+### Available Types
+
+- `SpoolContent<T>` - Generic content interface
+- `BlogPost` - Blog post with body, author, tags, etc.
+- `Page` - Page content with body and template
+- `SpoolCollection` - Collection metadata and schema
+- `SpoolMetadata` - SEO metadata structure
+- All function parameter types with full IntelliSense
 
 ---
 

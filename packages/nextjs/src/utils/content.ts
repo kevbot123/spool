@@ -1,4 +1,4 @@
-import { SpoolConfig } from '../types';
+import { SpoolConfig, GetSpoolContentOptions, GetSpoolStaticParamsOptions, GenerateSpoolSitemapOptions, SpoolMetadata, SpoolContent } from '../types';
 import { resolveConfig, ResolvedConfig } from './config';
 import { generateCacheKey, globalCache, createCachedFetch } from './cache';
 import { detectEnvironment } from './environment';
@@ -252,8 +252,6 @@ export const __testing__ = {
  * - getSpoolContent(config, 'blog') // Old way
  * - getSpoolContent({ collection: 'blog' }) // New simplified way
  */
-import { GetSpoolContentOptions, GetSpoolStaticParamsOptions, GenerateSpoolSitemapOptions } from '../types';
-
 export async function getSpoolContent<T = any>(
   options: GetSpoolContentOptions
 ): Promise<T> {
@@ -322,7 +320,7 @@ export async function getSpoolContent<T = any>(
     if (slug) {
       // Single item - return just the item (could be null if not found)
       const item = (data as any)?.item ?? data ?? null;
-      return item ? flattenContentItem(item) as T : null as T;
+      return item ? flattenContentItem(item) as T : (null as any);
     }
     
     // Collection request – always return an array for consistency
@@ -334,13 +332,13 @@ export async function getSpoolContent<T = any>(
     }
     
     // Flatten each item in the collection
-    return items.map(item => flattenContentItem(item)) as T;
+    return items.map(item => flattenContentItem(item)) as any;
     
   } catch (error) {
     if (error instanceof SpoolError) {
       // For NOT_FOUND errors, return appropriate empty values
       if (error.code === 'NOT_FOUND') {
-        return (slug ? null : []) as T;
+        return (slug ? null : []) as any;
       }
       
       // Log API errors for debugging
@@ -355,7 +353,7 @@ export async function getSpoolContent<T = any>(
     }
     
     // Always return empty values on any error to prevent breaking the UI
-    return (slug ? null : []) as T;
+    return (slug ? null : []) as any;
   }
 }
 
@@ -492,9 +490,20 @@ export async function getSpoolCollections(config?: SpoolConfig) {
  * Generate metadata for Next.js App Router - SIMPLIFIED VERSION
  * Auto-detects site URL, path, and everything else from Next.js context
  */
-export function generateSpoolMetadata(content: any): any {
+export function generateSpoolMetadata(content: any): SpoolMetadata {
   if (!content) {
-    return { title: 'Content Not Found' };
+    return { 
+      title: 'Content Not Found',
+      description: '',
+      openGraph: {
+        title: 'Content Not Found',
+        description: '',
+        siteName: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+        images: [],
+        type: 'article',
+      },
+      robots: 'noindex,nofollow',
+    };
   }
   
   // Auto-detect site URL from environment
@@ -502,22 +511,24 @@ export function generateSpoolMetadata(content: any): any {
                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
                   'http://localhost:3000';
   
-  const title = content.seoTitle || content.title || 'Untitled';
-  const description = content.seoDescription || content.description || content.excerpt || '';
+  const title = content?.seoTitle || content?.title || 'Untitled';
+  const description = content?.seoDescription || content?.description || content?.excerpt || '';
   
-  // Auto-generate OG image URL if not provided
-  const ogImage = content.ogImage || `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
+  // Handle ogImage which can be string or ImageSizes object
+  const ogImageUrl = content?.ogImage 
+    ? (typeof content.ogImage === 'string' ? content.ogImage : content.ogImage.original)
+    : `${siteUrl}/api/og?title=${encodeURIComponent(title)}`;
   
   return {
     title,
     description,
     openGraph: {
-      title: content.ogTitle || title,
-      description: content.ogDescription || description,
+      title: content?.ogTitle || title,
+      description: content?.ogDescription || description,
       siteName: siteUrl,
       images: [
         {
-          url: ogImage,
+          url: ogImageUrl,
           width: 1200,
           height: 630,
           alt: title,
@@ -529,9 +540,9 @@ export function generateSpoolMetadata(content: any): any {
       card: 'summary_large_image',
       title: title,
       description: description,
-      images: [ogImage],
+      images: [ogImageUrl],
     },
-    robots: content.noIndex ? 'noindex,nofollow' : 'index,follow',
+    robots: content?.noIndex ? 'noindex,nofollow' : 'index,follow',
   };
 }
 

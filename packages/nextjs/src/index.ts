@@ -22,13 +22,23 @@ export { img } from './utils/image';
 // Types
 export type { 
   SpoolConfig, 
-  SpoolContent, 
+  SpoolContent,
+  SpoolContentBase,
+  SpoolContentLegacy,
   SpoolCollection, 
+  SpoolCollectionSchema,
+  SpoolField,
+  BlogPost,
+  Page,
   ImageSizes, 
   ImageSize,
   GetSpoolContentOptions,
   GetSpoolStaticParamsOptions,
-  GenerateSpoolSitemapOptions
+  GenerateSpoolSitemapOptions,
+  SpoolMetadata,
+  SpoolContentArray,
+  SpoolContentSingle,
+  CollectionContent
 } from './types';
 export type { ContentOptions } from './utils/content';
 export type { EnvironmentContext } from './utils/environment';
