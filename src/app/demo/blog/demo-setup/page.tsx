@@ -77,7 +77,6 @@ export default function DemoSetupPage() {
                 <ul className="space-y-2 text-sm">
                   <li><strong>Name:</strong> Blog Posts</li>
                   <li><strong>Slug:</strong> blog</li>
-                  <li><strong>URL Pattern:</strong> /blog/[slug]</li>
                 </ul>
               </div>
 

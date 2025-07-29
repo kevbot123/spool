@@ -877,7 +877,7 @@ export function CollectionTable({
   const MemoizedRowMenu = useMemo(() => {
     return ({ row }: { row: any }) => {
       const isPublished = (row.original as any).status === 'published';
-      const viewUrl = localCollection.urlPattern.replace('{slug}', row.original.slug);
+      const viewUrl = `/${localCollection.slug}/${row.original.slug}`;
       const hasPendingChanges = pendingChanges.has(row.original.id);
       
       return (
@@ -894,7 +894,7 @@ export function CollectionTable({
         </div>
       );
     };
-  }, [localCollection.urlPattern, deleteItem, togglePublish, pendingChanges, republishItem, clearPendingChanges]);
+  }, [localCollection.slug, deleteItem, togglePublish, pendingChanges, republishItem, clearPendingChanges]);
 
   // Add the "more actions" column
   const moreActionsColumn: ColumnDef<ContentItem> = {

@@ -112,7 +112,6 @@ The demo blog expects a collection with the following schema:
 {
   name: "Blog Posts",
   slug: "blog", 
-  urlPattern: "/blog/[slug]",
   fields: [
     { name: "title", type: "text", required: true },
     { name: "excerpt", type: "text", required: true },

@@ -49,8 +49,8 @@ export class ContentManager {
   }
 
   async getContentByUrl(url: string): Promise<ContentItem | null> {
-    // This would need collection config to parse URL patterns
-    // For now, implement basic logic
+    // URL parsing is now handled by Next.js routing
+    // This method can be simplified or removed as needed
     const parts = url.split('/').filter(Boolean);
     if (parts.length < 2) return null;
 

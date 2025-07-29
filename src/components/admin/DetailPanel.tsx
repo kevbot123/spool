@@ -249,17 +249,14 @@ export function DetailPanel({
     const domain = currentSite?.domain || 'yoursite.com';
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
     
-    // Use the collection's urlPattern if available, otherwise fall back to /{collection.slug}
-    const urlPattern = collection.urlPattern || `/${collection.slug}/{slug}`;
-    
-    // Replace {slug} placeholder with empty for display purposes  
-    const pathPattern = urlPattern.replace('{slug}', '');
+    // URL structure is now handled by Next.js routing
+    const pathPattern = `/${collection.slug}/`;
     
     return {
       domain: cleanDomain,
       path: pathPattern
     };
-  }, [currentSite?.domain, collection.urlPattern, collection.slug]);
+  }, [currentSite?.domain, collection.slug]);
 
   // Helper to get the effective OG title
   const getOgTitle = () => {

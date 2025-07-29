@@ -27,7 +27,6 @@ export interface CollectionConfig {
   slug: string;
   description?: string;
   contentPath: string;
-  urlPattern: string;
   fields: FieldConfig[];
   settings?: {
     allowCreate?: boolean;

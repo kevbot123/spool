@@ -87,7 +87,7 @@ CREATE INDEX idx_content_published ON content_items(published_at DESC);
 - ✅ **Real-time preview** of content structure
 - ✅ **Collection templates** for common use cases (blog, pages, portfolio)
 - ✅ **Field validation rules** (required, min/max length, regex)
-- ✅ **URL structure control** (subfolder configuration)
+- ✅ **URL structure control** (handled by Next.js routing)
 
 **Example collections created in UI:**
 - **Blog**: title (text), excerpt (textarea), body (markdown), publishedAt (datetime), featured (boolean)

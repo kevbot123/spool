@@ -104,7 +104,6 @@ export default function CollectionSetupModal({
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
-  const [urlPattern, setUrlPattern] = useState('');
   const [fields, setFields] = useState<FieldConfig[]>([]);
   const [editingField, setEditingField] = useState<FieldConfig | null>(null);
   const [showFieldEditor, setShowFieldEditor] = useState(false);
@@ -136,7 +135,6 @@ export default function CollectionSetupModal({
         setName(existingCollection.name);
         setSlug(existingCollection.slug);
         setDescription(existingCollection.description || '');
-        setUrlPattern(existingCollection.urlPattern);
         // Filter out default fields when editing
         const customFields = existingCollection.fields.filter(field => 
           !['title', 'description', 'slug', 'seoTitle', 'seoDescription', 'ogTitle', 'ogDescription', 'ogImage', 'status', 'dateLastModified', 'datePublished'].includes(field.name)
@@ -146,7 +144,6 @@ export default function CollectionSetupModal({
         setName('');
         setSlug('');
         setDescription('');
-        setUrlPattern('');
         // Add default Body field for new collections
         setFields([
           {
@@ -171,7 +168,6 @@ export default function CollectionSetupModal({
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
       setSlug(generatedSlug);
-      setUrlPattern(`/${generatedSlug}/{slug}`);
     }
   }, [name, existingCollection]);
 
@@ -215,7 +211,6 @@ export default function CollectionSetupModal({
         name: name.trim(),
         slug: slug.trim(),
         description: description.trim(),
-        urlPattern: urlPattern || `/${slug.trim()}/{slug}`,
         fields: fields
       });
     } finally {
@@ -247,16 +242,7 @@ export default function CollectionSetupModal({
                   placeholder="e.g. Blog Posts"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="urlPattern">URL Pattern</Label>
-                <Input
-                  id="urlPattern"
-                  value={urlPattern}
-                  onChange={(e) => setUrlPattern(e.target.value)}
-                  placeholder="e.g. /blog/{slug}"
-                />
-                <p className="text-sm text-muted-foreground">Use {`{slug}`} as a placeholder for the item's URL slug</p>
-              </div>
+
 
             </div>
 

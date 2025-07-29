@@ -38,7 +38,6 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
   // Collection details
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [urlPattern, setUrlPattern] = useState("");
 
   // CSV data
   const [file, setFile] = useState<File | null>(null);
@@ -58,7 +57,6 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
       setSlug(generated);
-      setUrlPattern(`/${generated}/{slug}`);
     }
   }, [name]);
 
@@ -87,7 +85,6 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
           body: JSON.stringify({
             name,
             slug,
-            urlPattern,
             fields: updatedCollection?.fields ?? [],
             siteId: currentSite.id,
           }),
@@ -126,7 +123,6 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
       setStep("details");
       setName("");
       setSlug("");
-      setUrlPattern("");
       setFile(null);
       setHeaders([]);
       setSampleRow({});
@@ -150,15 +146,7 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
                 <Input id="col-name" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="col-pattern">URL pattern</Label>
-              <Input
-                id="col-pattern"
-                value={urlPattern}
-                onChange={(e) => setUrlPattern(e.target.value)}
-                placeholder="/blog/{slug}"
-              />
-            </div>
+
             {/* CSV upload section */}
             <UploadStep onFileParsed={handleFileParsed} />
           </div>
@@ -169,7 +157,6 @@ export const ImportNewCollectionModal: React.FC<ImportNewCollectionModalProps> =
             collection={{
               name,
               slug,
-              urlPattern,
               fields: [],
               site_id: "temp", // placeholder until created
               contentPath: "", // not needed for import mapping

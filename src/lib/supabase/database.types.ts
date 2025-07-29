@@ -61,7 +61,6 @@ export type Database = {
           site_id: string | null
           slug: string
           updated_at: string | null
-          url_pattern: string | null
         }
         Insert: {
           created_at?: string | null
@@ -73,7 +72,6 @@ export type Database = {
           site_id?: string | null
           slug: string
           updated_at?: string | null
-          url_pattern?: string | null
         }
         Update: {
           created_at?: string | null
@@ -85,7 +83,6 @@ export type Database = {
           site_id?: string | null
           slug?: string
           updated_at?: string | null
-          url_pattern?: string | null
         }
         Relationships: [
           {

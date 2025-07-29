@@ -52,7 +52,7 @@ export async function GET(
     // Get all collections
     const { data: collections, error: collectionsError } = await supabase
       .from('collections')
-      .select('id, name, slug, url_pattern')
+      .select('id, name, slug')
       .eq('site_id', params.siteId);
 
     if (collectionsError) {
@@ -97,7 +97,6 @@ export async function GET(
       slug: col.slug,
       description: '',
       contentPath: '',
-      urlPattern: col.url_pattern || `/${col.slug}/{slug}`,
       fields: [],
       seo: {}
     })) || [];

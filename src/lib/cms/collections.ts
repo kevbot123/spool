@@ -141,7 +141,6 @@ export class CollectionsManager {
          slug: collection.slug,
          description: collection.description || '',
          contentPath: 'posts', // Default path for compatibility
-         urlPattern: collection.url_pattern || `/${collection.slug}/{slug}`,
          fields: this.defaultFields.concat((schema?.fields as FieldConfig[]) || []),
         settings: {
           allowCreate: true,
@@ -172,38 +171,8 @@ export class CollectionsManager {
     return Array.from(this.collections.values());
   }
 
-  getCollectionByUrlPattern(url: string): { collection: CollectionConfig; params: Record<string, string> } | null {
-    const urlParts = url.split('/').filter(Boolean);
-    
-    for (const collection of this.collections.values()) {
-      const patternParts = collection.urlPattern.split('/').filter(Boolean);
-      
-      if (patternParts.length !== urlParts.length) continue;
-      
-      let match = true;
-      const params: Record<string, string> = {};
-      
-      for (let i = 0; i < patternParts.length; i++) {
-        const patternPart = patternParts[i];
-        const urlPart = urlParts[i];
-        
-        if (patternPart.startsWith('{') && patternPart.endsWith('}')) {
-          // Dynamic parameter
-          const paramName = patternPart.slice(1, -1);
-          params[paramName] = urlPart;
-        } else if (patternPart !== urlPart) {
-          // Static part doesn't match
-          match = false;
-          break;
-        }
-      }
-      
-      if (match) {
-        return { collection, params };
-      }
-    }
-    
-    return null;
+  getCollectionBySlug(slug: string): CollectionConfig | null {
+    return this.collections.get(slug) || null;
   }
 
   async createCollection(siteId: string, config: Partial<CollectionConfig>): Promise<CollectionConfig> {
@@ -216,7 +185,6 @@ export class CollectionsManager {
         name: config.name || 'Untitled Collection',
         slug: config.slug || this.generateSlug(config.name || 'untitled'),
         description: config.description,
-        url_pattern: config.urlPattern || `/${config.slug || this.generateSlug(config.name || 'untitled')}/{slug}`,
         schema: JSON.parse(JSON.stringify({
           fields: config.fields || []
         })),
@@ -238,7 +206,6 @@ export class CollectionsManager {
        slug: data.slug,
        description: data.description || '',
        contentPath: 'posts',
-       urlPattern: data.url_pattern || `/${data.slug}/{slug}`,
        fields: this.defaultFields.concat((schema?.fields as FieldConfig[]) || []),
       settings: {
         allowCreate: true,
@@ -267,7 +234,6 @@ export class CollectionsManager {
     const updateData: any = {};
     if (updates.name) updateData.name = updates.name;
     if (updates.description) updateData.description = updates.description;
-    if (updates.urlPattern) updateData.url_pattern = updates.urlPattern;
     if (updates.fields) {
       updateData.schema = JSON.parse(JSON.stringify({
         fields: updates.fields
@@ -296,7 +262,6 @@ export class CollectionsManager {
       slug: data.slug,
       description: data.description || '',
       contentPath: 'posts',
-      urlPattern: data.url_pattern || `/${data.slug}/{slug}`,
       fields: [
         ...this.defaultFields,
         ...(schema?.fields || [])

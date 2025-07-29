@@ -48,7 +48,7 @@ export async function GET(
     // Get all collections for this site
     const { data: collections, error: collectionsError } = await supabase
       .from('collections')
-      .select('id, name, slug, schema, description, url_pattern, created_at, updated_at')
+      .select('id, name, slug, schema, description, created_at, updated_at')
       .eq('site_id', params.siteId)
       .order('created_at', { ascending: true });
 
@@ -64,7 +64,6 @@ export async function GET(
       slug: collection.slug,
       description: collection.description,
       schema: collection.schema,
-      urlPattern: collection.url_pattern,
       createdAt: collection.created_at,
       updatedAt: collection.updated_at
     })) || [];

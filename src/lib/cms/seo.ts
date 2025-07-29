@@ -26,7 +26,9 @@ export class SEOManager {
   }
 
   private generateUrl(content: ContentItem, collection: CollectionConfig): string {
-    const path = collection.urlPattern.replace('{slug}', content.slug);
+    // URL generation is now handled by Next.js routing
+    // Return a basic path structure for SEO purposes
+    const path = `/${collection.slug}/${content.slug}`;
     return `${this.siteUrl}${path}`;
   }
 
@@ -307,7 +309,7 @@ export class SEOManager {
     contentItems.forEach(item => {
       const collection = collections.find(c => c.slug === item.collection);
       if (collection) {
-        const url = collection.urlPattern.replace('{slug}', item.slug);
+        const url = `/${collection.slug}/${item.slug}`;
         urls.push(`${this.siteUrl}${url}`);
       }
     });
