@@ -14,7 +14,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **New in v1.6.15:** Added detailed debug logging to help troubleshoot development mode live updates. This version includes verbose logging to track polling events, event bus emissions, and webhook handler processing to identify where the live update flow might be breaking.
+> **New in v1.6.16:** Added comprehensive debug logging to track the entire live update flow - from dev-bootstrap loading, through polling initialization, to webhook handler registration. This will help identify exactly where the development mode setup is failing.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.

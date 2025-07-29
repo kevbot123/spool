@@ -452,9 +452,13 @@ export function createSpoolWebhookHandler(options: {
   ) => Promise<void> | void;
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
+  console.log('[DEV] createSpoolWebhookHandler called');
+  console.log('[DEV] NODE_ENV:', process.env.NODE_ENV);
+  console.log('[DEV] developmentConfig provided:', !!options.developmentConfig);
 
   // In development, hook into the local polling bus to simulate webhooks
   if (process.env.NODE_ENV === 'development' && options.developmentConfig) {
+    console.log('[DEV] Setting up development mode webhook handler');
     // Listen for events emitted from the development polling (started by dev-bootstrap)
     const forwardFromBus = async (data: SpoolWebhookPayload) => {
       console.log(`[DEV] Webhook handler received event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
