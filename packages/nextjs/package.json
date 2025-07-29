@@ -1,6 +1,6 @@
 {
   "name": "@spoolcms/nextjs",
-  "version": "1.6.6",
+  "version": "1.6.9",
   "description": "The beautiful headless CMS for Next.js developers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,6 +12,9 @@
     },
     "./package.json": "./package.json"
   },
+  "sideEffects": [
+    "./dist/dev-bootstrap.js"
+  ],
   "files": [
     "dist/**/*",
     "src/scripts/**/*",

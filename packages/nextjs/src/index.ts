@@ -1,4 +1,7 @@
-// Auto-start Spool dev-mode polling when in development environment\nimport './dev-bootstrap';\n\n// Main exports for @spoolcms/nextjs package
+// Auto-start Spool dev-mode polling when in development environment
+import './dev-bootstrap';
+
+// Main exports for @spoolcms/nextjs package
 export { createSpoolHandler } from './handlers/spool-handler';
 export { 
   getSpoolContent, 
