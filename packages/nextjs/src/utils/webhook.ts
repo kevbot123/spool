@@ -5,6 +5,12 @@
 
 import crypto from 'crypto';
 
+// Global flag to ensure only one dev polling loop runs per process, even after hot reloads.
+declare global {
+  // eslint-disable-next-line no-var
+  var __spoolPollingActive: boolean | undefined;
+}
+
 export interface SpoolWebhookPayload {
   event: 'content.created' | 'content.updated' | 'content.published' | 'content.deleted';
   site_id: string;
@@ -173,10 +179,15 @@ function createContentHash(item: any): string {
   }
 }
 
+import { devPollingBus } from '../dev-polling-bus';
+
 async function startDevelopmentPolling(
   config: { apiKey: string; siteId: string; baseUrl?: string },
-  onContentChange: (data: SpoolWebhookPayload) => Promise<void> | void
+  onContentChange: (data: SpoolWebhookPayload) => Promise<void> | void = () => {}
 ) {
+  if (global.__spoolPollingActive) return; // already running
+  global.__spoolPollingActive = true;
+
   if (typeof window !== 'undefined') return; // Only run on server
   if (process.env.NODE_ENV !== 'development') return; // Only in development
   if (isPollingActive) return; // Prevent multiple polling instances
@@ -322,12 +333,9 @@ async function startDevelopmentPolling(
       
     } catch (error) {
       pollingRetryCount++;
-      console.error(`[DEV] Polling error (attempt ${pollingRetryCount}/${MAX_RETRY_COUNT}):`, error);
-      
-      // Stop polling after max retries to prevent spam
+      console.error(`[DEV] Spool polling error (Attempt ${pollingRetryCount}/${MAX_RETRY_COUNT}). Full error:`, error);
       if (pollingRetryCount >= MAX_RETRY_COUNT) {
-        console.error('[DEV] Max polling retries reached - stopping development polling');
-        console.error('[DEV] Please check your SPOOL_API_KEY and SPOOL_SITE_ID configuration');
+        console.error('[DEV] Max polling retries reached. Stopping development polling. Please restart your dev server to resume.');
         stopDevelopmentPolling();
       }
     }
@@ -352,6 +360,7 @@ function stopDevelopmentPolling() {
     isPollingActive = false;
     pollingRetryCount = 0;
     console.log('[DEV] Development polling stopped');
+    global.__spoolPollingActive = false;
   }
 }
 

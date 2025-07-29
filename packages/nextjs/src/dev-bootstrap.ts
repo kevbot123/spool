@@ -6,24 +6,34 @@
 
 import { startDevelopmentPolling } from './utils/webhook';
 
-// Only run in non-browser, development environment, and when credentials exist
+// Augment the global namespace to inform TypeScript about our custom global property.
+declare global {
+  var __spoolDevPollingStarted: boolean | undefined;
+}
+
+// Use a global variable to ensure the polling process is a singleton.
 if (
   typeof window === 'undefined' &&
   process.env.NODE_ENV === 'development' &&
-  process.env.SPOOL_API_KEY &&
-  process.env.SPOOL_SITE_ID
+  !global.__spoolDevPollingStarted
 ) {
-  try {
-    startDevelopmentPolling(
-      {
-        apiKey: process.env.SPOOL_API_KEY,
-        siteId: process.env.SPOOL_SITE_ID,
-      },
-      // no-op handler – user can still provide a real handler via
-      // createSpoolWebhookHandler; the polling util will call both.
-      () => {}
-    );
-  } catch (err) {
-    console.error('[DEV] Failed to auto-start Spool development polling:', err);
+  // Set the flag immediately to prevent race conditions.
+  global.__spoolDevPollingStarted = true;
+
+  if (process.env.SPOOL_API_KEY && process.env.SPOOL_SITE_ID) {
+    try {
+      console.log('[DEV] Starting Spool development mode polling...');
+      startDevelopmentPolling(
+        {
+          apiKey: process.env.SPOOL_API_KEY,
+          siteId: process.env.SPOOL_SITE_ID,
+        }
+      );
+      console.log('[DEV] Development polling started - live updates enabled on localhost');
+    } catch (e) {
+      console.error('[DEV] Failed to start Spool development polling.', e);
+      // Unset the key if startup fails, allowing a future attempt.
+      global.__spoolDevPollingStarted = false;
+    }
   }
 }
