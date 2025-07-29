@@ -402,37 +402,7 @@ export function createSpoolWebhookHandler(options: {
   ) => Promise<void> | void;
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
-  // ✅ Start development polling with better error handling and timing
-  if (options.developmentConfig && process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-    // Validate required config
-    if (!options.developmentConfig.apiKey || !options.developmentConfig.siteId) {
-      console.error('[DEV] Missing required developmentConfig: apiKey and siteId are required');
-      console.error('[DEV] Development polling will not start');
-    } else {
-      // Use setImmediate or setTimeout to start polling after the current execution context
-      const startPolling = () => {
-        startDevelopmentPolling(options.developmentConfig!, async (data) => {
-          try {
-            await options.onWebhook(data, {
-              deliveryId: `dev-${Date.now()}`,
-              event: data.event,
-              userAgent: 'Spool-Dev-Polling/1.0',
-            });
-          } catch (error) {
-            console.error('[DEV] Error in webhook handler during development polling:', error);
-          }
-        }).catch((error) => {
-          console.error('[DEV] Failed to start development polling:', error);
-        });
-      };
-      
-      if (typeof setImmediate !== 'undefined') {
-        setImmediate(startPolling);
-      } else {
-        setTimeout(startPolling, 0);
-      }
-    }
-  }
+
   
   return async function webhookHandler(request: Request): Promise<Response> {
     const startTime = Date.now();
