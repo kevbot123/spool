@@ -188,15 +188,21 @@ async function callWebhookHandlers(data: SpoolWebhookPayload) {
   // Emit on the bus for backward compatibility
   devPollingBus.emit('contentChange', data);
   
-  // Call all registered webhook handlers
+  // Call all registered webhook handlers - defer to avoid Next.js 15 render phase restrictions
   if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
-    for (const handler of global.__spoolWebhookHandlers) {
-      try {
-        await handler(data);
-      } catch (err) {
-        console.error('[DEV] Error in webhook handler:', err);
+    // Use setTimeout to defer execution outside of render phase
+    setTimeout(async () => {
+      const handlers = global.__spoolWebhookHandlers;
+      if (handlers) {
+        for (const handler of handlers) {
+          try {
+            await handler(data);
+          } catch (err) {
+            console.error('[DEV] Error in webhook handler:', err);
+          }
+        }
       }
-    }
+    }, 0);
   }
 }
 
@@ -206,10 +212,11 @@ async function startDevelopmentPolling(
 ) {
   if (typeof window !== 'undefined') return; // Only run on server
   if (process.env.NODE_ENV !== 'development') return; // Only in development
-  if (isPollingActive) return; // Prevent multiple polling instances
+  if (isPollingActive || global.__spoolPollingActive) return; // Prevent multiple polling instances
   
   console.log('[DEV] Starting Spool development mode polling...');
   isPollingActive = true;
+  global.__spoolPollingActive = true;
   pollingRetryCount = 0;
   
   const checkForChanges = async () => {

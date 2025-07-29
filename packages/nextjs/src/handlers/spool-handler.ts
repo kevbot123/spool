@@ -172,10 +172,16 @@ export function createSpoolHandler(config?: SpoolConfig) {
           if (result.success) {
             const [collection, slug] = contentPath.split('/');
             
-            // Revalidate relevant paths
-            revalidatePath(`/${collection}/${slug}`);
-            revalidatePath(`/${collection}`);
-            revalidatePath('/');
+            // Defer revalidation to avoid Next.js 15 render phase restrictions
+            setTimeout(() => {
+              try {
+                revalidatePath(`/${collection}/${slug}`);
+                revalidatePath(`/${collection}`);
+                revalidatePath('/');
+              } catch (err) {
+                console.error('Revalidation error:', err);
+              }
+            }, 0);
           }
           
           return addCorsHeaders(NextResponse.json(result));
@@ -261,9 +267,15 @@ export function createSpoolHandler(config?: SpoolConfig) {
           if (result.success) {
             const [collection, slug] = contentPath.split('/');
             
-            // Revalidate collection page to remove deleted item
-            revalidatePath(`/${collection}`);
-            revalidatePath('/');
+            // Defer revalidation to avoid Next.js 15 render phase restrictions
+            setTimeout(() => {
+              try {
+                revalidatePath(`/${collection}`);
+                revalidatePath('/');
+              } catch (err) {
+                console.error('Revalidation error:', err);
+              }
+            }, 0);
           }
           
           return addCorsHeaders(NextResponse.json(result));
