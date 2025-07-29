@@ -56,20 +56,21 @@ export async function GET(
       });
     }
     
-    // Get all published content (not just recent updates for development)
+    // Get all content items (published and unpublished) with comprehensive data
     const { data: contentItems, error: contentError } = await supabase
       .from('content_items')
       .select(`
         id,
         slug,
         title,
+        status,
+        data,
         updated_at,
         collections!inner(slug)
       `)
       .eq('site_id', siteId)
-      .eq('status', 'published')
       .order('updated_at', { ascending: false })
-      .limit(100);
+      .limit(200);
     
     if (contentError) {
       console.error('Error fetching content updates:', contentError);
@@ -83,14 +84,27 @@ export async function GET(
       });
     }
     
-    // Transform data for development polling
-    const updates = (contentItems || []).map(item => ({
-      item_id: item.id,
-      slug: item.slug,
-      title: item.title,
-      collection: item.collections.slug,
-      updated_at: item.updated_at,
-    }));
+    // Transform data for development polling with comprehensive change detection
+    const updates = (contentItems || []).map(item => {
+      // Create a hash of all content that could change
+      const contentHash = JSON.stringify({
+        title: item.title,
+        slug: item.slug,
+        status: item.status,
+        data: item.data,
+        updated_at: item.updated_at,
+      });
+      
+      return {
+        item_id: item.id,
+        slug: item.slug,
+        title: item.title,
+        status: item.status,
+        collection: item.collections.slug,
+        updated_at: item.updated_at,
+        content_hash: contentHash, // This will detect any field changes
+      };
+    });
     
     return NextResponse.json({
       items: updates,

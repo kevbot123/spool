@@ -145,7 +145,7 @@ export function getSpoolWebhookHeaders(request: Request): {
  * This enables live updates during development when webhooks can't reach localhost
  */
 let developmentPolling: NodeJS.Timeout | null = null;
-let lastContentCheck: Record<string, string> = {};
+let lastContentCheck: Record<string, string | { hash: string; slug: string; status: string }> = {};
 let isPollingActive = false;
 
 async function startDevelopmentPolling(
@@ -170,26 +170,81 @@ async function startDevelopmentPolling(
       
       if (response.ok) {
         const updates = await response.json();
+        const currentItems = new Set<string>();
         
         for (const update of updates.items || []) {
           const key = `${update.collection}-${update.item_id}`;
-          const currentHash = update.updated_at;
+          const currentHash = update.content_hash;
+          const previousData = lastContentCheck[key];
           
-          if (lastContentCheck[key] && lastContentCheck[key] !== currentHash) {
-            // Content changed - simulate webhook
-            console.log(`[DEV] Content change detected: ${update.collection}/${update.slug || 'no-slug'}`);
+          currentItems.add(key);
+          
+          if (previousData) {
+            const previousHash = typeof previousData === 'string' ? previousData : previousData.hash;
+            const previousSlug = typeof previousData === 'object' ? previousData.slug : null;
             
-            await onContentChange({
-              event: 'content.updated',
-              site_id: config.siteId,
-              collection: update.collection,
-              slug: update.slug,
-              item_id: update.item_id,
-              timestamp: new Date().toISOString(),
-            });
+            if (previousHash !== currentHash) {
+              // Content changed - determine event type
+              let event: SpoolWebhookPayload['event'] = 'content.updated';
+              
+              if (update.status === 'published' && (!previousData || typeof previousData === 'string')) {
+                event = 'content.published';
+              } else if (update.status !== 'published' && previousSlug) {
+                event = 'content.updated'; // Unpublished - still trigger update to remove from cache
+              }
+              
+              console.log(`[DEV] Content change detected: ${update.collection}/${update.slug || 'no-slug'} (${event})`);
+              
+              // Trigger webhook for current slug
+              await onContentChange({
+                event,
+                site_id: config.siteId,
+                collection: update.collection,
+                slug: update.slug,
+                item_id: update.item_id,
+                timestamp: new Date().toISOString(),
+              });
+              
+              // If slug changed, also trigger for old slug to clear old cache
+              if (previousSlug && previousSlug !== update.slug) {
+                console.log(`[DEV] Slug change detected: ${update.collection}/${previousSlug} → ${update.slug}`);
+                await onContentChange({
+                  event: 'content.updated',
+                  site_id: config.siteId,
+                  collection: update.collection,
+                  slug: previousSlug,
+                  item_id: update.item_id,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
           }
           
-          lastContentCheck[key] = currentHash;
+          // Store comprehensive data for next check
+          lastContentCheck[key] = {
+            hash: currentHash,
+            slug: update.slug,
+            status: update.status,
+          };
+        }
+        
+        // Check for deleted items (items that were in lastContentCheck but not in current response)
+        for (const [key, data] of Object.entries(lastContentCheck)) {
+          if (!currentItems.has(key) && typeof data === 'object') {
+            const [collection, itemId] = key.split('-');
+            console.log(`[DEV] Content deletion detected: ${collection}/${data.slug}`);
+            
+            await onContentChange({
+              event: 'content.deleted',
+              site_id: config.siteId,
+              collection,
+              slug: data.slug,
+              item_id: itemId,
+              timestamp: new Date().toISOString(),
+            });
+            
+            delete lastContentCheck[key];
+          }
         }
       } else {
         console.error(`[DEV] Failed to fetch content updates: ${response.status} ${response.statusText}`);

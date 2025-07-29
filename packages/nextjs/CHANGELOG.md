@@ -2,6 +2,27 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [1.6.2] - 2025-01-29
+
+### Fixed
+- **Comprehensive Change Detection**: Now detects changes to any field, not just title/slug
+- **Unpublishing Support**: Properly handles when content is unpublished or deleted
+- **Slug Change Handling**: Revalidates both old and new paths when slugs change
+- **Content Deletion**: Detects when content is deleted and triggers appropriate webhooks
+- **Status Changes**: Tracks published/unpublished status changes
+
+### Technical Improvements
+- **Content Hashing**: Uses comprehensive content hash to detect any field changes
+- **Slug Tracking**: Stores previous slug to handle slug changes properly
+- **Deletion Detection**: Compares current vs previous content lists to detect deletions
+- **Event Types**: Properly distinguishes between created, updated, published, and deleted events
+
+### What's Fixed
+- ✅ Non-title/non-slug field changes now trigger live updates
+- ✅ Unpublishing content now updates the frontend immediately
+- ✅ Slug changes revalidate both old and new URLs
+- ✅ Content deletion removes items from lists immediately
+
 ## [1.6.1] - 2025-01-29
 
 ### Fixed

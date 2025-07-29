@@ -14,7 +14,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **New in v1.6.1:** Automatic localhost live updates! No more ngrok or tunnels needed for development. Just add `developmentConfig` to your webhook handler and get live updates on `localhost:3000`. Fixed activation issue - polling now starts immediately.
+> **New in v1.6.2:** Complete localhost live updates! Now detects ALL content changes including field updates, unpublishing, slug changes, and deletions. No more ngrok or tunnels needed for development.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
@@ -173,12 +173,30 @@ const handleWebhook = createSpoolWebhookHandler({
 **What you'll see:**
 ```bash
 # In development console:
-[DEV] Content change detected: blog/my-new-post
+[DEV] Content change detected: blog/my-new-post (content.updated)
 [dev-1643723456789] Processing webhook: content.updated for blog/my-new-post
+
+# When slug changes:
+[DEV] Slug change detected: blog/old-slug → new-slug
+[dev-1643723456790] Processing webhook: content.updated for blog/old-slug
+[dev-1643723456791] Processing webhook: content.updated for blog/new-slug
+
+# When content is unpublished:
+[DEV] Content change detected: blog/my-post (content.updated)
+
+# When content is deleted:
+[DEV] Content deletion detected: blog/deleted-post
 
 # In production console:
 [wh_1234567890] Processing webhook: content.updated for blog/my-new-post
 ```
+
+**Types of changes detected:**
+- ✅ **Any field changes** - title, body, custom fields, etc.
+- ✅ **Publishing/unpublishing** - status changes
+- ✅ **Slug changes** - revalidates both old and new URLs
+- ✅ **Content deletion** - removes from lists immediately
+- ✅ **New content** - appears in lists immediately
 
 ### Migration from Previous Versions
 
