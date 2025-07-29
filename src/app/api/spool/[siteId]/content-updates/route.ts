@@ -11,21 +11,27 @@ export async function GET(
     const authHeader = request.headers.get('Authorization');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
+      return NextResponse.json({ error: 'Missing or invalid authorization header' }, { 
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        }
+      });
     }
     
     const apiKey = authHeader.replace('Bearer ', '');
     
-    // Create Supabase client
-    const cookieStore = cookies();
+    // Create Supabase client with service role key for API access
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {
         cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
+          get() { return undefined; },
+          set() {},
+          remove() {},
         },
       }
     );
@@ -39,12 +45,18 @@ export async function GET(
       .single();
     
     if (siteError || !site) {
-      return NextResponse.json({ error: 'Invalid API key or site not found' }, { status: 401 });
+      console.error('Site verification failed:', siteError);
+      return NextResponse.json({ error: 'Invalid API key or site not found' }, { 
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        }
+      });
     }
     
-    // Get recent content updates (last 5 minutes)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    
+    // Get all published content (not just recent updates for development)
     const { data: contentItems, error: contentError } = await supabase
       .from('content_items')
       .select(`
@@ -56,13 +68,19 @@ export async function GET(
       `)
       .eq('site_id', siteId)
       .eq('status', 'published')
-      .gte('updated_at', fiveMinutesAgo)
       .order('updated_at', { ascending: false })
-      .limit(50);
+      .limit(100);
     
     if (contentError) {
       console.error('Error fetching content updates:', contentError);
-      return NextResponse.json({ error: 'Failed to fetch content updates' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to fetch content updates' }, { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        }
+      });
     }
     
     // Transform data for development polling
@@ -77,10 +95,35 @@ export async function GET(
     return NextResponse.json({
       items: updates,
       timestamp: new Date().toISOString(),
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      }
     });
     
   } catch (error) {
     console.error('Error in content-updates endpoint:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { 
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      }
+    });
   }
+}
+
+// Handle CORS preflight requests
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    },
+  });
 }

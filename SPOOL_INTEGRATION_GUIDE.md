@@ -14,7 +14,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **New in v1.6.0:** Automatic localhost live updates! No more ngrok or tunnels needed for development. Just add `developmentConfig` to your webhook handler and get live updates on `localhost:3000`.
+> **New in v1.6.1:** Automatic localhost live updates! No more ngrok or tunnels needed for development. Just add `developmentConfig` to your webhook handler and get live updates on `localhost:3000`. Fixed activation issue - polling now starts immediately.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.

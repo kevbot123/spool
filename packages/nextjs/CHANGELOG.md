@@ -2,6 +2,20 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [1.6.1] - 2025-01-29
+
+### Fixed
+- **Development Polling Activation**: Fixed issue where development mode polling wasn't starting automatically
+- **Polling Initialization**: Development polling now starts immediately when `createSpoolWebhookHandler` is called
+- **CORS Support**: Added proper CORS headers to content-updates endpoint for localhost access
+- **Error Handling**: Improved error logging and debugging for development mode
+
+### Technical Details
+- Polling now starts with `setTimeout` to avoid blocking the main thread
+- Added `isPollingActive` flag to prevent multiple polling instances
+- Enhanced logging to show when development mode is active
+- Fixed authentication flow for development polling endpoint
+
 ## [1.6.0] - 2025-01-29
 
 ### Added

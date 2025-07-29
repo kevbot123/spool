@@ -146,6 +146,7 @@ export function getSpoolWebhookHeaders(request: Request): {
  */
 let developmentPolling: NodeJS.Timeout | null = null;
 let lastContentCheck: Record<string, string> = {};
+let isPollingActive = false;
 
 async function startDevelopmentPolling(
   config: { apiKey: string; siteId: string; baseUrl?: string },
@@ -153,6 +154,10 @@ async function startDevelopmentPolling(
 ) {
   if (typeof window !== 'undefined') return; // Only run on server
   if (process.env.NODE_ENV !== 'development') return; // Only in development
+  if (isPollingActive) return; // Prevent multiple polling instances
+  
+  console.log('[DEV] Starting Spool development mode polling...');
+  isPollingActive = true;
   
   const checkForChanges = async () => {
     try {
@@ -172,7 +177,7 @@ async function startDevelopmentPolling(
           
           if (lastContentCheck[key] && lastContentCheck[key] !== currentHash) {
             // Content changed - simulate webhook
-            console.log(`[DEV] Content change detected: ${update.collection}/${update.slug}`);
+            console.log(`[DEV] Content change detected: ${update.collection}/${update.slug || 'no-slug'}`);
             
             await onContentChange({
               event: 'content.updated',
@@ -186,23 +191,29 @@ async function startDevelopmentPolling(
           
           lastContentCheck[key] = currentHash;
         }
+      } else {
+        console.error(`[DEV] Failed to fetch content updates: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
-      // Silently fail - don't spam console in development
+      console.error('[DEV] Polling error:', error);
     }
   };
+  
+  // Initial check to populate lastContentCheck
+  await checkForChanges();
   
   // Check every 2 seconds in development
   developmentPolling = setInterval(checkForChanges, 2000);
   
-  // Initial check
-  await checkForChanges();
+  console.log('[DEV] Development polling started - live updates enabled on localhost');
 }
 
 function stopDevelopmentPolling() {
   if (developmentPolling) {
     clearInterval(developmentPolling);
     developmentPolling = null;
+    isPollingActive = false;
+    console.log('[DEV] Development polling stopped');
   }
 }
 
@@ -253,15 +264,18 @@ export function createSpoolWebhookHandler(options: {
   ) => Promise<void> | void;
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
-  // Start development polling if config is provided
-  if (options.developmentConfig && process.env.NODE_ENV === 'development') {
-    startDevelopmentPolling(options.developmentConfig, (data) => {
-      return options.onWebhook(data, {
-        deliveryId: `dev-${Date.now()}`,
-        event: data.event,
-        userAgent: 'Spool-Dev-Polling/1.0',
-      });
-    }).catch(console.error);
+  // ✅ Start development polling immediately when handler is created
+  if (options.developmentConfig && process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
+    // Use setTimeout to start polling after the current execution context
+    setTimeout(() => {
+      startDevelopmentPolling(options.developmentConfig!, (data) => {
+        return options.onWebhook(data, {
+          deliveryId: `dev-${Date.now()}`,
+          event: data.event,
+          userAgent: 'Spool-Dev-Polling/1.0',
+        });
+      }).catch(console.error);
+    }, 100);
   }
   
   return async function webhookHandler(request: Request): Promise<Response> {
