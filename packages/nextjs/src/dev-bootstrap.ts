@@ -5,6 +5,7 @@
 // against duplicate instances.
 
 import { startDevelopmentPolling } from './utils/webhook';
+import { devPollingBus } from './dev-polling-bus';
 
 // Augment the global namespace to inform TypeScript about our custom global property.
 declare global {
@@ -27,6 +28,11 @@ if (
         {
           apiKey: process.env.SPOOL_API_KEY,
           siteId: process.env.SPOOL_SITE_ID,
+        },
+        // Re-emit updates on the local EventEmitter so that user webhook handlers
+        // can subscribe without starting a second polling loop.
+        (data) => {
+          devPollingBus.emit('contentChange', data);
         }
       );
       console.log('[DEV] Development polling started - live updates enabled on localhost');

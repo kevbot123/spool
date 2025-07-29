@@ -412,7 +412,41 @@ export function createSpoolWebhookHandler(options: {
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
 
-  
+  // In development, hook into the local polling bus to simulate webhooks
+  if (process.env.NODE_ENV === 'development' && options.developmentConfig) {
+    // Start polling if it hasn't already been started elsewhere (e.g., via dev-bootstrap)
+    try {
+      startDevelopmentPolling(options.developmentConfig, async (data) => {
+        // Forward the event to the user's webhook handler as if it came from Spool
+        try {
+          await options.onWebhook(data, {} as any);
+        } catch (err) {
+          console.error('[DEV] Error in onWebhook while handling simulated webhook:', err);
+        }
+        // Also broadcast on the devPollingBus so multiple handlers can react if needed
+        devPollingBus.emit('contentChange', data);
+      });
+    } catch (e) {
+      // Ignore duplicate polling start errors
+    }
+
+    // Additionally, listen for events emitted from the dev-bootstrap singleton
+    const forwardFromBus = async (data: SpoolWebhookPayload) => {
+      try {
+        await options.onWebhook(data, {} as any);
+      } catch (err) {
+        console.error('[DEV] Error in onWebhook while forwarding EventEmitter webhook:', err);
+      }
+    };
+
+    devPollingBus.on('contentChange', forwardFromBus);
+
+    // Ensure we clean up the listener when the process exits / reloads
+    process.on('exit', () => {
+      devPollingBus.off('contentChange', forwardFromBus);
+    });
+  }
+
   return async function webhookHandler(request: Request): Promise<Response> {
     const startTime = Date.now();
     let headers: ReturnType<typeof getSpoolWebhookHeaders> = {};

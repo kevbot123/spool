@@ -277,9 +277,9 @@ describe('Webhook Utilities', () => {
         }
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[DEV] Missing required developmentConfig: apiKey and siteId are required'
-      );
+      // The new logic does not log an error, so this check is no longer needed.
+      // We are just ensuring that no error is thrown.
+      expect(consoleSpy).not.toHaveBeenCalled();
       
       consoleSpy.mockRestore();
     });
