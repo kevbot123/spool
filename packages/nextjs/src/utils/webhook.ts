@@ -257,6 +257,16 @@ async function startDevelopmentPolling(
               console.error(`[DEV] Webhook handler error:`, webhookError);
             }
             
+            // Always emit on the bus so webhook handlers can listen
+            devPollingBus.emit('contentChange', {
+              event,
+              site_id: config.siteId,
+              collection: update.collection,
+              slug: update.slug,
+              item_id: update.item_id,
+              timestamp: new Date().toISOString(),
+            });
+            
             // Handle slug changes - trigger for old slug to clear cache
             if (previousData.slug && previousData.slug !== update.slug) {
               console.log(`[DEV] Slug changed: ${update.collection}/${previousData.slug} → ${update.slug}`);
@@ -272,6 +282,16 @@ async function startDevelopmentPolling(
               } catch (webhookError) {
                 console.error(`[DEV] Webhook handler error for slug change:`, webhookError);
               }
+              
+              // Also emit slug change event on the bus
+              devPollingBus.emit('contentChange', {
+                event: 'content.updated',
+                site_id: config.siteId,
+                collection: update.collection,
+                slug: previousData.slug,
+                item_id: update.item_id,
+                timestamp: new Date().toISOString(),
+              });
             }
           }
         } else if (!isFirstRun) {
@@ -289,6 +309,16 @@ async function startDevelopmentPolling(
           } catch (webhookError) {
             console.error(`[DEV] Webhook handler error for new content:`, webhookError);
           }
+          
+          // Also emit new content event on the bus
+          devPollingBus.emit('contentChange', {
+            event: 'content.created',
+            site_id: config.siteId,
+            collection: update.collection,
+            slug: update.slug,
+            item_id: update.item_id,
+            timestamp: new Date().toISOString(),
+          });
         }
         
         // Store comprehensive data for next check
@@ -321,6 +351,16 @@ async function startDevelopmentPolling(
             } catch (webhookError) {
               console.error(`[DEV] Webhook handler error for deletion:`, webhookError);
             }
+            
+            // Also emit deletion event on the bus
+            devPollingBus.emit('contentChange', {
+              event: 'content.deleted',
+              site_id: config.siteId,
+              collection,
+              slug: data.slug,
+              item_id: itemId,
+              timestamp: new Date().toISOString(),
+            });
             
             delete lastContentCheck[key];
           }
@@ -414,17 +454,7 @@ export function createSpoolWebhookHandler(options: {
 
   // In development, hook into the local polling bus to simulate webhooks
   if (process.env.NODE_ENV === 'development' && options.developmentConfig) {
-    // Start polling if it hasn't already been started elsewhere (e.g., via dev-bootstrap)
-    try {
-      startDevelopmentPolling(options.developmentConfig, async (data) => {
-        // Also broadcast on the devPollingBus so multiple handlers can react if needed
-        devPollingBus.emit('contentChange', data);
-      });
-    } catch (e) {
-      // Ignore duplicate polling start errors
-    }
-
-    // Additionally, listen for events emitted from the dev-bootstrap singleton
+    // Listen for events emitted from the development polling (started by dev-bootstrap)
     const forwardFromBus = async (data: SpoolWebhookPayload) => {
       try {
         await options.onWebhook(data, {} as any);

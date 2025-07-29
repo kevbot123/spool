@@ -5,7 +5,6 @@
 // against duplicate instances.
 
 import { startDevelopmentPolling } from './utils/webhook';
-import { devPollingBus } from './dev-polling-bus';
 
 // Augment the global namespace to inform TypeScript about our custom global property.
 declare global {
@@ -24,17 +23,10 @@ if (
   if (process.env.SPOOL_API_KEY && process.env.SPOOL_SITE_ID) {
     try {
       console.log('[DEV] Starting Spool development mode polling...');
-      startDevelopmentPolling(
-        {
-          apiKey: process.env.SPOOL_API_KEY,
-          siteId: process.env.SPOOL_SITE_ID,
-        },
-        // Re-emit updates on the local EventEmitter so that user webhook handlers
-        // can subscribe without starting a second polling loop.
-        (data) => {
-          devPollingBus.emit('contentChange', data);
-        }
-      );
+      startDevelopmentPolling({
+        apiKey: process.env.SPOOL_API_KEY,
+        siteId: process.env.SPOOL_SITE_ID,
+      });
       console.log('[DEV] Development polling started - live updates enabled on localhost');
     } catch (e) {
       console.error('[DEV] Failed to start Spool development polling.', e);
