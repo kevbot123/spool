@@ -266,6 +266,7 @@ async function startDevelopmentPolling(
               item_id: update.item_id,
               timestamp: new Date().toISOString(),
             });
+            console.log(`[DEV] Emitted contentChange event for ${update.collection}/${update.slug}`);
             
             // Handle slug changes - trigger for old slug to clear cache
             if (previousData.slug && previousData.slug !== update.slug) {
@@ -456,14 +457,17 @@ export function createSpoolWebhookHandler(options: {
   if (process.env.NODE_ENV === 'development' && options.developmentConfig) {
     // Listen for events emitted from the development polling (started by dev-bootstrap)
     const forwardFromBus = async (data: SpoolWebhookPayload) => {
+      console.log(`[DEV] Webhook handler received event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
       try {
         await options.onWebhook(data, {} as any);
+        console.log(`[DEV] Successfully processed webhook event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
       } catch (err) {
         console.error('[DEV] Error in onWebhook while forwarding EventEmitter webhook:', err);
       }
     };
 
     devPollingBus.on('contentChange', forwardFromBus);
+    console.log('[DEV] Registered webhook handler to listen for contentChange events');
 
     // Ensure we clean up the listener when the process exits / reloads
     process.on('exit', () => {
