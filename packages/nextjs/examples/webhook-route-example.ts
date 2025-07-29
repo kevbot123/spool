@@ -117,6 +117,8 @@ const handleWebhook = createSpoolWebhookHandler({
     // Perform all revalidations
     const revalidationPromises = pathsToRevalidate.map(async (path) => {
       try {
+        // Defer revalidation to avoid Next.js 15 render phase restriction
+        await new Promise(resolve => setTimeout(resolve, 0));
         revalidatePath(path);
         console.log(`[${headers.deliveryId}] Revalidated: ${path}`);
       } catch (error) {
