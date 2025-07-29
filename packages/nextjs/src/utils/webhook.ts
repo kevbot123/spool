@@ -192,16 +192,9 @@ async function callWebhookHandlers(data: SpoolWebhookPayload) {
   if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
     for (const handler of global.__spoolWebhookHandlers) {
       try {
-        // Defer handler execution to avoid Next.js 15 render phase issues
-        setTimeout(async () => {
-          try {
-            await handler(data);
-          } catch (err) {
-            console.error('[DEV] Error in deferred webhook handler:', err);
-          }
-        }, 0);
+        await handler(data);
       } catch (err) {
-        console.error('[DEV] Error scheduling webhook handler:', err);
+        console.error('[DEV] Error in webhook handler:', err);
       }
     }
   }

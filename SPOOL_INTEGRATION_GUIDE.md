@@ -7,7 +7,15 @@ This guide provides all the necessary steps and code examples to integrate Spool
 -   **Real-time API:** Fetch content instantly in your Next.js app.
 -   **Simple Setup:** Get started in 5 minutes.
 
-## Setup Guide
+## New in v1.6.23
+
+- **✅ Next.js 15 Compatibility**: Fixed `revalidatePath` render phase errors by implementing async revalidation
+- **✅ Better Error Handling**: Improved error handling for webhook processing
+- **✅ Reduced Duplicate Polling**: Enhanced singleton pattern to prevent duplicate polling instances
+
+> **⚠️ Breaking Change for Next.js 15**: If you're upgrading to Next.js 15, you must update your webhook route to use async revalidation as shown in the examples above. Synchronous `revalidatePath` calls will throw errors during render phase.
+
+## Prerequisites
 
 ### 1. Install the package
 ```bash
@@ -55,30 +63,48 @@ const handleWebhook = createSpoolWebhookHandler({
   onWebhook: async (data, headers) => {
     console.log(`Processing ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
     
+    // Collect paths to revalidate
+    const pathsToRevalidate: string[] = [];
+    
     // More targeted revalidation based on webhook payload
     switch (data.collection) {
       case 'blog':
-        revalidatePath('/blog');
+        pathsToRevalidate.push('/blog');
         if (data.slug) {
-          revalidatePath(`/blog/${data.slug}`);
+          pathsToRevalidate.push(`/blog/${data.slug}`);
         }
         break;
       case 'pages':
         if (data.slug) {
-          revalidatePath(`/${data.slug}`);
+          pathsToRevalidate.push(`/${data.slug}`);
         }
         break;
       default:
         // Revalidate collection-specific paths
-        revalidatePath(`/${data.collection}`);
+        pathsToRevalidate.push(`/${data.collection}`);
         if (data.slug) {
-          revalidatePath(`/${data.collection}/${data.slug}`);
+          pathsToRevalidate.push(`/${data.collection}/${data.slug}`);
         }
     }
     
     // Always revalidate these common paths
-    revalidatePath('/');
-    revalidatePath('/sitemap.xml');
+    pathsToRevalidate.push('/');
+    pathsToRevalidate.push('/sitemap.xml');
+    
+    // Perform async revalidation to avoid Next.js 15 render phase issues
+    const revalidationPromises = pathsToRevalidate.map(async (path) => {
+      try {
+        // Defer revalidation to avoid Next.js 15 render phase restriction
+        await new Promise(resolve => setTimeout(resolve, 0));
+        revalidatePath(path);
+        console.log(`Revalidated: ${path}`);
+      } catch (error) {
+        console.error(`Failed to revalidate ${path}:`, error);
+      }
+    });
+    
+    // Wait for all revalidations to complete
+    await Promise.allSettled(revalidationPromises);
   }
 });
 
@@ -453,11 +479,20 @@ export async function POST(request: Request) {
     // Always revalidate these paths
     pathsToRevalidate.push('/', '/sitemap.xml');
     
-    // Revalidate all paths
-    for (const path of pathsToRevalidate) {
-      revalidatePath(path);
-      console.log(`[${deliveryId}] Revalidated: ${path}`);
-    }
+    // Perform async revalidation to avoid Next.js 15 render phase issues
+    const revalidationPromises = pathsToRevalidate.map(async (path) => {
+      try {
+        // Defer revalidation to avoid Next.js 15 render phase restriction
+        await new Promise(resolve => setTimeout(resolve, 0));
+        revalidatePath(path);
+        console.log(`[${deliveryId}] Revalidated: ${path}`);
+      } catch (error) {
+        console.error(`[${deliveryId}] Failed to revalidate ${path}:`, error);
+      }
+    });
+    
+    // Wait for all revalidations to complete
+    await Promise.allSettled(revalidationPromises);
     
     const duration = Date.now() - startTime;
     console.log(`[${deliveryId}] Webhook processed successfully in ${duration}ms`);
