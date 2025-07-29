@@ -185,11 +185,15 @@ import { devPollingBus } from '../dev-polling-bus';
 
 // Helper function to call all registered webhook handlers
 async function callWebhookHandlers(data: SpoolWebhookPayload) {
+  console.log(`[DEV] callWebhookHandlers called for ${data.event} on ${data.collection}/${data.slug}`);
+  console.log(`[DEV] Registered handlers count: ${global.__spoolWebhookHandlers?.length || 0}`);
+  
   // Emit on the bus for backward compatibility
   devPollingBus.emit('contentChange', data);
   
   // Call all registered webhook handlers
   if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
+    console.log(`[DEV] Calling ${global.__spoolWebhookHandlers.length} webhook handlers`);
     for (const handler of global.__spoolWebhookHandlers) {
       try {
         await handler(data);
@@ -197,6 +201,8 @@ async function callWebhookHandlers(data: SpoolWebhookPayload) {
         console.error('[DEV] Error in registered webhook handler:', err);
       }
     }
+  } else {
+    console.log('[DEV] No webhook handlers registered - revalidation will not occur');
   }
 }
 
