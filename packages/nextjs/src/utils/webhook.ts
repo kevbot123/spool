@@ -182,18 +182,19 @@ async function startDevelopmentPolling(
           if (previousData) {
             const previousHash = typeof previousData === 'string' ? previousData : previousData.hash;
             const previousSlug = typeof previousData === 'object' ? previousData.slug : null;
+            const previousStatus = typeof previousData === 'object' ? previousData.status : null;
             
             if (previousHash !== currentHash) {
-              // Content changed - determine event type
+              // Content changed - determine event type based on status changes
               let event: SpoolWebhookPayload['event'] = 'content.updated';
               
-              if (update.status === 'published' && (!previousData || typeof previousData === 'string')) {
+              // Detect publishing events
+              if (update.status === 'published' && previousStatus !== 'published') {
                 event = 'content.published';
-              } else if (update.status !== 'published' && previousSlug) {
-                event = 'content.updated'; // Unpublished - still trigger update to remove from cache
               }
               
               console.log(`[DEV] Content change detected: ${update.collection}/${update.slug || 'no-slug'} (${event})`);
+              console.log(`[DEV] Change details: status ${previousStatus} → ${update.status}`);
               
               // Trigger webhook for current slug
               await onContentChange({
@@ -218,6 +219,9 @@ async function startDevelopmentPolling(
                 });
               }
             }
+          } else {
+            // New item detected
+            console.log(`[DEV] New content detected: ${update.collection}/${update.slug || 'no-slug'}`);
           }
           
           // Store comprehensive data for next check
@@ -229,21 +233,26 @@ async function startDevelopmentPolling(
         }
         
         // Check for deleted items (items that were in lastContentCheck but not in current response)
-        for (const [key, data] of Object.entries(lastContentCheck)) {
-          if (!currentItems.has(key) && typeof data === 'object') {
-            const [collection, itemId] = key.split('-');
-            console.log(`[DEV] Content deletion detected: ${collection}/${data.slug}`);
-            
-            await onContentChange({
-              event: 'content.deleted',
-              site_id: config.siteId,
-              collection,
-              slug: data.slug,
-              item_id: itemId,
-              timestamp: new Date().toISOString(),
-            });
-            
-            delete lastContentCheck[key];
+        // Only check for deletions if we have previous data (not on first run)
+        if (Object.keys(lastContentCheck).length > 0) {
+          for (const [key, data] of Object.entries(lastContentCheck)) {
+            if (!currentItems.has(key) && typeof data === 'object') {
+              const [collection, ...itemIdParts] = key.split('-');
+              const itemId = itemIdParts.join('-'); // Handle UUIDs with dashes
+              
+              console.log(`[DEV] Content deletion detected: ${collection}/${data.slug}`);
+              
+              await onContentChange({
+                event: 'content.deleted',
+                site_id: config.siteId,
+                collection,
+                slug: data.slug,
+                item_id: itemId,
+                timestamp: new Date().toISOString(),
+              });
+              
+              delete lastContentCheck[key];
+            }
           }
         }
       } else {
@@ -254,11 +263,13 @@ async function startDevelopmentPolling(
     }
   };
   
-  // Initial check to populate lastContentCheck
-  await checkForChanges();
+  // Initial check to populate lastContentCheck (with small delay to let any pending operations complete)
+  setTimeout(async () => {
+    await checkForChanges();
+  }, 500);
   
-  // Check every 2 seconds in development
-  developmentPolling = setInterval(checkForChanges, 2000);
+  // Check every 3 seconds in development (slightly longer to reduce timing issues)
+  developmentPolling = setInterval(checkForChanges, 3000);
   
   console.log('[DEV] Development polling started - live updates enabled on localhost');
 }

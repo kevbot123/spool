@@ -2,6 +2,28 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [1.6.3] - 2025-01-29
+
+### Fixed
+- **Description Field Updates**: Now properly detects changes to description and all custom fields
+- **Publishing Consistency**: Improved detection of publish/unpublish status changes
+- **Deletion Timing**: Added delays and better timing to handle deletion detection reliably
+- **Data Structure Handling**: Fixed handling of nested data structures (data.data.field vs data.field)
+- **Published Date Tracking**: Now includes published_at field for better change detection
+
+### Technical Improvements
+- **Comprehensive Data Hashing**: Includes published_at and normalized data structure
+- **Better Status Change Detection**: Tracks previous status to detect publish/unpublish events
+- **Improved Deletion Logic**: Handles UUID splitting correctly and avoids false positives on first run
+- **Enhanced Debugging**: More detailed console logs for troubleshooting
+- **Timing Adjustments**: Increased polling interval to 3 seconds and added initial delay
+
+### What's Fixed
+- ✅ Description field changes now trigger live updates immediately
+- ✅ Re-publishing from collection table view works consistently
+- ✅ Content deletion works reliably without delays
+- ✅ All custom field changes are detected properly
+
 ## [1.6.2] - 2025-01-29
 
 ### Fixed

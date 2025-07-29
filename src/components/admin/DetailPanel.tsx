@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/accordion"
 import { DatePicker } from '@/components/ui/date-picker';
 import { useSite } from '@/context/SiteContext';
-import { ChevronsRight, ExternalLink, Link2, SquareArrowOutUpRight, TableProperties, TextCursorInput, MoreVertical, RefreshCcw, X, Trash2 } from 'lucide-react';
+import { ChevronsRight, Link2, TableProperties, TextCursorInput, MoreVertical, RefreshCcw, X, Trash2 } from 'lucide-react';
 import CollectionSetupModal from '@/components/admin/CollectionSetupModal';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -244,19 +244,7 @@ export function DetailPanel({
     return fieldType === 'datetime' && dateFieldNames.includes(fieldName);
   };
 
-  // Helper to build the display URL for the slug field
-  const buildDisplayUrl = useMemo(() => {
-    const domain = currentSite?.domain || 'yoursite.com';
-    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    
-    // URL structure is now handled by Next.js routing
-    const pathPattern = `/${collection.slug}/`;
-    
-    return {
-      domain: cleanDomain,
-      path: pathPattern
-    };
-  }, [currentSite?.domain, collection.slug]);
+  // Since URL structure is handled by Next.js routing, we don't need to build display URLs
 
   // Helper to get the effective OG title
   const getOgTitle = () => {
@@ -302,8 +290,8 @@ export function DetailPanel({
   const publishedAtDisplay = useMemo(() => formatDate(getFieldValue('datePublished') || publishedAtVal), [getFieldValue, publishedAtVal]);
   const lastModifiedDisplay = useMemo(() => formatDate(getFieldValue('dateLastModified') || getFieldValue('lastModified') || (currentItem as any).dateLastModified || currentItem.updatedAt), [getFieldValue, currentItem]);
 
-  // Construct a public preview URL for the item
-  const publicUrl = useMemo(() => `https://${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`, [buildDisplayUrl, getFieldValue]);
+  // Since URL structure is handled by Next.js routing, we don't construct preview URLs
+  const publicUrl = useMemo(() => '', []);
 
   const getStructuredData = () => {
     const data: any = {
@@ -311,10 +299,13 @@ export function DetailPanel({
       '@type': 'BlogPosting',
     };
 
-    if (publicUrl) {
+    // Include mainEntityOfPage with placeholder URL structure for preview purposes
+    // Developers should implement the actual URL in their Next.js pages
+    const slug = getFieldValue('slug');
+    if (slug) {
       data.mainEntityOfPage = {
         '@type': 'WebPage',
-        '@id': publicUrl,
+        '@id': `https://yoursite.com/${slug}`,
       };
     }
     
@@ -351,9 +342,8 @@ export function DetailPanel({
   const structuredData = getStructuredData();
 
   const openInNewTab = () => {
-    if (typeof window !== 'undefined') {
-      window.open(publicUrl, '_blank');
-    }
+    // Since URL structure is handled by Next.js routing, we can't provide a direct preview URL
+    console.log('Preview URL not available - URL structure is configured in your Next.js app');
   };
 
   // Update the hasPendingChanges check to use the unified system
@@ -389,14 +379,7 @@ export function DetailPanel({
                 <ChevronsRight className="w-5 h-5" />
               </button>
 
-              {/* Open in new tab */}
-              <button
-                type="button"
-                onClick={openInNewTab}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <SquareArrowOutUpRight className="w-4 h-4" />
-              </button>
+
             </div>
 
             {/* Right-aligned status and actions */}
@@ -461,19 +444,7 @@ export function DetailPanel({
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={publicUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center w-full px-4 py-1 text-sm cursor-pointer"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      <span>View Post</span>
-                    </a>
-                  </DropdownMenuItem>
+
                   {onDelete && (
                     <DestructiveActionDialog
                       trigger={
@@ -532,8 +503,7 @@ export function DetailPanel({
                     <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
                     Slug
                   </label>
-                  <div className="flex-1 flex items-center gap-1">
-                    <span className="text-gray-400 text-sm">{buildDisplayUrl.path}</span>
+                  <div className="flex-1">
                     <input
                       value={getFieldValue('slug') || ''}
                       onChange={(e) => {
@@ -547,8 +517,9 @@ export function DetailPanel({
                         }
                       }}
                       placeholder="url-slug"
-                      className="text-sm flex-1 min-w-0 px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     />
+                    <p className="text-xs text-gray-500 mt-1">URL structure is configured in your Next.js app</p>
                   </div>
                 </div>
               </div>
@@ -654,7 +625,7 @@ export function DetailPanel({
                           description={inheritSeoFromContent
                             ? (getFieldValue('description') || '')
                             : (getFieldValue('seoDescription') || getFieldValue('description') || '')}
-                          url={`${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`}
+                          url={getFieldValue('slug') || 'your-slug'}
                         />
                       </div>
                     </div>
@@ -720,7 +691,7 @@ export function DetailPanel({
                           title={getOgTitle()}
                           description={getOgDescription()}
                           image={getFieldValue('ogImage')}
-                          url={`${buildDisplayUrl.domain}${buildDisplayUrl.path}${getFieldValue('slug')}`}
+                          url={getFieldValue('slug') || 'your-slug'}
                         />
                       </div>
                     </div>

@@ -14,7 +14,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **New in v1.6.2:** Complete localhost live updates! Now detects ALL content changes including field updates, unpublishing, slug changes, and deletions. No more ngrok or tunnels needed for development.
+> **New in v1.6.3:** Bulletproof localhost live updates! Fixed description field updates, publishing consistency, and deletion timing issues. All content changes now detected reliably.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.

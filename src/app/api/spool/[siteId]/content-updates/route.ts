@@ -66,6 +66,7 @@ export async function GET(
         status,
         data,
         updated_at,
+        published_at,
         collections!inner(slug)
       `)
       .eq('site_id', siteId)
@@ -86,13 +87,18 @@ export async function GET(
     
     // Transform data for development polling with comprehensive change detection
     const updates = (contentItems || []).map(item => {
-      // Create a hash of all content that could change
+      // Create a comprehensive hash of all content that could change
+      // Handle both data.field and data.data.field structures
+      const normalizedData = item.data?.data || item.data || {};
+      
       const contentHash = JSON.stringify({
         title: item.title,
         slug: item.slug,
         status: item.status,
-        data: item.data,
+        published_at: item.published_at,
         updated_at: item.updated_at,
+        // Include all data fields (description, body, custom fields, etc.)
+        data: normalizedData,
       });
       
       return {
@@ -100,6 +106,7 @@ export async function GET(
         slug: item.slug,
         title: item.title,
         status: item.status,
+        published_at: item.published_at,
         collection: item.collections.slug,
         updated_at: item.updated_at,
         content_hash: contentHash, // This will detect any field changes
