@@ -188,21 +188,27 @@ async function callWebhookHandlers(data: SpoolWebhookPayload) {
   // Emit on the bus for backward compatibility
   devPollingBus.emit('contentChange', data);
   
-  // Call all registered webhook handlers - defer to avoid Next.js 15 render phase restrictions
+  // Call all registered webhook handlers - use process.nextTick to defer but still be awaitable
   if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
-    // Use setTimeout to defer execution outside of render phase
-    setTimeout(async () => {
-      const handlers = global.__spoolWebhookHandlers;
-      if (handlers) {
-        for (const handler of handlers) {
-          try {
-            await handler(data);
-          } catch (err) {
-            console.error('[DEV] Error in webhook handler:', err);
+    // Use process.nextTick to defer execution outside of render phase but still allow await
+    await new Promise<void>((resolve) => {
+      process.nextTick(async () => {
+        try {
+          const handlers = global.__spoolWebhookHandlers;
+          if (handlers) {
+            for (const handler of handlers) {
+              try {
+                await handler(data);
+              } catch (err) {
+                console.error('[DEV] Error in webhook handler:', err);
+              }
+            }
           }
+        } finally {
+          resolve();
         }
-      }
-    }, 0);
+      });
+    });
   }
 }
 
@@ -239,6 +245,9 @@ async function startDevelopmentPolling(
       const currentItems = new Set<string>();
       const isFirstRun = Object.keys(lastContentCheck).length === 0;
       
+      // Debug logging
+      console.log(`[DEV] Polling response: ${updates.items?.length || 0} items, isFirstRun: ${isFirstRun}`);
+      
       // Reset retry count on successful fetch
       pollingRetryCount = 0;
       
@@ -251,6 +260,9 @@ async function startDevelopmentPolling(
         currentItems.add(key);
         
         if (previousData && !isFirstRun) {
+          // Debug hash comparison
+          console.log(`[DEV] Checking ${key}: prev hash=${previousData.hash.substring(0, 20)}..., current hash=${currentHash.substring(0, 20)}...`);
+          
           // Check if content actually changed
           if (previousData.hash !== currentHash) {
             // Determine event type based on what changed
