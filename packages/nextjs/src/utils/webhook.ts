@@ -183,13 +183,27 @@ function createContentHash(item: any): string {
 
 import { devPollingBus } from '../dev-polling-bus';
 
+// Helper function to call all registered webhook handlers
+async function callWebhookHandlers(data: SpoolWebhookPayload) {
+  // Emit on the bus for backward compatibility
+  devPollingBus.emit('contentChange', data);
+  
+  // Call all registered webhook handlers
+  if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
+    for (const handler of global.__spoolWebhookHandlers) {
+      try {
+        await handler(data);
+      } catch (err) {
+        console.error('[DEV] Error in registered webhook handler:', err);
+      }
+    }
+  }
+}
+
 async function startDevelopmentPolling(
   config: { apiKey: string; siteId: string; baseUrl?: string },
   onContentChange: (data: SpoolWebhookPayload) => Promise<void> | void = () => {}
 ) {
-  if (global.__spoolPollingActive) return; // already running
-  global.__spoolPollingActive = true;
-
   if (typeof window !== 'undefined') return; // Only run on server
   if (process.env.NODE_ENV !== 'development') return; // Only in development
   if (isPollingActive) return; // Prevent multiple polling instances
@@ -245,22 +259,8 @@ async function startDevelopmentPolling(
               console.log(`[DEV] Content updated: ${update.collection}/${update.slug || 'no-slug'}`);
             }
             
-            // Always trigger webhook for current slug
-            try {
-              await onContentChange({
-                event,
-                site_id: config.siteId,
-                collection: update.collection,
-                slug: update.slug,
-                item_id: update.item_id,
-                timestamp: new Date().toISOString(),
-              });
-            } catch (webhookError) {
-              console.error(`[DEV] Webhook handler error:`, webhookError);
-            }
-            
-            // Always emit on the bus so webhook handlers can listen
-            devPollingBus.emit('contentChange', {
+            // Call webhook handlers for content change
+            await callWebhookHandlers({
               event,
               site_id: config.siteId,
               collection: update.collection,
@@ -268,49 +268,13 @@ async function startDevelopmentPolling(
               item_id: update.item_id,
               timestamp: new Date().toISOString(),
             });
-            console.log(`[DEV] Emitted contentChange event for ${update.collection}/${update.slug}`);
-            
-            // Call all registered webhook handlers
-            const webhookData = {
-              event,
-              site_id: config.siteId,
-              collection: update.collection,
-              slug: update.slug,
-              item_id: update.item_id,
-              timestamp: new Date().toISOString(),
-            };
-            
-            if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
-              console.log(`[DEV] Calling ${global.__spoolWebhookHandlers.length} registered webhook handlers`);
-              for (const handler of global.__spoolWebhookHandlers) {
-                try {
-                  await handler(webhookData);
-                } catch (err) {
-                  console.error('[DEV] Error in registered webhook handler:', err);
-                }
-              }
-            } else {
-              console.log('[DEV] No webhook handlers registered yet');
-            }
             
             // Handle slug changes - trigger for old slug to clear cache
             if (previousData.slug && previousData.slug !== update.slug) {
               console.log(`[DEV] Slug changed: ${update.collection}/${previousData.slug} → ${update.slug}`);
-              try {
-                await onContentChange({
-                  event: 'content.updated',
-                  site_id: config.siteId,
-                  collection: update.collection,
-                  slug: previousData.slug,
-                  item_id: update.item_id,
-                  timestamp: new Date().toISOString(),
-                });
-              } catch (webhookError) {
-                console.error(`[DEV] Webhook handler error for slug change:`, webhookError);
-              }
               
-              // Also emit slug change event on the bus
-              devPollingBus.emit('contentChange', {
+              // Call webhook handlers for slug change
+              await callWebhookHandlers({
                 event: 'content.updated',
                 site_id: config.siteId,
                 collection: update.collection,
@@ -318,46 +282,14 @@ async function startDevelopmentPolling(
                 item_id: update.item_id,
                 timestamp: new Date().toISOString(),
               });
-              
-              // Call registered webhook handlers for slug change
-              const slugChangeData = {
-                event: 'content.updated' as const,
-                site_id: config.siteId,
-                collection: update.collection,
-                slug: previousData.slug,
-                item_id: update.item_id,
-                timestamp: new Date().toISOString(),
-              };
-              
-              if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
-                for (const handler of global.__spoolWebhookHandlers) {
-                  try {
-                    await handler(slugChangeData);
-                  } catch (err) {
-                    console.error('[DEV] Error in registered webhook handler for slug change:', err);
-                  }
-                }
-              }
             }
           }
         } else if (!isFirstRun) {
           // New item detected (not on first run)
           console.log(`[DEV] New content created: ${update.collection}/${update.slug || 'no-slug'}`);
-          try {
-            await onContentChange({
-              event: 'content.created',
-              site_id: config.siteId,
-              collection: update.collection,
-              slug: update.slug,
-              item_id: update.item_id,
-              timestamp: new Date().toISOString(),
-            });
-          } catch (webhookError) {
-            console.error(`[DEV] Webhook handler error for new content:`, webhookError);
-          }
           
-          // Also emit new content event on the bus
-          devPollingBus.emit('contentChange', {
+          // Call webhook handlers for new content
+          await callWebhookHandlers({
             event: 'content.created',
             site_id: config.siteId,
             collection: update.collection,
@@ -365,26 +297,6 @@ async function startDevelopmentPolling(
             item_id: update.item_id,
             timestamp: new Date().toISOString(),
           });
-          
-          // Call registered webhook handlers for new content
-          const newContentData = {
-            event: 'content.created' as const,
-            site_id: config.siteId,
-            collection: update.collection,
-            slug: update.slug,
-            item_id: update.item_id,
-            timestamp: new Date().toISOString(),
-          };
-          
-          if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
-            for (const handler of global.__spoolWebhookHandlers) {
-              try {
-                await handler(newContentData);
-              } catch (err) {
-                console.error('[DEV] Error in registered webhook handler for new content:', err);
-              }
-            }
-          }
         }
         
         // Store comprehensive data for next check
@@ -405,21 +317,8 @@ async function startDevelopmentPolling(
             
             console.log(`[DEV] Content deleted: ${collection}/${data.slug}`);
             
-            try {
-              await onContentChange({
-                event: 'content.deleted',
-                site_id: config.siteId,
-                collection,
-                slug: data.slug,
-                item_id: itemId,
-                timestamp: new Date().toISOString(),
-              });
-            } catch (webhookError) {
-              console.error(`[DEV] Webhook handler error for deletion:`, webhookError);
-            }
-            
-            // Also emit deletion event on the bus
-            devPollingBus.emit('contentChange', {
+            // Call webhook handlers for deletion
+            await callWebhookHandlers({
               event: 'content.deleted',
               site_id: config.siteId,
               collection,
@@ -427,26 +326,6 @@ async function startDevelopmentPolling(
               item_id: itemId,
               timestamp: new Date().toISOString(),
             });
-            
-            // Call registered webhook handlers for deletion
-            const deletionData = {
-              event: 'content.deleted' as const,
-              site_id: config.siteId,
-              collection,
-              slug: data.slug,
-              item_id: itemId,
-              timestamp: new Date().toISOString(),
-            };
-            
-            if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
-              for (const handler of global.__spoolWebhookHandlers) {
-                try {
-                  await handler(deletionData);
-                } catch (err) {
-                  console.error('[DEV] Error in registered webhook handler for deletion:', err);
-                }
-              }
-            }
             
             delete lastContentCheck[key];
           }
@@ -537,30 +416,22 @@ export function createSpoolWebhookHandler(options: {
   ) => Promise<void> | void;
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
-  console.log('[DEV] createSpoolWebhookHandler called');
-  console.log('[DEV] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[DEV] developmentConfig provided:', !!options.developmentConfig);
 
   // In development, register this webhook handler globally so dev-bootstrap can call it
   if (process.env.NODE_ENV === 'development' && options.developmentConfig) {
-    console.log('[DEV] Registering webhook handler globally for development mode');
-    
     if (!global.__spoolWebhookHandlers) {
       global.__spoolWebhookHandlers = [];
     }
     
     const devHandler = async (data: SpoolWebhookPayload) => {
-      console.log(`[DEV] Webhook handler received event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
       try {
         await options.onWebhook(data, {} as any);
-        console.log(`[DEV] Successfully processed webhook event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
       } catch (err) {
-        console.error('[DEV] Error in onWebhook while processing development event:', err);
+        console.error('[DEV] Error in webhook handler:', err);
       }
     };
     
     global.__spoolWebhookHandlers.push(devHandler);
-    console.log('[DEV] Webhook handler registered. Total handlers:', global.__spoolWebhookHandlers.length);
   }
 
   return async function webhookHandler(request: Request): Promise<Response> {

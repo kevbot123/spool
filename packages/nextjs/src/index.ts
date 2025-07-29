@@ -27,7 +27,7 @@ export {
   verifySpoolWebhook, 
   parseSpoolWebhook, 
   getSpoolWebhookHeaders, 
-  createSpoolWebhookHandler 
+  createSpoolWebhookHandler
 } from './utils/webhook';
 
 // Types
