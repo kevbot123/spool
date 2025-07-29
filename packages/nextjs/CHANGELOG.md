@@ -2,6 +2,32 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [1.6.0] - 2025-01-29
+
+### Added
+- **Development Mode**: Automatic localhost live updates without ngrok or tunnels
+- **Smart Polling**: Intelligent content change detection during development
+- **Zero Configuration**: Uses existing API credentials for development mode
+- **Automatic Detection**: Only runs in `NODE_ENV=development`
+
+### Developer Experience
+- **Seamless Development**: Live updates work immediately on `localhost:3000`
+- **Same Code Everywhere**: Single configuration works in both development and production
+- **No Manual Setup**: No need for external tools or complex configuration
+
+### Example
+```typescript
+const handleWebhook = createSpoolWebhookHandler({
+  developmentConfig: {
+    apiKey: process.env.SPOOL_API_KEY!,
+    siteId: process.env.SPOOL_SITE_ID!,
+  },
+  onWebhook: async (data) => {
+    revalidatePath('/blog');
+  }
+});
+```
+
 ## [1.5.0] - 2025-01-29
 
 ### Added

@@ -14,7 +14,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **New in v1.5.0:** Secure webhook utilities with signature verification, payload validation, and easy integration helpers.
+> **New in v1.6.0:** Automatic localhost live updates! No more ngrok or tunnels needed for development. Just add `developmentConfig` to your webhook handler and get live updates on `localhost:3000`.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
@@ -45,6 +45,13 @@ import { revalidatePath } from 'next/cache';
 
 const handleWebhook = createSpoolWebhookHandler({
   secret: process.env.SPOOL_WEBHOOK_SECRET, // Optional but recommended for security
+  
+  // ✅ Development mode - enables live updates on localhost!
+  developmentConfig: {
+    apiKey: process.env.SPOOL_API_KEY!,
+    siteId: process.env.SPOOL_SITE_ID!,
+  },
+  
   onWebhook: async (data, headers) => {
     console.log(`Processing ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
     
@@ -132,6 +139,46 @@ SPOOL_WEBHOOK_SECRET="your_generated_webhook_secret_from_spool_admin"
 ```
 
 **Security Note:** The webhook secret ensures that only Spool can trigger your webhook endpoint. Always use webhook signature verification in production.
+
+### Development Mode (Localhost Live Updates)
+
+Spool automatically handles the localhost problem! When you add `developmentConfig` to your webhook handler, Spool enables intelligent polling during development:
+
+**How it works:**
+- ✅ **Production**: Uses real webhooks (fast, efficient)
+- ✅ **Development**: Uses smart polling (every 2 seconds, only when content changes)
+- ✅ **Zero configuration**: Just add your existing API credentials
+- ✅ **Automatic detection**: Only runs in `NODE_ENV=development`
+
+**Benefits:**
+- No ngrok or tunnel setup required
+- No manual refresh needed during development
+- Same code works in both development and production
+- Live updates work immediately on `localhost:3000`
+
+```typescript
+// ✅ This single configuration enables live updates everywhere
+const handleWebhook = createSpoolWebhookHandler({
+  secret: process.env.SPOOL_WEBHOOK_SECRET,
+  developmentConfig: {
+    apiKey: process.env.SPOOL_API_KEY!,    // Same as your existing setup
+    siteId: process.env.SPOOL_SITE_ID!,    // Same as your existing setup
+  },
+  onWebhook: async (data) => {
+    revalidatePath('/blog');
+  }
+});
+```
+
+**What you'll see:**
+```bash
+# In development console:
+[DEV] Content change detected: blog/my-new-post
+[dev-1643723456789] Processing webhook: content.updated for blog/my-new-post
+
+# In production console:
+[wh_1234567890] Processing webhook: content.updated for blog/my-new-post
+```
 
 ### Migration from Previous Versions
 

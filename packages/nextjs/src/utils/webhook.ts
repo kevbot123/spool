@@ -141,6 +141,72 @@ export function getSpoolWebhookHeaders(request: Request): {
 }
 
 /**
+ * Development mode polling for localhost webhook simulation
+ * This enables live updates during development when webhooks can't reach localhost
+ */
+let developmentPolling: NodeJS.Timeout | null = null;
+let lastContentCheck: Record<string, string> = {};
+
+async function startDevelopmentPolling(
+  config: { apiKey: string; siteId: string; baseUrl?: string },
+  onContentChange: (data: SpoolWebhookPayload) => Promise<void> | void
+) {
+  if (typeof window !== 'undefined') return; // Only run on server
+  if (process.env.NODE_ENV !== 'development') return; // Only in development
+  
+  const checkForChanges = async () => {
+    try {
+      const baseUrl = config.baseUrl || 'https://www.spoolcms.com';
+      const response = await fetch(`${baseUrl}/api/spool/${config.siteId}/content-updates`, {
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+        },
+      });
+      
+      if (response.ok) {
+        const updates = await response.json();
+        
+        for (const update of updates.items || []) {
+          const key = `${update.collection}-${update.item_id}`;
+          const currentHash = update.updated_at;
+          
+          if (lastContentCheck[key] && lastContentCheck[key] !== currentHash) {
+            // Content changed - simulate webhook
+            console.log(`[DEV] Content change detected: ${update.collection}/${update.slug}`);
+            
+            await onContentChange({
+              event: 'content.updated',
+              site_id: config.siteId,
+              collection: update.collection,
+              slug: update.slug,
+              item_id: update.item_id,
+              timestamp: new Date().toISOString(),
+            });
+          }
+          
+          lastContentCheck[key] = currentHash;
+        }
+      }
+    } catch (error) {
+      // Silently fail - don't spam console in development
+    }
+  };
+  
+  // Check every 2 seconds in development
+  developmentPolling = setInterval(checkForChanges, 2000);
+  
+  // Initial check
+  await checkForChanges();
+}
+
+function stopDevelopmentPolling() {
+  if (developmentPolling) {
+    clearInterval(developmentPolling);
+    developmentPolling = null;
+  }
+}
+
+/**
  * Create a complete webhook handler with verification and parsing
  * This is a higher-level utility that handles the common webhook processing pattern
  * 
@@ -154,6 +220,10 @@ export function getSpoolWebhookHeaders(request: Request): {
  * 
  * const handleWebhook = createSpoolWebhookHandler({
  *   secret: process.env.SPOOL_WEBHOOK_SECRET,
+ *   developmentConfig: {
+ *     apiKey: process.env.SPOOL_API_KEY!,
+ *     siteId: process.env.SPOOL_SITE_ID!,
+ *   },
  *   onWebhook: async (data, headers) => {
  *     console.log(`Processing ${data.event} for ${data.collection}/${data.slug}`);
  *     
@@ -172,12 +242,28 @@ export function getSpoolWebhookHeaders(request: Request): {
  */
 export function createSpoolWebhookHandler(options: {
   secret?: string;
+  developmentConfig?: {
+    apiKey: string;
+    siteId: string;
+    baseUrl?: string;
+  };
   onWebhook: (
     data: SpoolWebhookPayload, 
     headers: ReturnType<typeof getSpoolWebhookHeaders>
   ) => Promise<void> | void;
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
+  // Start development polling if config is provided
+  if (options.developmentConfig && process.env.NODE_ENV === 'development') {
+    startDevelopmentPolling(options.developmentConfig, (data) => {
+      return options.onWebhook(data, {
+        deliveryId: `dev-${Date.now()}`,
+        event: data.event,
+        userAgent: 'Spool-Dev-Polling/1.0',
+      });
+    }).catch(console.error);
+  }
+  
   return async function webhookHandler(request: Request): Promise<Response> {
     const startTime = Date.now();
     
@@ -236,3 +322,6 @@ export function createSpoolWebhookHandler(options: {
     }
   };
 }
+
+// Export development utilities for advanced use cases
+export { startDevelopmentPolling, stopDevelopmentPolling };
