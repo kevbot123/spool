@@ -2,6 +2,30 @@
 
 All notable changes to the @spoolcms/nextjs package will be documented in this file.
 
+## [1.5.0] - 2025-01-29
+
+### Added
+- **Webhook Security**: New `verifySpoolWebhook()` function for webhook signature verification
+- **Webhook Parsing**: New `parseSpoolWebhook()` function to validate and parse webhook payloads
+- **Webhook Headers**: New `getSpoolWebhookHeaders()` function to extract Spool-specific headers
+- **Complete Webhook Handler**: New `createSpoolWebhookHandler()` function for full webhook processing
+- **TypeScript Support**: Added `SpoolWebhookPayload` type for webhook data
+
+### Security
+- **HMAC-SHA256 Verification**: Secure webhook signature verification to prevent unauthorized requests
+- **Payload Validation**: Comprehensive validation of webhook payload structure and event types
+- **Error Handling**: Proper error responses for invalid signatures and malformed payloads
+
+### Developer Experience
+- **Easy Integration**: Simple utilities for common webhook patterns
+- **Comprehensive Testing**: Full test suite for all webhook utilities
+- **Better Debugging**: Detailed logging with delivery IDs and processing times
+- **Documentation**: Complete examples and usage patterns
+
+### Migration
+- Update your webhook endpoints to use the new verification utilities for enhanced security
+- See updated integration guide for secure webhook implementation examples
+
 ## [0.4.2] - 2025-01-22
 
 ### Fixed

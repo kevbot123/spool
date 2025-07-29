@@ -11,8 +11,10 @@ This guide provides all the necessary steps and code examples to integrate Spool
 
 ### 1. Install the package
 ```bash
-npm install @spoolcms/nextjs
+npm install @spoolcms/nextjs@latest
 ```
+
+> **New in v1.5.0:** Secure webhook utilities with signature verification, payload validation, and easy integration helpers.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
@@ -38,21 +40,376 @@ export const { GET, POST, PUT, DELETE } = createSpoolHandler();
 Create `app/api/webhooks/spool/route.ts` for real-time content updates:
 
 ```typescript
+import { createSpoolWebhookHandler } from '@spoolcms/nextjs';
+import { revalidatePath } from 'next/cache';
+
+const handleWebhook = createSpoolWebhookHandler({
+  secret: process.env.SPOOL_WEBHOOK_SECRET, // Optional but recommended for security
+  onWebhook: async (data, headers) => {
+    console.log(`Processing ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
+    
+    // More targeted revalidation based on webhook payload
+    switch (data.collection) {
+      case 'blog':
+        revalidatePath('/blog');
+        if (data.slug) {
+          revalidatePath(`/blog/${data.slug}`);
+        }
+        break;
+      case 'pages':
+        if (data.slug) {
+          revalidatePath(`/${data.slug}`);
+        }
+        break;
+      default:
+        // Revalidate collection-specific paths
+        revalidatePath(`/${data.collection}`);
+        if (data.slug) {
+          revalidatePath(`/${data.collection}/${data.slug}`);
+        }
+    }
+    
+    // Always revalidate these common paths
+    revalidatePath('/');
+    revalidatePath('/sitemap.xml');
+  }
+});
+
+export const POST = handleWebhook;
+```
+
+**Alternative: Manual webhook processing for more control**
+
+```typescript
+import { 
+  verifySpoolWebhook, 
+  parseSpoolWebhook, 
+  getSpoolWebhookHeaders 
+} from '@spoolcms/nextjs';
 import { revalidatePath } from 'next/cache';
 
 export async function POST(request: Request) {
-  // Revalidate your site when content changes in Spool
+  try {
+    const payload = await request.text();
+    const headers = getSpoolWebhookHeaders(request);
+    const secret = process.env.SPOOL_WEBHOOK_SECRET;
+    
+    // Verify webhook signature for security
+    if (secret && headers.signature) {
+      const isValid = verifySpoolWebhook(payload, headers.signature, secret);
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        return new Response('Unauthorized', { status: 401 });
+      }
+    }
+    
+    // Parse and validate payload
+    const data = parseSpoolWebhook(payload);
+    if (!data) {
+      return new Response('Invalid payload', { status: 400 });
+    }
+    
+    console.log(`Received webhook: ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
+    
+    // Your revalidation logic here...
+    revalidatePath('/');
+    
+    return new Response('OK');
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return new Response('Error processing webhook', { status: 500 });
+  }
+}
+```
+
+### 5. Configure webhook settings
+1. Add your webhook URL (`https://yoursite.com/api/webhooks/spool`) in your Spool project settings under **Site Settings > Instant Updates**
+2. Generate a webhook secret for security and add it to your environment variables:
+
+```bash
+# Add to .env.local
+SPOOL_WEBHOOK_SECRET="your_generated_webhook_secret_from_spool_admin"
+```
+
+**Security Note:** The webhook secret ensures that only Spool can trigger your webhook endpoint. Always use webhook signature verification in production.
+
+### Migration from Previous Versions
+
+If you're upgrading from an earlier version, update your webhook endpoint to use the new secure utilities:
+
+```bash
+# Update to the latest version
+npm install @spoolcms/nextjs@latest
+```
+
+**Before (v1.4.x and earlier):**
+```typescript
+export async function POST(request: Request) {
+  const data = await request.json();
   revalidatePath('/');
-  revalidatePath('/blog');
-  revalidatePath('/sitemap.xml');
-  
   return new Response('OK');
 }
 ```
 
-Then add your webhook URL (`https://yoursite.com/api/webhooks/spool`) in your Spool project settings under **Site Settings > Instant Updates**.
+**After (v1.5.0+):**
+```typescript
+import { createSpoolWebhookHandler } from '@spoolcms/nextjs';
+
+export const POST = createSpoolWebhookHandler({
+  secret: process.env.SPOOL_WEBHOOK_SECRET,
+  onWebhook: async (data) => {
+    revalidatePath('/');
+  }
+});
+```
 
 **That's it!** Your Next.js site is now connected to Spool CMS with real-time updates.
+
+### Quick Test
+
+Test your webhook integration:
+
+```bash
+# Test your webhook endpoint
+npm run test:webhook
+
+# Or test a specific URL
+npm run test:webhook https://yoursite.com/api/webhooks/spool
+```
+
+This will verify your webhook endpoint is working correctly and help debug any issues.
+
+---
+
+## Webhook System Deep Dive
+
+Spool's webhook system provides real-time updates to your Next.js application whenever content changes. Here's everything you need to know:
+
+### Webhook Events
+
+Spool sends webhooks for these content events:
+
+| Event | Description | When it's triggered |
+|-------|-------------|-------------------|
+| `content.created` | New content item created | When you create and save a new item |
+| `content.updated` | Existing content modified | When you edit and save an existing item |
+| `content.published` | Content status changed to published | When you publish a draft item |
+| `content.deleted` | Content item removed | When you delete an item |
+
+### Webhook Payload Structure
+
+Every webhook request includes this JSON payload:
+
+```json
+{
+  "event": "content.updated",
+  "site_id": "your-site-id",
+  "collection": "blog",
+  "slug": "my-blog-post",
+  "item_id": "uuid-of-the-item",
+  "timestamp": "2024-01-15T10:30:00.000Z"
+}
+```
+
+### Webhook Headers
+
+Spool includes these headers with every webhook request:
+
+```
+Content-Type: application/json
+User-Agent: Spool-CMS-Webhook/1.0
+X-Spool-Delivery: unique-delivery-id
+X-Spool-Event: content.updated
+X-Spool-Signature-256: sha256=signature-hash (if secret is configured)
+```
+
+### Advanced Webhook Implementation
+
+Here's a more sophisticated webhook handler with logging and error handling:
+
+```typescript
+// app/api/webhooks/spool/route.ts
+import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
+import crypto from 'crypto';
+
+const WEBHOOK_SECRET = process.env.SPOOL_WEBHOOK_SECRET;
+
+interface WebhookPayload {
+  event: 'content.created' | 'content.updated' | 'content.published' | 'content.deleted';
+  site_id: string;
+  collection: string;
+  slug?: string;
+  item_id: string;
+  timestamp: string;
+}
+
+function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
+  if (!secret) return true;
+  
+  try {
+    const expectedSignature = `sha256=${crypto
+      .createHmac('sha256', secret)
+      .update(payload, 'utf8')
+      .digest('hex')}`;
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch (error) {
+    console.error('Error verifying webhook signature:', error);
+    return false;
+  }
+}
+
+export async function POST(request: Request) {
+  const startTime = Date.now();
+  const headersList = headers();
+  const deliveryId = headersList.get('x-spool-delivery');
+  
+  try {
+    const payload = await request.text();
+    const signature = headersList.get('x-spool-signature-256');
+    
+    // Verify webhook signature
+    if (WEBHOOK_SECRET && signature) {
+      const isValid = verifyWebhookSignature(payload, signature, WEBHOOK_SECRET);
+      if (!isValid) {
+        console.error(`[${deliveryId}] Invalid webhook signature`);
+        return new Response('Unauthorized', { status: 401 });
+      }
+    }
+    
+    const data: WebhookPayload = JSON.parse(payload);
+    const { event, collection, slug, item_id } = data;
+    
+    console.log(`[${deliveryId}] Processing webhook: ${event} for ${collection}${slug ? `/${slug}` : ''} (${item_id})`);
+    
+    // Collection-specific revalidation logic
+    const pathsToRevalidate: string[] = [];
+    
+    switch (collection) {
+      case 'blog':
+        pathsToRevalidate.push('/blog');
+        if (slug) pathsToRevalidate.push(`/blog/${slug}`);
+        break;
+        
+      case 'pages':
+        if (slug) pathsToRevalidate.push(`/${slug}`);
+        break;
+        
+      case 'products':
+        pathsToRevalidate.push('/products');
+        if (slug) pathsToRevalidate.push(`/products/${slug}`);
+        break;
+        
+      default:
+        // Generic collection handling
+        pathsToRevalidate.push(`/${collection}`);
+        if (slug) pathsToRevalidate.push(`/${collection}/${slug}`);
+    }
+    
+    // Always revalidate these paths
+    pathsToRevalidate.push('/', '/sitemap.xml');
+    
+    // Revalidate all paths
+    for (const path of pathsToRevalidate) {
+      revalidatePath(path);
+      console.log(`[${deliveryId}] Revalidated: ${path}`);
+    }
+    
+    const duration = Date.now() - startTime;
+    console.log(`[${deliveryId}] Webhook processed successfully in ${duration}ms`);
+    
+    return new Response('OK', {
+      headers: {
+        'X-Spool-Processed': 'true',
+        'X-Processing-Time': `${duration}ms`
+      }
+    });
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[${deliveryId}] Webhook error after ${duration}ms:`, error);
+    
+    return new Response('Error processing webhook', { 
+      status: 500,
+      headers: {
+        'X-Spool-Error': 'true',
+        'X-Processing-Time': `${duration}ms`
+      }
+    });
+  }
+}
+```
+
+### Webhook Security Best Practices
+
+1. **Always verify webhook signatures** in production:
+   ```typescript
+   if (!verifyWebhookSignature(payload, signature, WEBHOOK_SECRET)) {
+     return new Response('Unauthorized', { status: 401 });
+   }
+   ```
+
+2. **Use environment variables** for secrets:
+   ```bash
+   SPOOL_WEBHOOK_SECRET="your-secret-from-spool-admin"
+   ```
+
+3. **Implement proper error handling** and logging for debugging
+
+4. **Return appropriate HTTP status codes**:
+   - `200 OK` - Webhook processed successfully
+   - `401 Unauthorized` - Invalid signature
+   - `500 Internal Server Error` - Processing error
+
+### Testing Webhooks
+
+You can test your webhook endpoint using the test button in Spool admin settings, or manually with curl:
+
+```bash
+# Test without signature (if no secret configured)
+curl -X POST https://yoursite.com/api/webhooks/spool \
+  -H "Content-Type: application/json" \
+  -H "X-Spool-Delivery: test-delivery-123" \
+  -H "X-Spool-Event: content.updated" \
+  -d '{
+    "event": "content.updated",
+    "site_id": "your-site-id",
+    "collection": "blog",
+    "slug": "test-post",
+    "item_id": "test-item-id",
+    "timestamp": "2024-01-15T10:30:00.000Z"
+  }'
+```
+
+### Webhook Monitoring
+
+Spool provides webhook delivery monitoring in the admin dashboard:
+
+1. Go to **Admin > Webhook Deliveries** to see all webhook attempts
+2. View delivery status (success/failed), response codes, and error messages
+3. Debug failed deliveries with detailed error information
+4. Monitor webhook performance and reliability
+
+### Troubleshooting Webhooks
+
+**Common Issues:**
+
+1. **405 Method Not Allowed**: Your webhook endpoint doesn't exist or doesn't handle POST requests
+2. **401 Unauthorized**: Webhook signature verification failed - check your secret
+3. **500 Internal Server Error**: Error in your webhook processing code
+4. **Timeout**: Your webhook takes too long to respond (>10 seconds)
+
+**Debug Steps:**
+
+1. Check your webhook URL is correct and accessible
+2. Verify your webhook secret matches what's in Spool admin
+3. Check your server logs for error details
+4. Use the webhook test button in Spool admin settings
+5. Monitor webhook deliveries in the admin dashboard
 
 ---
 

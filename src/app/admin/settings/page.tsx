@@ -10,10 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { DestructiveActionDialog } from '@/components/ui/destructive-action-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Save, RefreshCw, Globe, Key, Trash2 } from 'lucide-react';
+import { Copy, Save, RefreshCw, Globe, Key, Trash2, TestTube, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSite } from '@/context/SiteContext';
 import { useAdminHeader } from '@/context/AdminHeaderContext';
+import { generateWebhookSecret, testWebhook } from '@/lib/webhooks';
 
 interface SiteSettings {
   id: string;
@@ -23,6 +24,7 @@ interface SiteSettings {
   api_key: string;
   settings: {
     webhook_url?: string;
+    webhook_secret?: string;
     social_links?: {
       twitter?: string;
       facebook?: string;
@@ -51,6 +53,9 @@ export default function SiteSettingsPage() {
   const [name, setName] = useState('');
   const [domain, setDomain] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookSecret, setWebhookSecret] = useState('');
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [defaultTitle, setDefaultTitle] = useState('');
   const [defaultDescription, setDefaultDescription] = useState('');
   const [defaultOgImage, setDefaultOgImage] = useState('');
@@ -132,6 +137,7 @@ export default function SiteSettingsPage() {
         setName(data.name || '');
         setDomain(data.domain || '');
         setWebhookUrl(data.settings?.webhook_url || '');
+        setWebhookSecret(data.settings?.webhook_secret || '');
         setDefaultTitle(data.settings?.seo?.default_title || '');
         setDefaultDescription(data.settings?.seo?.default_description || '');
         setDefaultOgImage(data.settings?.seo?.default_og_image || '');
@@ -168,6 +174,7 @@ export default function SiteSettingsPage() {
         settings: {
           ...settings.settings, // Preserve other settings
           webhook_url: webhookUrl || undefined,
+          webhook_secret: webhookSecret || undefined,
           social_links: {
             twitter: twitterUrl || undefined,
             facebook: facebookUrl || undefined,
@@ -216,6 +223,7 @@ export default function SiteSettingsPage() {
     name,
     domain,
     webhookUrl,
+    webhookSecret,
     defaultTitle,
     defaultDescription,
     defaultOgImage,
@@ -225,6 +233,48 @@ export default function SiteSettingsPage() {
     instagramUrl,
     refreshSites,
   ]);
+
+  const handleGenerateWebhookSecret = useCallback(() => {
+    const newSecret = generateWebhookSecret();
+    setWebhookSecret(newSecret);
+    toast.success('New webhook secret generated');
+  }, []);
+
+  const handleTestWebhook = useCallback(async () => {
+    if (!currentSite) {
+      toast.error('No site selected');
+      return;
+    }
+
+    if (!webhookUrl) {
+      toast.error('Please enter a webhook URL first');
+      return;
+    }
+
+    try {
+      setIsTestingWebhook(true);
+      
+      // We need to create a supabase client here
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const result = await testWebhook(supabase, currentSite.id);
+      
+      if (result.success) {
+        toast.success('Webhook test successful! Check your endpoint logs.');
+      } else {
+        toast.error(`Webhook test failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error testing webhook:', error);
+      toast.error('Failed to test webhook');
+    } finally {
+      setIsTestingWebhook(false);
+    }
+  }, [currentSite, webhookUrl]);
 
   const handleDeleteSite = async () => {
     if (!currentSite) return;
@@ -365,16 +415,74 @@ export default function SiteSettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="webhook-url">Webhook URL</Label>
-              <Input
-                id="webhook-url"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                placeholder="https://yoursite.com/api/webhooks/spool"
-                type="url"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="webhook-url"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://yoursite.com/api/webhooks/spool"
+                  type="url"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleTestWebhook}
+                  disabled={!webhookUrl || isTestingWebhook}
+                  className="shrink-0"
+                >
+                  {isTestingWebhook ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <TestTube className="h-4 w-4" />
+                  )}
+                  Test
+                </Button>
+              </div>
               <p className="text-sm text-muted-foreground">
                 This URL will be called whenever content is updated, allowing your Next.js site to revalidate pages instantly.
                 Create the webhook endpoint at <code className="bg-muted px-1 rounded">app/api/webhooks/spool/route.ts</code> in your Next.js project.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="webhook-secret">Webhook Secret</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="webhook-secret"
+                    type={showWebhookSecret ? "text" : "password"}
+                    value={webhookSecret}
+                    onChange={(e) => setWebhookSecret(e.target.value)}
+                    placeholder="Generate a secure secret for webhook verification"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                  >
+                    {showWebhookSecret ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGenerateWebhookSecret}
+                  className="shrink-0"
+                >
+                  <Key className="h-4 w-4" />
+                  Generate
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                A secure secret used to verify webhook authenticity. Keep this secret safe and use it in your webhook endpoint to verify requests are from Spool.
               </p>
             </div>
           </CardContent>

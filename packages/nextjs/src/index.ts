@@ -19,6 +19,14 @@ export { resolveConfig } from './utils/config';
 export { clearAllCaches } from './utils/cache';
 export { img } from './utils/image';
 
+// Webhook utilities
+export { 
+  verifySpoolWebhook, 
+  parseSpoolWebhook, 
+  getSpoolWebhookHeaders, 
+  createSpoolWebhookHandler 
+} from './utils/webhook';
+
 // Types
 export type { 
   SpoolConfig, 
@@ -45,6 +53,9 @@ export type {
   SpoolContentSingle,
   CollectionContent
 } from './types';
+
+// Webhook types
+export type { SpoolWebhookPayload } from './utils/webhook';
 
 // Type guards
 export { isPublishedContent, isDraftContent } from './types';

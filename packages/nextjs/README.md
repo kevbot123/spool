@@ -214,7 +214,109 @@ const rawMarkdown = post.body.markdown; // Easy access to raw markdown
 
 ---
 
-## 6. Example: Building a Blog
+## 6. Webhook Integration
+
+Spool provides secure webhook utilities for real-time content updates in your Next.js application.
+
+### Basic Webhook Handler
+
+```typescript
+// app/api/webhooks/spool/route.ts
+import { createSpoolWebhookHandler } from '@spoolcms/nextjs';
+import { revalidatePath } from 'next/cache';
+
+const handleWebhook = createSpoolWebhookHandler({
+  secret: process.env.SPOOL_WEBHOOK_SECRET, // Optional but recommended
+  onWebhook: async (data, headers) => {
+    console.log(`Processing ${data.event} for ${data.collection}/${data.slug}`);
+    
+    // Revalidate paths based on collection
+    if (data.collection === 'blog') {
+      revalidatePath('/blog');
+      if (data.slug) revalidatePath(`/blog/${data.slug}`);
+    }
+    
+    revalidatePath('/'); // Always revalidate homepage
+  }
+});
+
+export const POST = handleWebhook;
+```
+
+### Manual Webhook Processing
+
+For more control, use the individual utilities:
+
+```typescript
+// app/api/webhooks/spool/route.ts
+import { 
+  verifySpoolWebhook, 
+  parseSpoolWebhook, 
+  getSpoolWebhookHeaders 
+} from '@spoolcms/nextjs';
+import { revalidatePath } from 'next/cache';
+
+export async function POST(request: Request) {
+  const payload = await request.text();
+  const headers = getSpoolWebhookHeaders(request);
+  const secret = process.env.SPOOL_WEBHOOK_SECRET;
+  
+  // Verify signature (recommended for security)
+  if (secret && headers.signature) {
+    const isValid = verifySpoolWebhook(payload, headers.signature, secret);
+    if (!isValid) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+  }
+  
+  // Parse and validate payload
+  const data = parseSpoolWebhook(payload);
+  if (!data) {
+    return new Response('Invalid payload', { status: 400 });
+  }
+  
+  // Process webhook
+  console.log(`Processing ${data.event} for ${data.collection}`);
+  
+  // Revalidate relevant paths
+  revalidatePath('/');
+  if (data.collection === 'blog') {
+    revalidatePath('/blog');
+    if (data.slug) revalidatePath(`/blog/${data.slug}`);
+  }
+  
+  return new Response('OK');
+}
+```
+
+### Webhook Types
+
+```typescript
+import type { SpoolWebhookPayload } from '@spoolcms/nextjs';
+
+// Webhook payload structure
+interface SpoolWebhookPayload {
+  event: 'content.created' | 'content.updated' | 'content.published' | 'content.deleted';
+  site_id: string;
+  collection: string;
+  slug?: string;
+  item_id: string;
+  timestamp: string;
+}
+```
+
+### Environment Variables
+
+Add your webhook secret to your environment file:
+
+```bash
+# .env.local
+SPOOL_WEBHOOK_SECRET="your_webhook_secret_from_spool_admin"
+```
+
+---
+
+## 7. Example: Building a Blog
 
 Here is a complete example for creating a blog list and detail pages.
 

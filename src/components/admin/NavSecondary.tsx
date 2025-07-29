@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Trash2, HelpCircle, FileText, MapPinned, UsersRound, UserRoundCog, Cog, UserPlus, UserRoundPlusIcon, UserRoundPlus, FileJson } from 'lucide-react';
+import { Calendar, Trash2, HelpCircle, FileText, MapPinned, UsersRound, UserRoundCog, Cog, UserPlus, UserRoundPlusIcon, UserRoundPlus, FileJson, Webhook } from 'lucide-react';
 import { LuRocket } from "react-icons/lu";
 import {
   SidebarGroup,
@@ -35,6 +35,11 @@ const items = [
     title: 'Redirects',
     url: '/admin/redirects',
     icon: FileJson,
+  },
+  {
+    title: 'Webhook deliveries',
+    url: '/admin/webhooks',
+    icon: Webhook,
   },
   {
     title: 'Help',

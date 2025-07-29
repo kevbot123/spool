@@ -179,7 +179,7 @@ export class ContentManager {
       created.collections.slug,
       created.id,
       created.slug
-    );
+    ).catch(console.error);
 
     return mappedItem;
   }
@@ -302,7 +302,7 @@ export class ContentManager {
         updated.collections.slug,
         updated.id,
         updated.slug
-      );
+      ).catch(console.error);
     }
 
     return mappedItem;
@@ -383,7 +383,7 @@ export class ContentManager {
         updated.collections.slug,
         updated.id,
         updated.slug
-      );
+      ).catch(console.error);
     }
 
     return mappedItem;
@@ -431,7 +431,7 @@ export class ContentManager {
       itemToDelete.collections.slug,
       itemToDelete.id,
       itemToDelete.slug
-    );
+    ).catch(console.error);
   }
 
   async searchContent(query: string, collectionSlugs?: string[], publishedOnly: boolean = false): Promise<ContentItem[]> {
