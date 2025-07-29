@@ -9,17 +9,17 @@ import { devPollingBus } from './dev-polling-bus';
 
 // Augment the global namespace to inform TypeScript about our custom global property.
 declare global {
-  var __spoolDevPollingStarted: boolean | undefined;
+  var __spoolPollingActive: boolean | undefined;
 }
 
 // Use a global variable to ensure the polling process is a singleton.
 if (
   typeof window === 'undefined' &&
   process.env.NODE_ENV === 'development' &&
-  !global.__spoolDevPollingStarted
+  !global.__spoolPollingActive
 ) {
   // Set the flag immediately to prevent race conditions.
-  global.__spoolDevPollingStarted = true;
+  global.__spoolPollingActive = true;
 
   if (process.env.SPOOL_API_KEY && process.env.SPOOL_SITE_ID) {
     try {
@@ -39,7 +39,7 @@ if (
     } catch (e) {
       console.error('[DEV] Failed to start Spool development polling.', e);
       // Unset the key if startup fails, allowing a future attempt.
-      global.__spoolDevPollingStarted = false;
+      global.__spoolPollingActive = false;
     }
   }
 }

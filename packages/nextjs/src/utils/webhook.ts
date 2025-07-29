@@ -417,12 +417,6 @@ export function createSpoolWebhookHandler(options: {
     // Start polling if it hasn't already been started elsewhere (e.g., via dev-bootstrap)
     try {
       startDevelopmentPolling(options.developmentConfig, async (data) => {
-        // Forward the event to the user's webhook handler as if it came from Spool
-        try {
-          await options.onWebhook(data, {} as any);
-        } catch (err) {
-          console.error('[DEV] Error in onWebhook while handling simulated webhook:', err);
-        }
         // Also broadcast on the devPollingBus so multiple handlers can react if needed
         devPollingBus.emit('contentChange', data);
       });

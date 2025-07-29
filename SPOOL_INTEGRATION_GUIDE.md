@@ -14,7 +14,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **New in v1.6.12:** Fixed a bug where live updates in development mode (localhost) were not reliably triggering content revalidation. Polling is now correctly connected to the webhook handler, ensuring `revalidatePath` is called on every change.
+> **New in v1.6.13:** Fixed a bug where live updates in development mode (localhost) were not reliably triggering content revalidation. Polling is now correctly connected to the webhook handler, ensuring `revalidatePath` is called on every change.
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
