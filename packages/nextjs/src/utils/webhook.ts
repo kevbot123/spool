@@ -9,6 +9,8 @@ import crypto from 'crypto';
 declare global {
   // eslint-disable-next-line no-var
   var __spoolPollingActive: boolean | undefined;
+  // eslint-disable-next-line no-var
+  var __spoolWebhookHandlers: ((data: SpoolWebhookPayload) => Promise<void> | void)[] | undefined;
 }
 
 export interface SpoolWebhookPayload {
@@ -268,6 +270,29 @@ async function startDevelopmentPolling(
             });
             console.log(`[DEV] Emitted contentChange event for ${update.collection}/${update.slug}`);
             
+            // Call all registered webhook handlers
+            const webhookData = {
+              event,
+              site_id: config.siteId,
+              collection: update.collection,
+              slug: update.slug,
+              item_id: update.item_id,
+              timestamp: new Date().toISOString(),
+            };
+            
+            if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
+              console.log(`[DEV] Calling ${global.__spoolWebhookHandlers.length} registered webhook handlers`);
+              for (const handler of global.__spoolWebhookHandlers) {
+                try {
+                  await handler(webhookData);
+                } catch (err) {
+                  console.error('[DEV] Error in registered webhook handler:', err);
+                }
+              }
+            } else {
+              console.log('[DEV] No webhook handlers registered yet');
+            }
+            
             // Handle slug changes - trigger for old slug to clear cache
             if (previousData.slug && previousData.slug !== update.slug) {
               console.log(`[DEV] Slug changed: ${update.collection}/${previousData.slug} → ${update.slug}`);
@@ -293,6 +318,26 @@ async function startDevelopmentPolling(
                 item_id: update.item_id,
                 timestamp: new Date().toISOString(),
               });
+              
+              // Call registered webhook handlers for slug change
+              const slugChangeData = {
+                event: 'content.updated' as const,
+                site_id: config.siteId,
+                collection: update.collection,
+                slug: previousData.slug,
+                item_id: update.item_id,
+                timestamp: new Date().toISOString(),
+              };
+              
+              if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
+                for (const handler of global.__spoolWebhookHandlers) {
+                  try {
+                    await handler(slugChangeData);
+                  } catch (err) {
+                    console.error('[DEV] Error in registered webhook handler for slug change:', err);
+                  }
+                }
+              }
             }
           }
         } else if (!isFirstRun) {
@@ -320,6 +365,26 @@ async function startDevelopmentPolling(
             item_id: update.item_id,
             timestamp: new Date().toISOString(),
           });
+          
+          // Call registered webhook handlers for new content
+          const newContentData = {
+            event: 'content.created' as const,
+            site_id: config.siteId,
+            collection: update.collection,
+            slug: update.slug,
+            item_id: update.item_id,
+            timestamp: new Date().toISOString(),
+          };
+          
+          if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
+            for (const handler of global.__spoolWebhookHandlers) {
+              try {
+                await handler(newContentData);
+              } catch (err) {
+                console.error('[DEV] Error in registered webhook handler for new content:', err);
+              }
+            }
+          }
         }
         
         // Store comprehensive data for next check
@@ -362,6 +427,26 @@ async function startDevelopmentPolling(
               item_id: itemId,
               timestamp: new Date().toISOString(),
             });
+            
+            // Call registered webhook handlers for deletion
+            const deletionData = {
+              event: 'content.deleted' as const,
+              site_id: config.siteId,
+              collection,
+              slug: data.slug,
+              item_id: itemId,
+              timestamp: new Date().toISOString(),
+            };
+            
+            if (global.__spoolWebhookHandlers && global.__spoolWebhookHandlers.length > 0) {
+              for (const handler of global.__spoolWebhookHandlers) {
+                try {
+                  await handler(deletionData);
+                } catch (err) {
+                  console.error('[DEV] Error in registered webhook handler for deletion:', err);
+                }
+              }
+            }
             
             delete lastContentCheck[key];
           }
@@ -456,27 +541,26 @@ export function createSpoolWebhookHandler(options: {
   console.log('[DEV] NODE_ENV:', process.env.NODE_ENV);
   console.log('[DEV] developmentConfig provided:', !!options.developmentConfig);
 
-  // In development, hook into the local polling bus to simulate webhooks
+  // In development, register this webhook handler globally so dev-bootstrap can call it
   if (process.env.NODE_ENV === 'development' && options.developmentConfig) {
-    console.log('[DEV] Setting up development mode webhook handler');
-    // Listen for events emitted from the development polling (started by dev-bootstrap)
-    const forwardFromBus = async (data: SpoolWebhookPayload) => {
+    console.log('[DEV] Registering webhook handler globally for development mode');
+    
+    if (!global.__spoolWebhookHandlers) {
+      global.__spoolWebhookHandlers = [];
+    }
+    
+    const devHandler = async (data: SpoolWebhookPayload) => {
       console.log(`[DEV] Webhook handler received event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
       try {
         await options.onWebhook(data, {} as any);
         console.log(`[DEV] Successfully processed webhook event: ${data.event} for ${data.collection}/${data.slug || 'no-slug'}`);
       } catch (err) {
-        console.error('[DEV] Error in onWebhook while forwarding EventEmitter webhook:', err);
+        console.error('[DEV] Error in onWebhook while processing development event:', err);
       }
     };
-
-    devPollingBus.on('contentChange', forwardFromBus);
-    console.log('[DEV] Registered webhook handler to listen for contentChange events');
-
-    // Ensure we clean up the listener when the process exits / reloads
-    process.on('exit', () => {
-      devPollingBus.off('contentChange', forwardFromBus);
-    });
+    
+    global.__spoolWebhookHandlers.push(devHandler);
+    console.log('[DEV] Webhook handler registered. Total handlers:', global.__spoolWebhookHandlers.length);
   }
 
   return async function webhookHandler(request: Request): Promise<Response> {
