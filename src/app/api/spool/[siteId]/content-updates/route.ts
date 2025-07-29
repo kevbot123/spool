@@ -65,13 +65,15 @@ export async function GET(
         title,
         status,
         data,
+        draft_data,
         updated_at,
         published_at,
+        created_at,
         collections!inner(slug)
       `)
       .eq('site_id', siteId)
       .order('updated_at', { ascending: false })
-      .limit(200);
+      .limit(500); // Increased limit for better coverage
     
     if (contentError) {
       console.error('Error fetching content updates:', contentError);
@@ -87,29 +89,39 @@ export async function GET(
     
     // Transform data for development polling with comprehensive change detection
     const updates = (contentItems || []).map(item => {
-      // Create a comprehensive hash of all content that could change
-      // Handle both data.field and data.data.field structures
-      const normalizedData = item.data?.data || item.data || {};
+      // Normalize data structure - handle both nested and flat data
+      let normalizedData = {};
       
-      const contentHash = JSON.stringify({
-        title: item.title,
-        slug: item.slug,
-        status: item.status,
-        published_at: item.published_at,
-        updated_at: item.updated_at,
-        // Include all data fields (description, body, custom fields, etc.)
-        data: normalizedData,
-      });
+      try {
+        // Handle different data structures that might exist
+        if (item.data) {
+          if (typeof item.data === 'object') {
+            // If data has a nested 'data' property, use that, otherwise use the data directly
+            normalizedData = item.data.data || item.data;
+          } else {
+            normalizedData = item.data;
+          }
+        }
+        
+        // Include draft data if it exists (for published items with drafts)
+        if (item.draft_data && typeof item.draft_data === 'object') {
+          normalizedData = { ...normalizedData, ...item.draft_data };
+        }
+      } catch (error) {
+        console.warn('Error normalizing data for item:', item.id, error);
+        normalizedData = item.data || {};
+      }
       
       return {
         item_id: item.id,
-        slug: item.slug,
-        title: item.title,
-        status: item.status,
+        slug: item.slug || '',
+        title: item.title || '',
+        status: item.status || 'draft',
         published_at: item.published_at,
+        created_at: item.created_at,
         collection: item.collections.slug,
         updated_at: item.updated_at,
-        content_hash: contentHash, // This will detect any field changes
+        data: normalizedData, // Include the actual data for hash calculation
       };
     });
     

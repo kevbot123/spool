@@ -26,11 +26,11 @@ import { getStatusColor } from '@/lib/status-colors';
 import { useCollectionData } from '@/hooks/useCollectionData';
 
 // StatusSelect component to prevent infinite re-renders
-const StatusSelect = React.memo(({ 
+const StatusSelect = React.memo(({
   itemId,
   status,
   publishedAt,
-  onTogglePublish 
+  onTogglePublish
 }: {
   itemId: string;
   status: 'draft' | 'published';
@@ -132,7 +132,7 @@ export function DetailPanel({
 }: DetailPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { currentSite } = useSite();
-  
+
   // Use the shared collection data hook
   const {
     items: localItems,
@@ -158,7 +158,7 @@ export function DetailPanel({
   // SEO and OG inheritance states
   const [inheritSeoFromContent, setInheritSeoFromContent] = useState(true);
   const [inheritOgFromSeo, setInheritOgFromSeo] = useState(true);
-  
+
   // Collection modal state
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
@@ -177,11 +177,11 @@ export function DetailPanel({
       }
       return (currentItem as any)[fieldName] || '';
     }
-    
+
     // Handle data fields
     return currentItem.data?.[fieldName];
   }, [currentItem]);
-  
+
   useEffect(() => {
     setIsOpen(true);
   }, []);
@@ -190,7 +190,7 @@ export function DetailPanel({
   useEffect(() => {
     const fetchAllReferenceOptions = async () => {
       if (!currentSite) return; // Don't fetch if no site is selected
-      
+
       const newOptions = new Map<string, { label: string; value: string }[]>();
       const collectionsToFetch = new Set<string>();
 
@@ -208,9 +208,9 @@ export function DetailPanel({
           if (res.ok) {
             const json = await res.json();
             if (Array.isArray(json?.items)) {
-              const opts = json.items.map((item: any) => ({ 
-                label: item.title || item.slug || item.id, 
-                value: item.id 
+              const opts = json.items.map((item: any) => ({
+                label: item.title || item.slug || item.id,
+                value: item.id
               }));
               newOptions.set(collectionSlug, opts);
             }
@@ -219,7 +219,7 @@ export function DetailPanel({
           console.error(`Failed to fetch reference options for ${collectionSlug}`, error);
         }
       }
-      
+
       setReferenceOptions(newOptions);
     };
 
@@ -308,7 +308,7 @@ export function DetailPanel({
         '@id': `https://yoursite.com/${slug}`,
       };
     }
-    
+
     const title = getFieldValue('title');
     if (title) data.headline = title;
 
@@ -336,7 +336,7 @@ export function DetailPanel({
     if (dateModified) {
       data.dateModified = new Date(dateModified).toISOString();
     }
-    
+
     return data;
   };
   const structuredData = getStructuredData();
@@ -353,17 +353,15 @@ export function DetailPanel({
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 transition-opacity z-40 ${
-          isOpen ? 'bg-opacity-0' : 'bg-opacity-0'
-        }`}
+        className={`fixed inset-0 transition-opacity z-40 ${isOpen ? 'bg-opacity-0' : 'bg-opacity-0'
+          }`}
         onClick={handleClose}
       />
-      
+
       {/* Panel */}
       <div
-        className={`fixed right-0 top-0 h-full w-full max-w-[900px] bg-white shadow-2xl z-50 m-[8px] rounded-t-xl outline-1 outline-gray-900/5 transform transition-transform ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed right-0 top-0 h-full w-full max-w-[900px] bg-white shadow-2xl z-50 m-[8px] rounded-t-xl outline-1 outline-gray-900/5 transform transition-transform ${isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="h-full flex flex-col">
           {/* Header */}
@@ -395,7 +393,7 @@ export function DetailPanel({
                   </Button>
                 </div>
               )}
-              
+
               {itemHasPendingChanges ? (
                 <Button
                   size="sm"
@@ -449,7 +447,7 @@ export function DetailPanel({
                     <DestructiveActionDialog
                       trigger={
                         <DropdownMenuItem
-                          onSelect={(e)=>e.preventDefault()}
+                          onSelect={(e) => e.preventDefault()}
                           className="flex items-center w-full px-4 py-1 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
                         >
                           <Trash2 size={14} className="mr-2" />
@@ -465,7 +463,7 @@ export function DetailPanel({
               </DropdownMenu>
             </div>
           </div>
-          
+
           {/* Content */}
           <div className="flex-1 overflow-y-auto pt-6 px-14 pb-20 detailbody">
             <div className="space-y-6">
@@ -519,7 +517,6 @@ export function DetailPanel({
                       placeholder="url-slug"
                       className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     />
-                    <p className="text-xs text-gray-500 mt-1">URL structure is configured in your Next.js app</p>
                   </div>
                 </div>
               </div>
@@ -708,14 +705,14 @@ export function DetailPanel({
                           <label className="block text-gray-600">Status</label>
                           <span className="text-gray-900 capitalize">{isPublished ? 'Published' : 'Draft'}</span>
                         </div>
-                        
+
                         {publishedAtDisplay && (
                           <div>
                             <label className="block text-gray-600">Published</label>
                             <span className="text-gray-900">{publishedAtDisplay}</span>
                           </div>
                         )}
-                        
+
                         {lastModifiedDisplay && (
                           <div>
                             <label className="block text-gray-600">Last Modified</label>
@@ -741,10 +738,10 @@ export function DetailPanel({
           </div>
         </div>
       </div>
-      
+
       {/* Collection Setup Modal */}
       {isCollectionModalOpen && (
-                <CollectionSetupModal
+        <CollectionSetupModal
           isOpen={isCollectionModalOpen}
           onClose={() => setIsCollectionModalOpen(false)}
           existingCollection={localCollection}
@@ -760,20 +757,20 @@ export function DetailPanel({
 }
 
 // Notion-like input component
-function NotionLikeInput({ 
-  value, 
-  onChange, 
+function NotionLikeInput({
+  value,
+  onChange,
   onBlur,
-  placeholder, 
-  className, 
-  multiline = false 
-}: { 
-  value: string; 
-  onChange: (value: string) => void; 
+  placeholder,
+  className,
+  multiline = false
+}: {
+  value: string;
+  onChange: (value: string) => void;
   onBlur?: (value: string) => void;
-  placeholder: string; 
-  className: string; 
-  multiline?: boolean; 
+  placeholder: string;
+  className: string;
+  multiline?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
@@ -832,7 +829,7 @@ function renderField(
   referenceOptions?: Map<string, { label: string; value: string }[]>,
 ) {
   const value = getFieldValue(field.name);
-  
+
   switch (field.type) {
     case 'text':
       return (
@@ -844,7 +841,7 @@ function renderField(
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
-    
+
     case 'textarea':
       return (
         <textarea
@@ -855,7 +852,7 @@ function renderField(
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
-    
+
     case 'number':
       return (
         <input
@@ -866,7 +863,7 @@ function renderField(
           className="text-sm w-full px-3 py-1 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         />
       );
-    
+
     case 'boolean':
       return (
         <input
@@ -876,16 +873,16 @@ function renderField(
           className="rounded border-gray-300 text-primary focus:ring-primary"
         />
       );
-    
-         case 'datetime':
-       return (
-         <DatePicker
-           date={value ? new Date(value) : undefined}
-           setDate={(date: Date | undefined) => updateField(itemId, field.name, date?.toISOString())}
-           className="w-full"
-         />
-       );
-    
+
+    case 'datetime':
+      return (
+        <DatePicker
+          date={value ? new Date(value) : undefined}
+          setDate={(date: Date | undefined) => updateField(itemId, field.name, date?.toISOString())}
+          className="w-full"
+        />
+      );
+
     case 'select':
       return (
         <Select
@@ -904,7 +901,7 @@ function renderField(
           </SelectContent>
         </Select>
       );
-    
+
     case 'multi-select':
       return (
         <NotionMultiSelect
@@ -914,7 +911,7 @@ function renderField(
           placeholder={field.placeholder}
         />
       );
-    
+
     case 'reference':
       return (
         <NotionSelect
@@ -924,7 +921,7 @@ function renderField(
           placeholder={field.placeholder}
         />
       );
-    
+
     case 'multi-reference':
       return (
         <NotionMultiSelect
@@ -934,27 +931,27 @@ function renderField(
           placeholder={field.placeholder}
         />
       );
-    
+
     case 'image':
-       return (
-         <ImageUploadField
-           field={field}
-           value={value}
-           authToken={authToken}
-           siteId={siteId}
-           onFieldUpdate={(fieldName, value) => updateField(itemId, fieldName, value)}
-         />
+      return (
+        <ImageUploadField
+          field={field}
+          value={value}
+          authToken={authToken}
+          siteId={siteId}
+          onFieldUpdate={(fieldName, value) => updateField(itemId, fieldName, value)}
+        />
       );
-    
-         case 'markdown':
-       return (
-         <TipTapEditor
-           content={value || ''}
-           onChange={(newValue) => updateField(itemId, field.name, newValue)}
-           authToken={authToken}
-         />
-       );
-    
+
+    case 'markdown':
+      return (
+        <TipTapEditor
+          content={value || ''}
+          onChange={(newValue) => updateField(itemId, field.name, newValue)}
+          authToken={authToken}
+        />
+      );
+
     default:
       return (
         <input
@@ -1054,7 +1051,7 @@ function ImageUploadField({ field, value, authToken, siteId, onFieldUpdate }: { 
         onChange={handleImageUpload}
         className="hidden"
       />
-      
+
       {src && (
         <div className="relative">
           <img
@@ -1070,12 +1067,12 @@ function ImageUploadField({ field, value, authToken, siteId, onFieldUpdate }: { 
           </button>
         </div>
       )}
-      
+
       <button
         onClick={triggerFileInput}
         className="text-sm px-3 py-1 border rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
       >
-         {src ? 'Replace Image' : 'Upload Image'}
+        {src ? 'Replace Image' : 'Upload Image'}
       </button>
     </div>
   );

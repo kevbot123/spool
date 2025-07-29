@@ -145,8 +145,33 @@ export function getSpoolWebhookHeaders(request: Request): {
  * This enables live updates during development when webhooks can't reach localhost
  */
 let developmentPolling: NodeJS.Timeout | null = null;
-let lastContentCheck: Record<string, string | { hash: string; slug: string; status: string }> = {};
+let lastContentCheck: Record<string, { hash: string; slug: string; status: string; title: string; updated_at: string }> = {};
 let isPollingActive = false;
+let pollingRetryCount = 0;
+const MAX_RETRY_COUNT = 3;
+
+// Create a stable hash for content comparison
+function createContentHash(item: any): string {
+  try {
+    // Create a comprehensive hash that includes all fields that could change
+    const hashData = {
+      title: item.title || '',
+      slug: item.slug || '',
+      status: item.status || 'draft',
+      published_at: item.published_at || null,
+      updated_at: item.updated_at || '',
+      // Normalize data structure - handle both nested and flat data
+      data: typeof item.data === 'object' ? JSON.stringify(item.data, Object.keys(item.data).sort()) : item.data || {}
+    };
+    
+    // Create a stable string representation
+    return JSON.stringify(hashData, Object.keys(hashData).sort());
+  } catch (error) {
+    console.warn('[DEV] Error creating content hash:', error);
+    // Fallback to a simple hash
+    return `${item.title}-${item.slug}-${item.status}-${item.updated_at}`;
+  }
+}
 
 async function startDevelopmentPolling(
   config: { apiKey: string; siteId: string; baseUrl?: string },
@@ -158,6 +183,7 @@ async function startDevelopmentPolling(
   
   console.log('[DEV] Starting Spool development mode polling...');
   isPollingActive = true;
+  pollingRetryCount = 0;
   
   const checkForChanges = async () => {
     try {
@@ -165,38 +191,49 @@ async function startDevelopmentPolling(
       const response = await fetch(`${baseUrl}/api/spool/${config.siteId}/content-updates`, {
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
+          'Cache-Control': 'no-cache',
         },
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(10000),
       });
       
-      if (response.ok) {
-        const updates = await response.json();
-        const currentItems = new Set<string>();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const updates = await response.json();
+      const currentItems = new Set<string>();
+      const isFirstRun = Object.keys(lastContentCheck).length === 0;
+      
+      // Reset retry count on successful fetch
+      pollingRetryCount = 0;
+      
+      // Process each content item
+      for (const update of updates.items || []) {
+        const key = `${update.collection}::${update.item_id}`;
+        const currentHash = createContentHash(update);
+        const previousData = lastContentCheck[key];
         
-        for (const update of updates.items || []) {
-          const key = `${update.collection}-${update.item_id}`;
-          const currentHash = update.content_hash;
-          const previousData = lastContentCheck[key];
-          
-          currentItems.add(key);
-          
-          if (previousData) {
-            const previousHash = typeof previousData === 'string' ? previousData : previousData.hash;
-            const previousSlug = typeof previousData === 'object' ? previousData.slug : null;
-            const previousStatus = typeof previousData === 'object' ? previousData.status : null;
+        currentItems.add(key);
+        
+        if (previousData && !isFirstRun) {
+          // Check if content actually changed
+          if (previousData.hash !== currentHash) {
+            // Determine event type based on what changed
+            let event: SpoolWebhookPayload['event'] = 'content.updated';
             
-            if (previousHash !== currentHash) {
-              // Content changed - determine event type based on status changes
-              let event: SpoolWebhookPayload['event'] = 'content.updated';
-              
-              // Detect publishing events
-              if (update.status === 'published' && previousStatus !== 'published') {
-                event = 'content.published';
-              }
-              
-              console.log(`[DEV] Content change detected: ${update.collection}/${update.slug || 'no-slug'} (${event})`);
-              console.log(`[DEV] Change details: status ${previousStatus} → ${update.status}`);
-              
-              // Trigger webhook for current slug
+            // Detect publishing events
+            if (update.status === 'published' && previousData.status !== 'published') {
+              event = 'content.published';
+              console.log(`[DEV] Content published: ${update.collection}/${update.slug || 'no-slug'}`);
+            } else if (update.status === 'draft' && previousData.status === 'published') {
+              console.log(`[DEV] Content unpublished: ${update.collection}/${update.slug || 'no-slug'}`);
+            } else {
+              console.log(`[DEV] Content updated: ${update.collection}/${update.slug || 'no-slug'}`);
+            }
+            
+            // Always trigger webhook for current slug
+            try {
               await onContentChange({
                 event,
                 site_id: config.siteId,
@@ -205,43 +242,63 @@ async function startDevelopmentPolling(
                 item_id: update.item_id,
                 timestamp: new Date().toISOString(),
               });
-              
-              // If slug changed, also trigger for old slug to clear old cache
-              if (previousSlug && previousSlug !== update.slug) {
-                console.log(`[DEV] Slug change detected: ${update.collection}/${previousSlug} → ${update.slug}`);
+            } catch (webhookError) {
+              console.error(`[DEV] Webhook handler error:`, webhookError);
+            }
+            
+            // Handle slug changes - trigger for old slug to clear cache
+            if (previousData.slug && previousData.slug !== update.slug) {
+              console.log(`[DEV] Slug changed: ${update.collection}/${previousData.slug} → ${update.slug}`);
+              try {
                 await onContentChange({
                   event: 'content.updated',
                   site_id: config.siteId,
                   collection: update.collection,
-                  slug: previousSlug,
+                  slug: previousData.slug,
                   item_id: update.item_id,
                   timestamp: new Date().toISOString(),
                 });
+              } catch (webhookError) {
+                console.error(`[DEV] Webhook handler error for slug change:`, webhookError);
               }
             }
-          } else {
-            // New item detected
-            console.log(`[DEV] New content detected: ${update.collection}/${update.slug || 'no-slug'}`);
           }
-          
-          // Store comprehensive data for next check
-          lastContentCheck[key] = {
-            hash: currentHash,
-            slug: update.slug,
-            status: update.status,
-          };
+        } else if (!isFirstRun) {
+          // New item detected (not on first run)
+          console.log(`[DEV] New content created: ${update.collection}/${update.slug || 'no-slug'}`);
+          try {
+            await onContentChange({
+              event: 'content.created',
+              site_id: config.siteId,
+              collection: update.collection,
+              slug: update.slug,
+              item_id: update.item_id,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (webhookError) {
+            console.error(`[DEV] Webhook handler error for new content:`, webhookError);
+          }
         }
         
-        // Check for deleted items (items that were in lastContentCheck but not in current response)
-        // Only check for deletions if we have previous data (not on first run)
-        if (Object.keys(lastContentCheck).length > 0) {
-          for (const [key, data] of Object.entries(lastContentCheck)) {
-            if (!currentItems.has(key) && typeof data === 'object') {
-              const [collection, ...itemIdParts] = key.split('-');
-              const itemId = itemIdParts.join('-'); // Handle UUIDs with dashes
-              
-              console.log(`[DEV] Content deletion detected: ${collection}/${data.slug}`);
-              
+        // Store comprehensive data for next check
+        lastContentCheck[key] = {
+          hash: currentHash,
+          slug: update.slug || '',
+          status: update.status || 'draft',
+          title: update.title || '',
+          updated_at: update.updated_at || '',
+        };
+      }
+      
+      // Check for deleted items (only after first run)
+      if (!isFirstRun) {
+        for (const [key, data] of Object.entries(lastContentCheck)) {
+          if (!currentItems.has(key)) {
+            const [collection, itemId] = key.split('::');
+            
+            console.log(`[DEV] Content deleted: ${collection}/${data.slug}`);
+            
+            try {
               await onContentChange({
                 event: 'content.deleted',
                 site_id: config.siteId,
@@ -250,26 +307,40 @@ async function startDevelopmentPolling(
                 item_id: itemId,
                 timestamp: new Date().toISOString(),
               });
-              
-              delete lastContentCheck[key];
+            } catch (webhookError) {
+              console.error(`[DEV] Webhook handler error for deletion:`, webhookError);
             }
+            
+            delete lastContentCheck[key];
           }
         }
-      } else {
-        console.error(`[DEV] Failed to fetch content updates: ${response.status} ${response.statusText}`);
       }
+      
+      if (isFirstRun) {
+        console.log(`[DEV] Initial content sync complete - tracking ${currentItems.size} items`);
+      }
+      
     } catch (error) {
-      console.error('[DEV] Polling error:', error);
+      pollingRetryCount++;
+      console.error(`[DEV] Polling error (attempt ${pollingRetryCount}/${MAX_RETRY_COUNT}):`, error);
+      
+      // Stop polling after max retries to prevent spam
+      if (pollingRetryCount >= MAX_RETRY_COUNT) {
+        console.error('[DEV] Max polling retries reached - stopping development polling');
+        console.error('[DEV] Please check your SPOOL_API_KEY and SPOOL_SITE_ID configuration');
+        stopDevelopmentPolling();
+      }
     }
   };
   
-  // Initial check to populate lastContentCheck (with small delay to let any pending operations complete)
+  // Initial check with a small delay to let the server start up
   setTimeout(async () => {
+    console.log('[DEV] Performing initial content sync...');
     await checkForChanges();
-  }, 500);
+  }, 1000);
   
-  // Check every 3 seconds in development (slightly longer to reduce timing issues)
-  developmentPolling = setInterval(checkForChanges, 3000);
+  // Check every 2 seconds in development for responsive updates
+  developmentPolling = setInterval(checkForChanges, 2000);
   
   console.log('[DEV] Development polling started - live updates enabled on localhost');
 }
@@ -279,6 +350,7 @@ function stopDevelopmentPolling() {
     clearInterval(developmentPolling);
     developmentPolling = null;
     isPollingActive = false;
+    pollingRetryCount = 0;
     console.log('[DEV] Development polling stopped');
   }
 }
@@ -330,32 +402,51 @@ export function createSpoolWebhookHandler(options: {
   ) => Promise<void> | void;
   onError?: (error: Error, request: Request) => Promise<Response> | Response;
 }) {
-  // ✅ Start development polling immediately when handler is created
+  // ✅ Start development polling with better error handling and timing
   if (options.developmentConfig && process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-    // Use setTimeout to start polling after the current execution context
-    setTimeout(() => {
-      startDevelopmentPolling(options.developmentConfig!, (data) => {
-        return options.onWebhook(data, {
-          deliveryId: `dev-${Date.now()}`,
-          event: data.event,
-          userAgent: 'Spool-Dev-Polling/1.0',
+    // Validate required config
+    if (!options.developmentConfig.apiKey || !options.developmentConfig.siteId) {
+      console.error('[DEV] Missing required developmentConfig: apiKey and siteId are required');
+      console.error('[DEV] Development polling will not start');
+    } else {
+      // Use setImmediate or setTimeout to start polling after the current execution context
+      const startPolling = () => {
+        startDevelopmentPolling(options.developmentConfig!, async (data) => {
+          try {
+            await options.onWebhook(data, {
+              deliveryId: `dev-${Date.now()}`,
+              event: data.event,
+              userAgent: 'Spool-Dev-Polling/1.0',
+            });
+          } catch (error) {
+            console.error('[DEV] Error in webhook handler during development polling:', error);
+          }
+        }).catch((error) => {
+          console.error('[DEV] Failed to start development polling:', error);
         });
-      }).catch(console.error);
-    }, 100);
+      };
+      
+      if (typeof setImmediate !== 'undefined') {
+        setImmediate(startPolling);
+      } else {
+        setTimeout(startPolling, 0);
+      }
+    }
   }
   
   return async function webhookHandler(request: Request): Promise<Response> {
     const startTime = Date.now();
+    let headers: ReturnType<typeof getSpoolWebhookHeaders> = {};
     
     try {
       const payload = await request.text();
-      const headers = getSpoolWebhookHeaders(request);
+      headers = getSpoolWebhookHeaders(request);
       
       // Verify signature if secret is provided
       if (options.secret && headers.signature) {
         const isValid = verifySpoolWebhook(payload, headers.signature, options.secret);
         if (!isValid) {
-          console.error(`[${headers.deliveryId}] Invalid webhook signature`);
+          console.error(`[${headers.deliveryId || 'unknown'}] Invalid webhook signature`);
           return new Response('Unauthorized', { status: 401 });
         }
       }
@@ -363,17 +454,22 @@ export function createSpoolWebhookHandler(options: {
       // Parse payload
       const data = parseSpoolWebhook(payload);
       if (!data) {
-        console.error(`[${headers.deliveryId}] Invalid webhook payload`);
+        console.error(`[${headers.deliveryId || 'unknown'}] Invalid webhook payload:`, payload.substring(0, 200));
         return new Response('Invalid payload', { status: 400 });
       }
       
-      console.log(`[${headers.deliveryId}] Processing webhook: ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
+      console.log(`[${headers.deliveryId || 'unknown'}] Processing webhook: ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
       
-      // Call user handler
-      await options.onWebhook(data, headers);
+      // Call user handler with error boundary
+      try {
+        await options.onWebhook(data, headers);
+      } catch (handlerError) {
+        console.error(`[${headers.deliveryId || 'unknown'}] Error in user webhook handler:`, handlerError);
+        throw handlerError; // Re-throw to be caught by outer try-catch
+      }
       
       const duration = Date.now() - startTime;
-      console.log(`[${headers.deliveryId}] Webhook processed successfully in ${duration}ms`);
+      console.log(`[${headers.deliveryId || 'unknown'}] Webhook processed successfully in ${duration}ms`);
       
       return new Response('OK', {
         headers: {
@@ -384,19 +480,24 @@ export function createSpoolWebhookHandler(options: {
       
     } catch (error) {
       const duration = Date.now() - startTime;
-      const headers = getSpoolWebhookHeaders(request);
       
-      console.error(`[${headers.deliveryId}] Webhook error after ${duration}ms:`, error);
+      console.error(`[${headers.deliveryId || 'unknown'}] Webhook error after ${duration}ms:`, error);
       
       if (options.onError) {
-        return await options.onError(error as Error, request);
+        try {
+          return await options.onError(error as Error, request);
+        } catch (errorHandlerError) {
+          console.error('Error in custom error handler:', errorHandlerError);
+          // Fall through to default error response
+        }
       }
       
       return new Response('Error processing webhook', { 
         status: 500,
         headers: {
           'X-Spool-Error': 'true',
-          'X-Processing-Time': `${duration}ms`
+          'X-Processing-Time': `${duration}ms`,
+          'X-Error-Message': error instanceof Error ? error.message : 'Unknown error'
         }
       });
     }

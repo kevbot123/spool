@@ -85,6 +85,8 @@ const handleWebhook = createSpoolWebhookHandler({
 export const POST = handleWebhook;
 ```
 
+> **💡 Pro Tip:** For a more comprehensive webhook setup with advanced revalidation logic, error handling, and collection-specific routing, check out the [complete webhook example](https://github.com/spoolcms/nextjs/blob/main/examples/webhook-route-example.ts) in the package repository.
+
 **Alternative: Manual webhook processing for more control**
 
 ```typescript
@@ -165,7 +167,31 @@ const handleWebhook = createSpoolWebhookHandler({
     siteId: process.env.SPOOL_SITE_ID!,    // Same as your existing setup
   },
   onWebhook: async (data) => {
-    revalidatePath('/blog');
+    console.log(`Processing ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
+    
+    // Revalidate paths based on collection and event
+    switch (data.collection) {
+      case 'blog':
+        revalidatePath('/blog');
+        if (data.slug) {
+          revalidatePath(`/blog/${data.slug}`);
+        }
+        break;
+      case 'pages':
+        if (data.slug) {
+          revalidatePath(`/${data.slug}`);
+        }
+        break;
+      default:
+        revalidatePath(`/${data.collection}`);
+        if (data.slug) {
+          revalidatePath(`/${data.collection}/${data.slug}`);
+        }
+    }
+    
+    // Always revalidate home and sitemap
+    revalidatePath('/');
+    revalidatePath('/sitemap.xml');
   }
 });
 ```
@@ -173,30 +199,70 @@ const handleWebhook = createSpoolWebhookHandler({
 **What you'll see:**
 ```bash
 # In development console:
-[DEV] Content change detected: blog/my-new-post (content.updated)
-[dev-1643723456789] Processing webhook: content.updated for blog/my-new-post
+[DEV] Starting Spool development mode polling...
+[DEV] Initial content sync complete - tracking 15 items
+[DEV] Content updated: blog/my-new-post
+[dev-1643723456789] Processing content.updated for blog/my-new-post
 
 # When slug changes:
-[DEV] Slug change detected: blog/old-slug → new-slug
-[dev-1643723456790] Processing webhook: content.updated for blog/old-slug
-[dev-1643723456791] Processing webhook: content.updated for blog/new-slug
+[DEV] Slug changed: blog/old-slug → new-slug
+[dev-1643723456790] Processing content.updated for blog/old-slug
+[dev-1643723456791] Processing content.updated for blog/new-slug
 
-# When content is unpublished:
-[DEV] Content change detected: blog/my-post (content.updated)
+# When content is published:
+[DEV] Content published: blog/my-post
+[dev-1643723456792] Processing content.published for blog/my-post
 
 # When content is deleted:
-[DEV] Content deletion detected: blog/deleted-post
+[DEV] Content deleted: blog/deleted-post
+[dev-1643723456793] Processing content.deleted for blog/deleted-post
 
 # In production console:
 [wh_1234567890] Processing webhook: content.updated for blog/my-new-post
 ```
 
 **Types of changes detected:**
-- ✅ **Any field changes** - title, body, custom fields, etc.
-- ✅ **Publishing/unpublishing** - status changes
-- ✅ **Slug changes** - revalidates both old and new URLs
+- ✅ **Any field changes** - title, body, description, custom fields, etc.
+- ✅ **Publishing/unpublishing** - status changes trigger appropriate events
+- ✅ **Slug changes** - revalidates both old and new URLs automatically
 - ✅ **Content deletion** - removes from lists immediately
 - ✅ **New content** - appears in lists immediately
+- ✅ **Draft changes** - detects changes to draft content on published items
+
+**Troubleshooting Development Mode:**
+
+If live updates aren't working in development:
+
+1. **Check your environment variables:**
+   ```bash
+   # Make sure these are set in .env.local
+   SPOOL_API_KEY="spool_your_api_key_here"
+   SPOOL_SITE_ID="your_site_id_here"
+   ```
+
+2. **Verify the console output:**
+   ```bash
+   # You should see this when starting your dev server:
+   [DEV] Starting Spool development mode polling...
+   [DEV] Initial content sync complete - tracking X items
+   ```
+
+3. **Check for errors:**
+   ```bash
+   # If you see polling errors:
+   [DEV] Polling error (attempt 1/3): Error message here
+   
+   # Common issues:
+   # - Invalid API key or site ID
+   # - Network connectivity issues
+   # - Spool service temporarily unavailable
+   ```
+
+4. **Test the content-updates endpoint directly:**
+   ```bash
+   curl -H "Authorization: Bearer YOUR_API_KEY" \
+        "https://www.spoolcms.com/api/spool/YOUR_SITE_ID/content-updates"
+   ```
 
 ### Migration from Previous Versions
 
@@ -235,14 +301,23 @@ export const POST = createSpoolWebhookHandler({
 Test your webhook integration:
 
 ```bash
-# Test your webhook endpoint
+# Test your complete webhook setup (recommended)
+npx test-spool-webhooks
+
+# Or test your webhook endpoint manually
 npm run test:webhook
 
 # Or test a specific URL
 npm run test:webhook https://yoursite.com/api/webhooks/spool
 ```
 
-This will verify your webhook endpoint is working correctly and help debug any issues.
+The `test-spool-webhooks` command will verify:
+- ✅ Environment variables are set correctly
+- ✅ Content-updates endpoint is accessible
+- ✅ Webhook endpoint responds correctly
+- ✅ Signature verification works (if secret is configured)
+
+This will help you identify and fix any configuration issues quickly.
 
 ---
 

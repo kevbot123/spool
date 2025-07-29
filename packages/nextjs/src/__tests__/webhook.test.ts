@@ -159,6 +159,11 @@ describe('Webhook Utilities', () => {
       timestamp: '2024-01-15T10:30:00.000Z'
     };
 
+    beforeEach(() => {
+      // Reset environment for each test
+      delete process.env.NODE_ENV;
+    });
+
     it('should create a working webhook handler', async () => {
       const onWebhook = jest.fn();
       const handler = createSpoolWebhookHandler({ onWebhook });
@@ -254,6 +259,71 @@ describe('Webhook Utilities', () => {
       expect(response.status).toBe(422);
       expect(await response.text()).toBe('Custom error');
       expect(onError).toHaveBeenCalledWith(expect.any(Error), mockRequest);
+    });
+
+    it('should handle development config validation', () => {
+      const onWebhook = jest.fn();
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      
+      // Set development environment
+      process.env.NODE_ENV = 'development';
+      
+      // Create handler with invalid development config
+      createSpoolWebhookHandler({ 
+        onWebhook,
+        developmentConfig: {
+          apiKey: '', // Invalid - empty
+          siteId: 'test-site'
+        }
+      });
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[DEV] Missing required developmentConfig: apiKey and siteId are required'
+      );
+      
+      consoleSpy.mockRestore();
+    });
+
+    it('should not start development polling in production', () => {
+      const onWebhook = jest.fn();
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      // Set production environment
+      process.env.NODE_ENV = 'production';
+      
+      createSpoolWebhookHandler({ 
+        onWebhook,
+        developmentConfig: {
+          apiKey: 'test-key',
+          siteId: 'test-site'
+        }
+      });
+
+      // Should not see development polling messages
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('[DEV] Starting Spool development mode polling')
+      );
+      
+      consoleSpy.mockRestore();
+    });
+
+    it('should include error details in response headers', async () => {
+      const onWebhook = jest.fn().mockRejectedValue(new Error('Test error message'));
+      const handler = createSpoolWebhookHandler({ onWebhook });
+
+      const mockRequest = {
+        text: jest.fn().mockResolvedValue(JSON.stringify(validPayload)),
+        headers: {
+          get: jest.fn(() => null)
+        }
+      } as any;
+
+      const response = await handler(mockRequest);
+      
+      expect(response.status).toBe(500);
+      expect(response.headers.get('X-Spool-Error')).toBe('true');
+      expect(response.headers.get('X-Error-Message')).toBe('Test error message');
+      expect(response.headers.get('X-Processing-Time')).toMatch(/\d+ms/);
     });
   });
 });
