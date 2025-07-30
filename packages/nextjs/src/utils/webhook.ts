@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { clearAllCaches } from './cache';
 
 // Global flag to ensure only one dev polling loop runs per process, even after hot reloads.
 declare global {
@@ -161,23 +162,27 @@ const MAX_RETRY_COUNT = 3;
 // Create a stable hash for content comparison
 function createContentHash(item: any): string {
   try {
-    // Create a comprehensive hash that includes all fields that could change
-    const hashData = {
-      title: item.title || '',
-      slug: item.slug || '',
-      status: item.status || 'draft',
-      published_at: item.published_at || null,
-      updated_at: item.updated_at || '',
-      // Normalize data structure - handle both nested and flat data
-      data: typeof item.data === 'object' ? JSON.stringify(item.data, Object.keys(item.data).sort()) : item.data || {}
-    };
+    // Sort data object keys to ensure consistent stringification
+    const sortedData = item.data ? 
+      JSON.stringify(item.data, Object.keys(item.data).sort()) : 
+      '{}';
     
-    // Create a stable string representation
-    return JSON.stringify(hashData, Object.keys(hashData).sort());
+    // Create a simple, reliable hash from key fields with sorted data
+    const key = `${item.item_id}-${item.updated_at}-${item.status}-${sortedData}`;
+    
+    // Create a simple hash using built-in string methods
+    let hash = 0;
+    if (key.length === 0) return hash.toString();
+    for (let i = 0; i < key.length; i++) {
+      const char = key.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
   } catch (error) {
     console.warn('[DEV] Error creating content hash:', error);
-    // Fallback to a simple hash
-    return `${item.title}-${item.slug}-${item.status}-${item.updated_at}`;
+    // Fallback to timestamp + status + id (most reliable)
+    return `${item.item_id}-${item.updated_at || Date.now()}-${item.status || 'unknown'}`;
   }
 }
 
@@ -218,7 +223,18 @@ async function startDevelopmentPolling(
 ) {
   if (typeof window !== 'undefined') return; // Only run on server
   if (process.env.NODE_ENV !== 'development') return; // Only in development
-  if (isPollingActive || global.__spoolPollingActive) return; // Prevent multiple polling instances
+  
+  // Check if polling is actually running (not just flagged)
+  if (developmentPolling && isPollingActive) {
+    console.log(`[DEV] Polling already active (interval: ${!!developmentPolling}, isPollingActive: ${isPollingActive})`);
+    return;
+  }
+  
+  // Reset stale global flag if no actual polling is running
+  if (global.__spoolPollingActive && !developmentPolling) {
+    console.log(`[DEV] Clearing stale global polling flag`);
+    global.__spoolPollingActive = false;
+  }
   
   console.log('[DEV] Starting Spool development mode polling...');
   isPollingActive = true;
@@ -228,10 +244,16 @@ async function startDevelopmentPolling(
   const checkForChanges = async () => {
     try {
       const baseUrl = config.baseUrl || 'https://www.spoolcms.com';
-      const response = await fetch(`${baseUrl}/api/spool/${config.siteId}/content-updates`, {
+      // Add cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
+      // Use the actual content endpoint that we know works
+      const url = `${baseUrl}/api/spool/${config.siteId}/content/blog?t=${timestamp}`;
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
           'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         },
         // Add timeout to prevent hanging requests
         signal: AbortSignal.timeout(10000),
@@ -245,75 +267,127 @@ async function startDevelopmentPolling(
       const currentItems = new Set<string>();
       const isFirstRun = Object.keys(lastContentCheck).length === 0;
       
-      // Debug logging
-      console.log(`[DEV] Polling response: ${updates.items?.length || 0} items, isFirstRun: ${isFirstRun}`);
+      // Only log first run and when items count changes
+      if (isFirstRun) {
+        console.log(`[DEV] Initial content sync: ${updates.items?.length || 0} items`);
+      }
       
       // Reset retry count on successful fetch
       pollingRetryCount = 0;
       
+      // Track all timestamps to detect ANY changes
+      const allCurrentTimestamps: Record<string, string> = {};
+      const allPreviousTimestamps: Record<string, string> = {};
+      
+      // Adapt the response format from the real API
+      for (const item of updates.items || []) {
+        // The real API returns items with 'id' not 'item_id', and no 'collection' field on items
+        const adaptedUpdate = {
+          collection: updates.collection?.slug || 'blog', // Use collection from top level
+          item_id: item.id,
+          updated_at: item.updated_at,
+          slug: item.slug,
+          status: item.status,
+          title: item.title
+        };
+        
+        const key = `${adaptedUpdate.collection}::${adaptedUpdate.item_id}`;
+        allCurrentTimestamps[key] = adaptedUpdate.updated_at;
+        if (lastContentCheck[key]) {
+          allPreviousTimestamps[key] = lastContentCheck[key].updated_at;
+        }
+      }
+      
+      // Log any timestamp changes detected
+      const timestampChanges = [];
+      for (const key in allCurrentTimestamps) {
+        if (allPreviousTimestamps[key] && allCurrentTimestamps[key] !== allPreviousTimestamps[key]) {
+          timestampChanges.push({
+            key,
+            old: allPreviousTimestamps[key],
+            new: allCurrentTimestamps[key]
+          });
+        }
+      }
+      
+      // Log changes in development
+      if (timestampChanges.length > 0 && !isFirstRun) {
+        console.log(`[DEV] Detected ${timestampChanges.length} content change(s)`);
+      }
+      
       // Process each content item
-      for (const update of updates.items || []) {
-        const key = `${update.collection}::${update.item_id}`;
-        const currentHash = createContentHash(update);
+      for (const item of updates.items || []) {
+        // Adapt the item format to what the polling expects
+        const adaptedUpdate = {
+          collection: updates.collection?.slug || 'blog',
+          item_id: item.id,
+          updated_at: item.updated_at,
+          slug: item.slug,
+          status: item.status,
+          title: item.title
+        };
+        
+        const key = `${adaptedUpdate.collection}::${adaptedUpdate.item_id}`;
+        const currentHash = createContentHash(item); // Use original item for hash
         const previousData = lastContentCheck[key];
         
         currentItems.add(key);
         
         if (previousData && !isFirstRun) {
-          // Debug hash comparison
-          console.log(`[DEV] Checking ${key}: prev hash=${previousData.hash.substring(0, 20)}..., current hash=${currentHash.substring(0, 20)}...`);
+          // Check if content actually changed (hash OR updated_at timestamp)
+          const hashChanged = previousData.hash !== currentHash;
+          const timestampChanged = previousData.updated_at !== (adaptedUpdate.updated_at || '');
           
-          // Check if content actually changed
-          if (previousData.hash !== currentHash) {
+          if (hashChanged || timestampChanged) {
             // Determine event type based on what changed
             let event: SpoolWebhookPayload['event'] = 'content.updated';
             
             // Detect publishing events
-            if (update.status === 'published' && previousData.status !== 'published') {
+            if (adaptedUpdate.status === 'published' && previousData.status !== 'published') {
               event = 'content.published';
-              console.log(`[DEV] Content published: ${update.collection}/${update.slug || 'no-slug'}`);
-            } else if (update.status === 'draft' && previousData.status === 'published') {
-              console.log(`[DEV] Content unpublished: ${update.collection}/${update.slug || 'no-slug'}`);
+              console.log(`[DEV] Content published: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
+            } else if (adaptedUpdate.status === 'draft' && previousData.status === 'published') {
+              console.log(`[DEV] Content unpublished: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
             } else {
-              console.log(`[DEV] Content updated: ${update.collection}/${update.slug || 'no-slug'}`);
+              console.log(`[DEV] Content updated: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
             }
             
             // Call webhook handlers for content change
             await callWebhookHandlers({
               event,
               site_id: config.siteId,
-              collection: update.collection,
-              slug: update.slug,
-              item_id: update.item_id,
+              collection: adaptedUpdate.collection,
+              slug: adaptedUpdate.slug,
+              item_id: adaptedUpdate.item_id,
               timestamp: new Date().toISOString(),
             });
             
             // Handle slug changes - trigger for old slug to clear cache
-            if (previousData.slug && previousData.slug !== update.slug) {
-              console.log(`[DEV] Slug changed: ${update.collection}/${previousData.slug} → ${update.slug}`);
+            if (previousData.slug && previousData.slug !== adaptedUpdate.slug) {
+              console.log(`[DEV] Slug changed: ${adaptedUpdate.collection}/${previousData.slug} → ${adaptedUpdate.slug}`);
               
               // Call webhook handlers for slug change
               await callWebhookHandlers({
                 event: 'content.updated',
                 site_id: config.siteId,
-                collection: update.collection,
+                collection: adaptedUpdate.collection,
                 slug: previousData.slug,
-                item_id: update.item_id,
+                item_id: adaptedUpdate.item_id,
                 timestamp: new Date().toISOString(),
               });
             }
           }
         } else if (!isFirstRun) {
           // New item detected (not on first run)
-          console.log(`[DEV] New content created: ${update.collection}/${update.slug || 'no-slug'}`);
+          console.log(`[DEV] New content created: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
           
           // Call webhook handlers for new content
           await callWebhookHandlers({
             event: 'content.created',
             site_id: config.siteId,
-            collection: update.collection,
-            slug: update.slug,
-            item_id: update.item_id,
+            collection: adaptedUpdate.collection,
+            slug: adaptedUpdate.slug,
+            item_id: adaptedUpdate.item_id,
             timestamp: new Date().toISOString(),
           });
         }
@@ -321,10 +395,10 @@ async function startDevelopmentPolling(
         // Store comprehensive data for next check
         lastContentCheck[key] = {
           hash: currentHash,
-          slug: update.slug || '',
-          status: update.status || 'draft',
-          title: update.title || '',
-          updated_at: update.updated_at || '',
+          slug: adaptedUpdate.slug || '',
+          status: adaptedUpdate.status || 'draft',
+          title: adaptedUpdate.title || '',
+          updated_at: adaptedUpdate.updated_at || '',
         };
       }
       
@@ -357,7 +431,10 @@ async function startDevelopmentPolling(
       
     } catch (error) {
       pollingRetryCount++;
-      console.error(`[DEV] Spool polling error (Attempt ${pollingRetryCount}/${MAX_RETRY_COUNT}). Full error:`, error);
+      console.error(`[DEV] Spool polling error (Attempt ${pollingRetryCount}/${MAX_RETRY_COUNT}):`, error);
+      console.error(`[DEV] API Key: ${config.apiKey ? config.apiKey.substring(0, 10) + '...' : 'MISSING'}`);
+      console.error(`[DEV] Site ID: ${config.siteId || 'MISSING'}`);
+      
       if (pollingRetryCount >= MAX_RETRY_COUNT) {
         console.error('[DEV] Max polling retries reached. Stopping development polling. Please restart your dev server to resume.');
         stopDevelopmentPolling();
@@ -444,7 +521,80 @@ export function createSpoolWebhookHandler(options: {
     
     const devHandler = async (data: SpoolWebhookPayload) => {
       try {
-        await options.onWebhook(data, {} as any);
+        console.log(`Processing ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
+        
+        // Nuclear option: Use HTTP request to trigger revalidation from completely separate context
+        const revalidatePaths: string[] = [];
+        
+        // Aggressive cache clearing for Next.js 15
+        const pathsToTry = [];
+        
+        if (data.collection === 'blog') {
+          pathsToTry.push('/blog');
+          pathsToTry.push('/blog/page');
+          if (data.slug) {
+            pathsToTry.push(`/blog/${data.slug}`);
+            pathsToTry.push(`/blog/${data.slug}/page`);
+          }
+        } else {
+          pathsToTry.push(`/${data.collection}`);
+          pathsToTry.push(`/${data.collection}/page`);
+          if (data.slug) {
+            pathsToTry.push(`/${data.collection}/${data.slug}`);
+            pathsToTry.push(`/${data.collection}/${data.slug}/page`);
+          }
+        }
+        
+        // Always revalidate root and common paths
+        pathsToTry.push('/');
+        pathsToTry.push('/page');
+        pathsToTry.push('/sitemap.xml');
+        
+        // Try both revalidatePath and revalidateTag approaches
+        for (const path of pathsToTry) {
+          revalidatePaths.push(path);
+          revalidatePaths.push(`${path}?revalidateTag=${data.collection}`);
+        }
+        
+                // Trigger revalidation via HTTP (completely separate execution context)
+        setTimeout(async () => {
+          const revalidationPromises = revalidatePaths.map(async (path) => {
+            try {
+              // Add cache-busting and force fresh request
+              const timestamp = Date.now();
+              const response = await fetch(`http://localhost:3000/api/revalidate?path=${encodeURIComponent(path)}&t=${timestamp}`, {
+                method: 'POST',
+                headers: {
+                  'Cache-Control': 'no-cache',
+                  'Pragma': 'no-cache',
+                },
+                signal: AbortSignal.timeout(5000),
+              });
+              
+              const responseText = await response.text();
+              
+              if (response.ok) {
+                console.log(`✅ HTTP revalidated: ${path} (${response.status})`);
+              } else {
+                console.log(`❌ HTTP revalidation FAILED for ${path}: ${response.status} - ${responseText}`);
+              }
+            } catch (err) {
+              console.log(`❌ Revalidation ERROR for ${path}:`, err instanceof Error ? err.message : String(err));
+            }
+          });
+          
+          await Promise.allSettled(revalidationPromises);
+          // Clear in-memory caches so next getSpoolContent fetches fresh data in dev
+          if (process.env.NODE_ENV === 'development') {
+            try {
+              clearAllCaches();
+              console.log('[DEV] In-memory caches cleared');
+            } catch (err) {
+              console.warn('[DEV] Failed to clear caches:', err instanceof Error ? err.message : String(err));
+            }
+          }
+        }, 100);
+        
       } catch (err) {
         console.error('[DEV] Error in webhook handler:', err);
       }

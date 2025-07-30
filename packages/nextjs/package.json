@@ -1,6 +1,6 @@
 {
   "name": "@spoolcms/nextjs",
-  "version": "1.6.26",
+  "version": "1.6.44",
   "description": "The beautiful headless CMS for Next.js developers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -44,7 +44,7 @@ async function enhancedFetch(url: string, options: RequestInit = {}): Promise<Re
       const fetchOptions: any = {
         ...options,
         next: {
-          revalidate: 300, // 5 minutes default
+          revalidate: environment.isDevelopment ? 0 : 300, // No cache in dev, 5 minutes in production
           ...((options as any).next || {}),
         },
       };
