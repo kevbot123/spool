@@ -558,6 +558,10 @@ export function createSpoolWebhookHandler(options: {
         
                 // Trigger revalidation via HTTP (completely separate execution context)
         setTimeout(async () => {
+          // Wait 2 seconds to allow Spool API to propagate the changes
+          // This prevents race conditions where revalidation happens faster than API propagation
+          console.log("[DEV] Waiting 2 seconds for API propagation before revalidation...");
+          await new Promise(resolve => setTimeout(resolve, 2000));
           const revalidationPromises = revalidatePaths.map(async (path) => {
             try {
               // Add cache-busting and force fresh request
@@ -588,7 +592,7 @@ export function createSpoolWebhookHandler(options: {
           if (process.env.NODE_ENV === 'development') {
             try {
               clearAllCaches();
-              console.log('[DEV] In-memory caches cleared');
+              console.log('[DEV] In-memory caches cleared (after 2-second API propagation delay)');
             } catch (err) {
               console.warn('[DEV] Failed to clear caches:', err instanceof Error ? err.message : String(err));
             }
