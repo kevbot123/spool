@@ -1,6 +1,6 @@
 {
   "name": "@spoolcms/nextjs",
-  "version": "1.6.46",
+  "version": "2.1.0",
   "description": "The beautiful headless CMS for Next.js developers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,8 @@
   "bin": {
     "spool-setup": "dist/cli.js",
     "create-spool-route": "dist/cli.js",
-    "test-spool-webhooks": "src/scripts/test-webhook-setup.js"
+    "test-spool-webhooks": "src/scripts/test-webhook-setup.js",
+    "test-spool-live-updates": "src/scripts/test-live-updates.js"
   },
   "keywords": [
     "nextjs",
@@ -58,6 +59,8 @@
     "react": ">=18.0.0"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.5.1",
+    "@supabase/supabase-js": "^2.45.4",
     "react-resize-detector": "^12.1.0"
   },
   "devDependencies": {

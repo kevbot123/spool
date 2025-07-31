@@ -7,23 +7,26 @@ This guide provides all the necessary steps and code examples to integrate Spool
 -   **Real-time API:** Fetch content instantly in your Next.js app.
 -   **Simple Setup:** Get started in 5 minutes.
 
-## New in v1.6.33 🎉
+## New in v2.0.0 🚀
 
-- **✅ NUCLEAR FIX for Next.js 15**: Completely eliminated `revalidatePath` render phase errors using HTTP-based revalidation
-- **✅ Zero Configuration**: Library automatically handles all revalidation deferral - no more manual `setTimeout` needed!
-- **✅ Bulletproof Live Updates**: HTTP requests run in completely separate execution contexts
-- **✅ Enhanced Development Mode**: Improved polling with better duplicate prevention
+- **🔥 SUPABASE REALTIME INTEGRATION**: Industry-standard centralized live updates using Supabase's WebSocket infrastructure
+- **⚡ INSTANT FEEDBACK**: Content changes appear immediately (0ms delay) via Supabase Realtime
+- **🌟 INDUSTRY-STANDARD**: Same centralized approach as Sanity, Contentful, and other leading CMS platforms
+- **🔧 ZERO CONFIGURATION**: Just add Supabase credentials and live updates work automatically
+- **📡 ENTERPRISE-GRADE**: Leverages Supabase's managed WebSocket infrastructure with automatic scaling
+- **🎯 SMART REVALIDATION**: Only revalidates the exact paths that changed
+- **☁️ VERCEL READY**: Perfect for serverless environments with no custom WebSocket servers needed
 
-> **🚀 BREAKING: Next.js 15 Users Must Create Revalidation Route**: v1.6.33 uses HTTP-based revalidation to completely solve render phase issues. You must create an `/api/revalidate` route as shown below. Remove any manual `setTimeout` or async revalidation logic from your webhook routes.
+> **🚀 BREAKING: v2.0.0 Uses Supabase Realtime**: Industry-standard centralized live updates via Supabase's managed WebSocket infrastructure. No custom API routes needed - just add Supabase credentials and you get enterprise-grade real-time updates. You must create an `/api/revalidate` route as shown below for the revalidation system to work.
 
 ## Prerequisites
 
 ### 1. Install the package
 ```bash
-npm install @spoolcms/nextjs@latest
+npm install @spoolcms/nextjs@2.0.1
 ```
 
-> **Latest v1.6.33:** NUCLEAR FIX for Next.js 15! Completely eliminated render phase errors using HTTP-based revalidation. Live updates now work flawlessly with zero configuration needed in your webhook routes.
+> **Latest v2.0.0:** SUPABASE REALTIME INTEGRATION! Industry-standard centralized live updates with 0ms delay using Supabase's managed WebSocket infrastructure. Same approach as Sanity and Contentful - no custom API routes needed!
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
@@ -33,10 +36,13 @@ Add your Spool credentials to `.env.local`. You can find these keys in your Spoo
 SPOOL_API_KEY="your_spool_api_key"
 SPOOL_SITE_ID="your_spool_site_id"
 NEXT_PUBLIC_SITE_URL="https://yoursite.com"
+
+# No additional credentials needed for live updates in v2.0.0+
+# Live updates connect to Spool's centralized infrastructure automatically
 ```
 > **Important:** Copy the **entire** API key including the `spool_` prefix.
 
-> **Latest Version:** Make sure you're using the latest version with `npm install @spoolcms/nextjs@latest` for the best Next.js 15 compatibility.
+> **New in v2.0.0:** Live updates now connect to Spool's centralized infrastructure automatically. No additional setup required!
 
 ### 3. Create API route
 Create `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router):
@@ -70,7 +76,7 @@ export const POST = handleWebhook;
 ```
 
 ### 5. Create revalidation API route (Required for v1.6.33+)
-Create `app/api/revalidate/route.ts` to handle HTTP-based revalidation:
+**⚠️ CRITICAL:** Create `app/api/revalidate/route.ts` to handle HTTP-based revalidation:
 
 ```typescript
 import { revalidatePath } from 'next/cache';
@@ -96,6 +102,8 @@ export async function POST(request: NextRequest) {
   }
 }
 ```
+
+> **🚨 WITHOUT THIS ROUTE, LIVE UPDATES WON'T WORK!** The Spool package makes HTTP requests to this endpoint to trigger revalidation safely.
 
 **How It Works:**
 1. Content changes in Spool CMS → Library detects change
@@ -170,21 +178,23 @@ SPOOL_WEBHOOK_SECRET="your_generated_webhook_secret_from_spool_admin"
 
 **Security Note:** The webhook secret ensures that only Spool can trigger your webhook endpoint. Always use webhook signature verification in production.
 
-### Development Mode (Localhost Live Updates)
+### Development Mode (Centralized Live Updates)
 
-Spool automatically handles the localhost problem! When you add `developmentConfig` to your webhook handler, Spool enables intelligent polling during development:
+Spool now uses **centralized live updates** for instant updates! This industry-standard approach connects directly to Spool's managed WebSocket infrastructure, just like Sanity and Contentful. When you add `developmentConfig` to your webhook handler, Spool establishes a connection to our centralized service for instant updates:
 
 **How it works:**
 - ✅ **Production**: Uses real webhooks (fast, efficient)
-- ✅ **Development**: Uses smart polling (every 2 seconds, only when content changes)
-- ✅ **Zero configuration**: Just add your existing API credentials
+- ✅ **Development**: Uses **Spool's centralized service** (instant, 0ms delay, enterprise-grade)
+- ✅ **Zero configuration**: Just add your existing Spool credentials
 - ✅ **Automatic detection**: Only runs in `NODE_ENV=development`
+- ✅ **Centralized**: All users connect to the same Supabase infrastructure
 
 **Benefits:**
-- No ngrok or tunnel setup required
-- No manual refresh needed during development
-- Same code works in both development and production
-- Live updates work immediately on `localhost:3000`
+- **Instant updates** - content changes appear immediately (0ms delay)
+- **Industry-standard** - same centralized approach as Sanity, Contentful, and other leading CMS platforms
+- **Enterprise-grade** - leverages Spool's managed WebSocket infrastructure with automatic scaling
+- **Serverless compatible** - works perfectly with Vercel, Netlify, and other serverless platforms
+- **Same code** works in both development and production
 
 ```typescript
 // ✅ This single configuration enables live updates everywhere
@@ -194,56 +204,28 @@ const handleWebhook = createSpoolWebhookHandler({
     apiKey: process.env.SPOOL_API_KEY!,    // Same as your existing setup
     siteId: process.env.SPOOL_SITE_ID!,    // Same as your existing setup
   },
-  onWebhook: async (data) => {
-    console.log(`Processing ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
-    
-    // Revalidate paths based on collection and event
-    switch (data.collection) {
-      case 'blog':
-        revalidatePath('/blog');
-        if (data.slug) {
-          revalidatePath(`/blog/${data.slug}`);
-        }
-        break;
-      case 'pages':
-        if (data.slug) {
-          revalidatePath(`/${data.slug}`);
-        }
-        break;
-      default:
-        revalidatePath(`/${data.collection}`);
-        if (data.slug) {
-          revalidatePath(`/${data.collection}/${data.slug}`);
-        }
-    }
-    
-    // Always revalidate home and sitemap
-    revalidatePath('/');
-    revalidatePath('/sitemap.xml');
-  }
+  // ✅ v1.6.33+: No onWebhook needed! Library handles all revalidation automatically
+  // The library will automatically revalidate the right paths based on your content changes
 });
 ```
 
 **What you'll see:**
 ```bash
 # In development console:
-[DEV] Starting Spool development mode polling...
-[DEV] Initial content sync complete - tracking 15 items
-[DEV] Content updated: blog/my-new-post
-[dev-1643723456789] Processing content.updated for blog/my-new-post
-
-# When slug changes:
-[DEV] Slug changed: blog/old-slug → new-slug
-[dev-1643723456790] Processing content.updated for blog/old-slug
-[dev-1643723456791] Processing content.updated for blog/new-slug
+[DEV] Starting Spool live updates via centralized Realtime...
+[DEV] ✅ Connected to Spool Realtime for site: your-site-id
+[DEV] 🔄 Live update: blog/my-new-post
+[DEV] ✅ Revalidated: /blog/my-new-post
+[DEV] 🧹 Caches cleared
 
 # When content is published:
-[DEV] Content published: blog/my-post
-[dev-1643723456792] Processing content.published for blog/my-post
+[DEV] 🔄 Live update: blog/my-post
+[DEV] ✅ Revalidated: /blog
+[DEV] ✅ Revalidated: /blog/my-post
 
 # When content is deleted:
-[DEV] Content deleted: blog/deleted-post
-[dev-1643723456793] Processing content.deleted for blog/deleted-post
+[DEV] 🔄 Live update: blog/deleted-post
+[DEV] ✅ Revalidated: /blog
 
 # In production console:
 [wh_1234567890] Processing webhook: content.updated for blog/my-new-post
@@ -382,28 +364,62 @@ export const POST = createSpoolWebhookHandler({
 
 **That's it!** Your Next.js site is now connected to Spool CMS with real-time updates.
 
+## ✅ Setup Checklist
+
+Before testing live updates, ensure you have:
+
+- [ ] **Installed the package**: `npm install @spoolcms/nextjs@2.0.1` (or `@latest`)
+- [ ] **Set environment variables** in `.env.local`:
+  - `SPOOL_API_KEY="spool_your_api_key_here"`
+  - `SPOOL_SITE_ID="your_site_id_here"`
+- [ ] **Created API route**: `app/api/spool/[...route]/route.ts`
+- [ ] **Created webhook route**: `app/api/webhooks/spool/route.ts` 
+- [ ] **Created revalidate route**: `app/api/revalidate/route.ts` ⚠️ **CRITICAL**
+- [ ] **Development server running** on the expected port
+
+**🧪 Test your setup**: `npx test-spool-live-updates`
+
 ### Quick Test
 
-Test your webhook integration:
+Test your live updates setup:
 
 ```bash
-# Test your complete webhook setup (recommended)
+# Test your complete live updates setup (recommended)
+npx test-spool-live-updates
+
+# Or test your webhook setup
 npx test-spool-webhooks
-
-# Or test your webhook endpoint manually
-npm run test:webhook
-
-# Or test a specific URL
-npm run test:webhook https://yoursite.com/api/webhooks/spool
 ```
 
-The `test-spool-webhooks` command will verify:
+The `test-spool-live-updates` command will verify:
+- ✅ `/api/revalidate` endpoint exists and works
+- ✅ `/api/webhooks/spool` endpoint is accessible  
 - ✅ Environment variables are set correctly
-- ✅ Content-updates endpoint is accessible
-- ✅ Webhook endpoint responds correctly
-- ✅ Signature verification works (if secret is configured)
+- ✅ Development server is running on the correct port
 
 This will help you identify and fix any configuration issues quickly.
+
+### Troubleshooting Live Updates
+
+**Live updates not working?** Here's how to debug:
+
+1. **Check the console logs** - Look for `[DEV]` messages in your Next.js dev server
+2. **Verify the revalidate endpoint** - Visit `http://localhost:3000/api/revalidate?path=/test` (should return "Missing path parameter")
+3. **Check environment variables** - Make sure `SPOOL_API_KEY` and `SPOOL_SITE_ID` are set
+4. **Test with curl**:
+   ```bash
+   # Test revalidation endpoint
+   curl -X POST "http://localhost:3000/api/revalidate?path=/blog"
+   
+   # Should return "OK", not 404
+   ```
+
+**Common Issues:**
+
+- **404 on /api/revalidate** → You haven't created the revalidate route (step 5)
+- **No [DEV] messages** → Environment variables not set or development config missing
+- **Connection refused** → Next.js dev server not running or wrong port
+- **Polling errors** → Invalid API key or site ID
 
 ---
 

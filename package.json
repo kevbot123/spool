@@ -23,7 +23,7 @@
     "real-time"
   ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server.js",
     "dev:fast": "next dev & (sleep 10 && node scripts/precompile-routes.js)",
     "precompile": "node scripts/precompile-routes.js",
     "build": "next build && node esbuild.config.js && node process-css.js",

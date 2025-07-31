@@ -6,6 +6,43 @@
 import crypto from 'crypto';
 import { clearAllCaches } from './cache';
 
+/**
+ * Dynamically detect the base URL of the current Next.js app
+ * This handles different ports and environments
+ */
+function getAppBaseUrl(): string {
+  // In development, try to detect the port from common environment variables
+  if (process.env.NODE_ENV === 'development') {
+    // Check for common Next.js port environment variables
+    const port = process.env.PORT || process.env.NEXT_PUBLIC_PORT || '3000';
+    return `http://localhost:${port}`;
+  }
+  
+  // In production, try to get from environment variables
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                  process.env.NEXT_PUBLIC_APP_URL || 
+                  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+                  'http://localhost:3000';
+  
+  return baseUrl;
+}
+
+/**
+ * Test if the revalidate endpoint exists and is working
+ */
+async function testRevalidateEndpoint(baseUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${baseUrl}/api/revalidate?path=/test`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(3000),
+    });
+    
+    return response.status !== 404;
+  } catch (error) {
+    return false;
+  }
+}
+
 // Global flag to ensure only one dev polling loop runs per process, even after hot reloads.
 declare global {
   // eslint-disable-next-line no-var
@@ -150,40 +187,115 @@ export function getSpoolWebhookHeaders(request: Request): {
 }
 
 /**
- * Development mode polling for localhost webhook simulation
- * This enables live updates during development when webhooks can't reach localhost
+ * Supabase Realtime live updates client
+ * Connects to Spool's dedicated live updates Supabase project
  */
-let developmentPolling: NodeJS.Timeout | null = null;
-let lastContentCheck: Record<string, { hash: string; slug: string; status: string; title: string; updated_at: string }> = {};
-let isPollingActive = false;
-let pollingRetryCount = 0;
-const MAX_RETRY_COUNT = 3;
+let realtimeChannel: any = null;
+let supabaseClient: any = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
-// Create a stable hash for content comparison
-function createContentHash(item: any): string {
+// Spool Live Updates Project Credentials (embedded in package)
+const SPOOL_LIVE_UPDATES_URL = 'https://uyauwtottrqhbhfcckwk.supabase.co';
+const SPOOL_LIVE_UPDATES_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5YXV3dG90dHJxaGJoZmNja3drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4OTkwODYsImV4cCI6MjA2OTQ3NTA4Nn0.iclMZMPlXYyKaQFt6A8ygSB0bFPK45ct1RPYSkoIve4';
+
+/**
+ * Connect to Spool's live updates Supabase Realtime
+ */
+async function connectSpoolRealtime(config: { apiKey: string; siteId: string; baseUrl?: string }) {
+  if (typeof window !== 'undefined') return; // Only run on server
+  
   try {
-    // Sort data object keys to ensure consistent stringification
-    const sortedData = item.data ? 
-      JSON.stringify(item.data, Object.keys(item.data).sort()) : 
-      '{}';
+    // Dynamically import Supabase client
+    const { createClient } = await import('@supabase/supabase-js');
     
-    // Create a simple, reliable hash from key fields with sorted data
-    const key = `${item.item_id}-${item.updated_at}-${item.status}-${sortedData}`;
+    // Create client for Spool's live updates project
+    supabaseClient = createClient(SPOOL_LIVE_UPDATES_URL, SPOOL_LIVE_UPDATES_ANON_KEY, {
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      },
+      global: {
+        headers: {
+          'x-api-key': config.apiKey // For RLS policy authentication
+        }
+      }
+    });
     
-    // Create a simple hash using built-in string methods
-    let hash = 0;
-    if (key.length === 0) return hash.toString();
-    for (let i = 0; i < key.length; i++) {
-      const char = key.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return hash.toString();
+    // Subscribe to live_updates table changes for this site
+    realtimeChannel = supabaseClient
+      .channel(`live_updates:site_id=eq.${config.siteId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'live_updates',
+        filter: `site_id=eq.${config.siteId}`
+      }, (payload: any) => {
+        const update = payload.new;
+        console.log(`[DEV] 🔄 Live update: ${update.collection}/${update.slug || 'no-slug'}`);
+        
+        // Convert to webhook format and call handlers
+        const webhookData = {
+          event: update.event_type,
+          site_id: update.site_id,
+          collection: update.collection,
+          slug: update.slug,
+          item_id: update.item_id,
+          timestamp: update.timestamp
+        };
+        
+        callWebhookHandlers(webhookData);
+      })
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`[DEV] ✅ Connected to Spool Realtime for site: ${config.siteId}`);
+          reconnectAttempts = 0;
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[DEV] ❌ Spool Realtime connection error');
+          handleReconnection(config);
+        } else if (status === 'TIMED_OUT') {
+          console.warn('[DEV] ⚠️  Spool Realtime connection timed out');
+          handleReconnection(config);
+        }
+      });
+    
   } catch (error) {
-    console.warn('[DEV] Error creating content hash:', error);
-    // Fallback to timestamp + status + id (most reliable)
-    return `${item.item_id}-${item.updated_at || Date.now()}-${item.status || 'unknown'}`;
+    console.error('[DEV] Failed to connect to Spool Realtime:', error);
+    console.warn('[DEV] 💡 Make sure @supabase/supabase-js is installed');
+    handleReconnection(config);
   }
+}
+
+/**
+ * Handle reconnection with exponential backoff
+ */
+function handleReconnection(config: { apiKey: string; siteId: string; baseUrl?: string }) {
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.error('[DEV] ❌ Max reconnection attempts reached. Live updates disabled.');
+    console.log('[DEV] 💡 Restart your dev server to re-enable live updates');
+    return;
+  }
+  
+  reconnectAttempts++;
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+  
+  console.log(`[DEV] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+  
+  setTimeout(() => {
+    // Clean up existing connection
+    if (realtimeChannel) {
+      realtimeChannel.unsubscribe();
+      realtimeChannel = null;
+    }
+    if (supabaseClient) {
+      supabaseClient.removeAllChannels();
+      supabaseClient = null;
+    }
+    
+    // Attempt reconnection
+    connectSpoolRealtime(config);
+  }, delay);
 }
 
 import { devPollingBus } from '../dev-polling-bus';
@@ -217,252 +329,50 @@ async function callWebhookHandlers(data: SpoolWebhookPayload) {
   }
 }
 
-async function startDevelopmentPolling(
-  config: { apiKey: string; siteId: string; baseUrl?: string },
-  onContentChange: (data: SpoolWebhookPayload) => Promise<void> | void = () => {}
+async function startLiveUpdates(
+  config: { apiKey: string; siteId: string; baseUrl?: string }
 ) {
   if (typeof window !== 'undefined') return; // Only run on server
-  if (process.env.NODE_ENV !== 'development') return; // Only in development
   
-  // Check if polling is actually running (not just flagged)
-  if (developmentPolling && isPollingActive) {
-    console.log(`[DEV] Polling already active (interval: ${!!developmentPolling}, isPollingActive: ${isPollingActive})`);
+  // Check if already connected
+  if (realtimeChannel) {
+    console.log('[DEV] Spool Realtime already connected');
     return;
   }
   
-  // Reset stale global flag if no actual polling is running
-  if (global.__spoolPollingActive && !developmentPolling) {
-    console.log(`[DEV] Clearing stale global polling flag`);
-    global.__spoolPollingActive = false;
+  console.log('[DEV] Starting Spool live updates via Supabase Realtime...');
+  await connectSpoolRealtime(config);
+  
+  // Test if revalidate endpoint exists (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    setTimeout(async () => {
+      const appBaseUrl = getAppBaseUrl();
+      const revalidateWorks = await testRevalidateEndpoint(appBaseUrl);
+      
+      if (!revalidateWorks) {
+        console.warn('[DEV] ⚠️  /api/revalidate endpoint not found or not working');
+        console.warn('[DEV] 💡 Create app/api/revalidate/route.ts for live updates to work');
+        console.warn('[DEV] 📖 See: https://docs.spoolcms.com/nextjs-integration#revalidate-route');
+      } else {
+        console.log('[DEV] ✅ /api/revalidate endpoint is working');
+      }
+    }, 1000);
   }
-  
-  console.log('[DEV] Starting Spool development mode polling...');
-  isPollingActive = true;
-  global.__spoolPollingActive = true;
-  pollingRetryCount = 0;
-  
-  const checkForChanges = async () => {
-    try {
-      const baseUrl = config.baseUrl || 'https://www.spoolcms.com';
-      // Add cache-busting timestamp to ensure fresh data
-      const timestamp = Date.now();
-      // Use the actual content endpoint that we know works
-      const url = `${baseUrl}/api/spool/${config.siteId}/content/blog?t=${timestamp}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-        // Add timeout to prevent hanging requests
-        signal: AbortSignal.timeout(10000),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const updates = await response.json();
-      const currentItems = new Set<string>();
-      const isFirstRun = Object.keys(lastContentCheck).length === 0;
-      
-      // Only log first run and when items count changes
-      if (isFirstRun) {
-        console.log(`[DEV] Initial content sync: ${updates.items?.length || 0} items`);
-      }
-      
-      // Reset retry count on successful fetch
-      pollingRetryCount = 0;
-      
-      // Track all timestamps to detect ANY changes
-      const allCurrentTimestamps: Record<string, string> = {};
-      const allPreviousTimestamps: Record<string, string> = {};
-      
-      // Adapt the response format from the real API
-      for (const item of updates.items || []) {
-        // The real API returns items with 'id' not 'item_id', and no 'collection' field on items
-        const adaptedUpdate = {
-          collection: updates.collection?.slug || 'blog', // Use collection from top level
-          item_id: item.id,
-          updated_at: item.updated_at,
-          slug: item.slug,
-          status: item.status,
-          title: item.title
-        };
-        
-        const key = `${adaptedUpdate.collection}::${adaptedUpdate.item_id}`;
-        allCurrentTimestamps[key] = adaptedUpdate.updated_at;
-        if (lastContentCheck[key]) {
-          allPreviousTimestamps[key] = lastContentCheck[key].updated_at;
-        }
-      }
-      
-      // Log any timestamp changes detected
-      const timestampChanges = [];
-      for (const key in allCurrentTimestamps) {
-        if (allPreviousTimestamps[key] && allCurrentTimestamps[key] !== allPreviousTimestamps[key]) {
-          timestampChanges.push({
-            key,
-            old: allPreviousTimestamps[key],
-            new: allCurrentTimestamps[key]
-          });
-        }
-      }
-      
-      // Log changes in development
-      if (timestampChanges.length > 0 && !isFirstRun) {
-        console.log(`[DEV] Detected ${timestampChanges.length} content change(s)`);
-      }
-      
-      // Process each content item
-      for (const item of updates.items || []) {
-        // Adapt the item format to what the polling expects
-        const adaptedUpdate = {
-          collection: updates.collection?.slug || 'blog',
-          item_id: item.id,
-          updated_at: item.updated_at,
-          slug: item.slug,
-          status: item.status,
-          title: item.title
-        };
-        
-        const key = `${adaptedUpdate.collection}::${adaptedUpdate.item_id}`;
-        const currentHash = createContentHash(item); // Use original item for hash
-        const previousData = lastContentCheck[key];
-        
-        currentItems.add(key);
-        
-        if (previousData && !isFirstRun) {
-          // Check if content actually changed (hash OR updated_at timestamp)
-          const hashChanged = previousData.hash !== currentHash;
-          const timestampChanged = previousData.updated_at !== (adaptedUpdate.updated_at || '');
-          
-          if (hashChanged || timestampChanged) {
-            // Determine event type based on what changed
-            let event: SpoolWebhookPayload['event'] = 'content.updated';
-            
-            // Detect publishing events
-            if (adaptedUpdate.status === 'published' && previousData.status !== 'published') {
-              event = 'content.published';
-              console.log(`[DEV] Content published: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
-            } else if (adaptedUpdate.status === 'draft' && previousData.status === 'published') {
-              console.log(`[DEV] Content unpublished: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
-            } else {
-              console.log(`[DEV] Content updated: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
-            }
-            
-            // Call webhook handlers for content change
-            await callWebhookHandlers({
-              event,
-              site_id: config.siteId,
-              collection: adaptedUpdate.collection,
-              slug: adaptedUpdate.slug,
-              item_id: adaptedUpdate.item_id,
-              timestamp: new Date().toISOString(),
-            });
-            
-            // Handle slug changes - trigger for old slug to clear cache
-            if (previousData.slug && previousData.slug !== adaptedUpdate.slug) {
-              console.log(`[DEV] Slug changed: ${adaptedUpdate.collection}/${previousData.slug} → ${adaptedUpdate.slug}`);
-              
-              // Call webhook handlers for slug change
-              await callWebhookHandlers({
-                event: 'content.updated',
-                site_id: config.siteId,
-                collection: adaptedUpdate.collection,
-                slug: previousData.slug,
-                item_id: adaptedUpdate.item_id,
-                timestamp: new Date().toISOString(),
-              });
-            }
-          }
-        } else if (!isFirstRun) {
-          // New item detected (not on first run)
-          console.log(`[DEV] New content created: ${adaptedUpdate.collection}/${adaptedUpdate.slug || 'no-slug'}`);
-          
-          // Call webhook handlers for new content
-          await callWebhookHandlers({
-            event: 'content.created',
-            site_id: config.siteId,
-            collection: adaptedUpdate.collection,
-            slug: adaptedUpdate.slug,
-            item_id: adaptedUpdate.item_id,
-            timestamp: new Date().toISOString(),
-          });
-        }
-        
-        // Store comprehensive data for next check
-        lastContentCheck[key] = {
-          hash: currentHash,
-          slug: adaptedUpdate.slug || '',
-          status: adaptedUpdate.status || 'draft',
-          title: adaptedUpdate.title || '',
-          updated_at: adaptedUpdate.updated_at || '',
-        };
-      }
-      
-      // Check for deleted items (only after first run)
-      if (!isFirstRun) {
-        for (const [key, data] of Object.entries(lastContentCheck)) {
-          if (!currentItems.has(key)) {
-            const [collection, itemId] = key.split('::');
-            
-            console.log(`[DEV] Content deleted: ${collection}/${data.slug}`);
-            
-            // Call webhook handlers for deletion
-            await callWebhookHandlers({
-              event: 'content.deleted',
-              site_id: config.siteId,
-              collection,
-              slug: data.slug,
-              item_id: itemId,
-              timestamp: new Date().toISOString(),
-            });
-            
-            delete lastContentCheck[key];
-          }
-        }
-      }
-      
-      if (isFirstRun) {
-        console.log(`[DEV] Initial content sync complete - tracking ${currentItems.size} items`);
-      }
-      
-    } catch (error) {
-      pollingRetryCount++;
-      console.error(`[DEV] Spool polling error (Attempt ${pollingRetryCount}/${MAX_RETRY_COUNT}):`, error);
-      console.error(`[DEV] API Key: ${config.apiKey ? config.apiKey.substring(0, 10) + '...' : 'MISSING'}`);
-      console.error(`[DEV] Site ID: ${config.siteId || 'MISSING'}`);
-      
-      if (pollingRetryCount >= MAX_RETRY_COUNT) {
-        console.error('[DEV] Max polling retries reached. Stopping development polling. Please restart your dev server to resume.');
-        stopDevelopmentPolling();
-      }
-    }
-  };
-  
-  // Initial check with a small delay to let the server start up
-  setTimeout(async () => {
-    console.log('[DEV] Performing initial content sync...');
-    await checkForChanges();
-  }, 1000);
-  
-  // Check every 2 seconds in development for responsive updates
-  developmentPolling = setInterval(checkForChanges, 2000);
-  
-  console.log('[DEV] Development polling started - live updates enabled on localhost');
 }
 
-function stopDevelopmentPolling() {
-  if (developmentPolling) {
-    clearInterval(developmentPolling);
-    developmentPolling = null;
-    isPollingActive = false;
-    pollingRetryCount = 0;
-    console.log('[DEV] Development polling stopped');
-    global.__spoolPollingActive = false;
+function stopLiveUpdates() {
+  if (realtimeChannel) {
+    realtimeChannel.unsubscribe();
+    realtimeChannel = null;
+    console.log('[DEV] Spool Realtime connection closed');
   }
+  
+  if (supabaseClient) {
+    supabaseClient.removeAllChannels();
+    supabaseClient = null;
+  }
+  
+  reconnectAttempts = 0;
 }
 
 /**
@@ -506,7 +416,7 @@ export function createSpoolWebhookHandler(options: {
     siteId: string;
     baseUrl?: string;
   };
-  onWebhook: (
+  onWebhook?: (
     data: SpoolWebhookPayload, 
     headers: ReturnType<typeof getSpoolWebhookHeaders>
   ) => Promise<void> | void;
@@ -562,11 +472,17 @@ export function createSpoolWebhookHandler(options: {
           // This prevents race conditions where revalidation happens faster than API propagation
           console.log("[DEV] Waiting 2 seconds for API propagation before revalidation...");
           await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Detect the current app URL dynamically
+          const baseUrl = getAppBaseUrl();
+          
           const revalidationPromises = revalidatePaths.map(async (path) => {
             try {
               // Add cache-busting and force fresh request
               const timestamp = Date.now();
-              const response = await fetch(`http://localhost:3000/api/revalidate?path=${encodeURIComponent(path)}&t=${timestamp}`, {
+              const revalidateUrl = `${baseUrl}/api/revalidate?path=${encodeURIComponent(path)}&t=${timestamp}`;
+              
+              const response = await fetch(revalidateUrl, {
                 method: 'POST',
                 headers: {
                   'Cache-Control': 'no-cache',
@@ -581,9 +497,19 @@ export function createSpoolWebhookHandler(options: {
                 console.log(`✅ HTTP revalidated: ${path} (${response.status})`);
               } else {
                 console.log(`❌ HTTP revalidation FAILED for ${path}: ${response.status} - ${responseText}`);
+                
+                // If 404, provide helpful guidance
+                if (response.status === 404) {
+                  console.log(`💡 HINT: Create app/api/revalidate/route.ts in your Next.js app. See: https://docs.spoolcms.com/nextjs-integration#revalidate-route`);
+                }
               }
             } catch (err) {
               console.log(`❌ Revalidation ERROR for ${path}:`, err instanceof Error ? err.message : String(err));
+              
+              // Provide helpful error context
+              if (err instanceof Error && err.message.includes('ECONNREFUSED')) {
+                console.log(`💡 HINT: Make sure your Next.js dev server is running and accessible at ${baseUrl}`);
+              }
             }
           });
           
@@ -605,6 +531,9 @@ export function createSpoolWebhookHandler(options: {
     };
     
     global.__spoolWebhookHandlers.push(devHandler);
+    
+    // Start Socket.IO connection for live updates
+    startLiveUpdates(options.developmentConfig);
   }
 
   return async function webhookHandler(request: Request): Promise<Response> {
@@ -633,12 +562,14 @@ export function createSpoolWebhookHandler(options: {
       
       console.log(`[${headers.deliveryId || 'unknown'}] Processing webhook: ${data.event} for ${data.collection}${data.slug ? `/${data.slug}` : ''}`);
       
-      // Call user handler with error boundary
-      try {
-        await options.onWebhook(data, headers);
-      } catch (handlerError) {
-        console.error(`[${headers.deliveryId || 'unknown'}] Error in user webhook handler:`, handlerError);
-        throw handlerError; // Re-throw to be caught by outer try-catch
+      // Call user handler with error boundary (if provided)
+      if (options.onWebhook) {
+        try {
+          await options.onWebhook(data, headers);
+        } catch (handlerError) {
+          console.error(`[${headers.deliveryId || 'unknown'}] Error in user webhook handler:`, handlerError);
+          throw handlerError; // Re-throw to be caught by outer try-catch
+        }
       }
       
       const duration = Date.now() - startTime;
@@ -677,5 +608,5 @@ export function createSpoolWebhookHandler(options: {
   };
 }
 
-// Export development utilities for advanced use cases
-export { startDevelopmentPolling, stopDevelopmentPolling };
+// Export live update utilities for advanced use cases
+export { startLiveUpdates, stopLiveUpdates };

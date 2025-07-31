@@ -4,7 +4,7 @@
 // It is safe to import multiple times because `startDevelopmentPolling` guards
 // against duplicate instances.
 
-import { startDevelopmentPolling, SpoolWebhookPayload } from './utils/webhook';
+import { startLiveUpdates, SpoolWebhookPayload } from './utils/webhook';
 
 // Augment the global namespace to inform TypeScript about our custom global property.
 declare global {
@@ -28,12 +28,12 @@ if (typeof window === 'undefined' &&
   global.__spoolPollingActive = true;
   
   try {
-    console.log('[DEV] Starting Spool development mode polling...');
-    startDevelopmentPolling({
+    console.log('[DEV] Starting Spool live updates (serverless-compatible)...');
+    startLiveUpdates({
       apiKey: process.env.SPOOL_API_KEY,
       siteId: process.env.SPOOL_SITE_ID,
     });
-    console.log('[DEV] Development polling started - live updates enabled on localhost');
+    console.log('[DEV] Live updates initialized');
     
     // Force webhook route loading by making a request to common webhook paths
     setTimeout(async () => {
@@ -77,7 +77,7 @@ if (typeof window === 'undefined' &&
     }, 3000); // Longer delay to ensure Next.js is fully ready
     
   } catch (e) {
-    console.error('[DEV] Failed to start Spool development polling.', e);
+    console.error('[DEV] Failed to start Spool live updates connection.', e);
     // Unset the key if startup fails, allowing a future attempt.
     global.__spoolPollingActive = false;
   }

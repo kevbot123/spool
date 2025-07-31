@@ -6,6 +6,7 @@ import slugify from 'slugify';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/lib/supabase/database.types';
 import { triggerContentWebhook } from '@/lib/webhooks';
+import { broadcastContentUpdate } from '@/lib/live-updates';
 
 export class ContentManager {
   private supabase: SupabaseClient<Database>;
@@ -181,6 +182,14 @@ export class ContentManager {
       created.slug
     ).catch(console.error);
 
+    // Broadcast live update
+    broadcastContentUpdate(created.collections.site_id, {
+      event_type: 'content.created',
+      collection: created.collections.slug,
+      slug: created.slug,
+      item_id: created.id
+    });
+
     return mappedItem;
   }
 
@@ -303,6 +312,14 @@ export class ContentManager {
         updated.id,
         updated.slug
       ).catch(console.error);
+
+      // Broadcast live update
+      broadcastContentUpdate(updated.collections.site_id, {
+        event_type: 'content.updated',
+        collection: updated.collections.slug,
+        slug: updated.slug,
+        item_id: updated.id
+      });
     }
 
     return mappedItem;
@@ -384,6 +401,14 @@ export class ContentManager {
         updated.id,
         updated.slug
       ).catch(console.error);
+
+      // Broadcast live update
+      broadcastContentUpdate(updated.collections.site_id, {
+        event_type: 'content.published',
+        collection: updated.collections.slug,
+        slug: updated.slug,
+        item_id: updated.id
+      });
     }
 
     return mappedItem;
@@ -432,6 +457,14 @@ export class ContentManager {
       itemToDelete.id,
       itemToDelete.slug
     ).catch(console.error);
+
+    // Broadcast live update
+    broadcastContentUpdate(itemToDelete.collections.site_id, {
+      event_type: 'content.deleted',
+      collection: itemToDelete.collections.slug,
+      slug: itemToDelete.slug,
+      item_id: itemToDelete.id
+    });
   }
 
   async searchContent(query: string, collectionSlugs?: string[], publishedOnly: boolean = false): Promise<ContentItem[]> {
