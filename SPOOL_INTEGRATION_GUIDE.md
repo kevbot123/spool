@@ -38,14 +38,13 @@ SPOOL_API_KEY="your_spool_api_key"
 SPOOL_SITE_ID="your_spool_site_id"
 NEXT_PUBLIC_SITE_URL="https://yoursite.com"
 
-# For live updates (v2.1.0+)
+# For live updates (v2.1.0+) - automatically connects to Spool's infrastructure
 NEXT_PUBLIC_SPOOL_API_KEY="your_spool_api_key"
 NEXT_PUBLIC_SPOOL_SITE_ID="your_spool_site_id"
-NEXT_PUBLIC_SPOOL_CONVEX_URL="https://your-deployment.convex.cloud"
 ```
 > **Important:** Copy the **entire** API key including the `spool_` prefix.
 
-> **New in v2.1.0:** Live updates now use Convex for better performance and cost savings. The public environment variables are safe to expose as they're protected by Convex's built-in authentication.
+> **New in v2.1.0:** Live updates now use Convex for better performance and cost savings. No additional setup required - just use your existing Spool API credentials and live updates work automatically!
 
 ### 3. Create API route
 Create `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router):
@@ -109,10 +108,10 @@ export default function LiveUpdateStatus() {
 ```
 
 **How It Works:**
-1. Content changes in Spool CMS → Convex receives update
-2. Your app automatically receives the update via WebSocket
+1. Content changes in Spool CMS → Spool's Convex infrastructure receives update
+2. Your app automatically receives the update via WebSocket (through Spool's infrastructure)
 3. Automatic revalidation happens for affected paths
-4. **ZERO CONFIGURATION** - works in development and production!
+4. **ZERO CONFIGURATION** - no Convex setup required, works in development and production!
 
 **Advanced: Custom webhook processing (v1.6.33+)**
 
@@ -193,15 +192,15 @@ Add your webhook URL in Spool admin settings if you need server-side processing.
 Spool now uses **Convex** for revolutionary real-time updates! This provides a much simpler developer experience with significant cost savings.
 
 **How it works:**
-- ✅ **All environments**: Uses Convex real-time subscriptions (works everywhere)
-- ✅ **Zero configuration**: Just wrap your app and use a hook
-- ✅ **Automatic detection**: Works in development and production
+- ✅ **All environments**: Uses Spool's Convex infrastructure (works everywhere)
+- ✅ **Zero configuration**: Just wrap your app and use a hook - no Convex setup required!
+- ✅ **Automatic connection**: Connects to Spool's infrastructure automatically
 - ✅ **Cost effective**: 55% cheaper than traditional approaches at scale
 
 **Benefits:**
 - **Instant updates** - content changes appear immediately
 - **Works everywhere** - development, production, edge functions, mobile apps
-- **Zero setup** - no webhook endpoints, no API routes, no complex configuration
+- **Zero setup** - no webhook endpoints, no API routes, no Convex deployment needed
 - **Serverless native** - perfect for Vercel, Netlify, and all serverless platforms
 - **TypeScript first** - automatic type safety and IntelliSense
 
@@ -266,7 +265,7 @@ If live updates aren't working:
    # Make sure these are set in .env.local
    NEXT_PUBLIC_SPOOL_API_KEY="spool_your_api_key_here"
    NEXT_PUBLIC_SPOOL_SITE_ID="your_site_id_here"
-   NEXT_PUBLIC_SPOOL_CONVEX_URL="https://your-deployment.convex.cloud"
+   # No Convex URL needed - automatically connects to Spool's infrastructure!
    ```
 
 2. **Verify the provider is set up:**
@@ -284,8 +283,8 @@ If live updates aren't working:
    
    # If you see errors:
    # - Invalid API key or site ID
-   # - Convex URL not set correctly
    # - Network connectivity issues
+   # - Spool's live update service temporarily unavailable
    ```
 
 ### Migration from Previous Versions
@@ -360,7 +359,6 @@ Before testing live updates, ensure you have:
   - `SPOOL_SITE_ID="your_site_id_here"`
   - `NEXT_PUBLIC_SPOOL_API_KEY="spool_your_api_key_here"`
   - `NEXT_PUBLIC_SPOOL_SITE_ID="your_site_id_here"`
-  - `NEXT_PUBLIC_SPOOL_CONVEX_URL="https://your-deployment.convex.cloud"`
 - [ ] **Created API route**: `app/api/spool/[...route]/route.ts`
 - [ ] **Added provider**: `SpoolLiveUpdatesProvider` wrapping your app
 - [ ] **Used the hook**: `useSpoolLiveUpdates` in components that need real-time updates
@@ -396,7 +394,7 @@ You should see:
 
 - **No connection messages** → Environment variables not set or provider missing
 - **"Invalid API key" errors** → Check your API key is correct and includes `spool_` prefix
-- **Connection refused** → Convex URL not set correctly
+- **Connection refused** → Network connectivity issues or Spool's service temporarily unavailable
 - **Hook not working** → Make sure component is marked with `'use client'`
 
 ---
@@ -557,8 +555,8 @@ Live updates are secured through Convex's built-in authentication system:
 
 1. **API key validation**: Each connection is authenticated using your Spool API key
 2. **Site isolation**: Users can only see updates for sites they have access to
-3. **Rate limiting**: Convex provides built-in rate limiting and abuse protection
-4. **Secure WebSockets**: All connections use secure WebSocket protocols
+3. **Rate limiting**: Spool's infrastructure provides built-in rate limiting and abuse protection
+4. **Secure WebSockets**: All connections use secure WebSocket protocols through Spool's infrastructure
 
 ### Testing Live Updates
 
@@ -581,7 +579,7 @@ You should see:
 Monitor your live updates through:
 
 1. **Browser console**: See connection status and update messages
-2. **Convex dashboard**: View function execution logs and performance metrics
+2. **Spool admin dashboard**: View live update statistics and performance metrics
 3. **Network tab**: Monitor WebSocket connection health
 4. **Custom logging**: Add your own logging in the `onUpdate` callback
 
@@ -597,10 +595,10 @@ Monitor your live updates through:
 **Debug Steps:**
 
 1. Check browser console for connection and error messages
-2. Verify all environment variables are set correctly
+2. Verify all environment variables are set correctly (no Convex URL needed!)
 3. Ensure `SpoolLiveUpdatesProvider` wraps your app
 4. Test with a simple component using `useSpoolLiveUpdates`
-5. Check the Convex dashboard for function execution logs
+5. Check Spool admin dashboard for live update status
 
 ---
 

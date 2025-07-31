@@ -8,9 +8,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ConvexReactClient, useQuery } from 'convex/react';
 
-// Spool's Convex deployment URL (embedded in package)
-// This will be set to your actual Convex deployment URL
-const SPOOL_CONVEX_URL = process.env.NEXT_PUBLIC_SPOOL_CONVEX_URL || 'https://your-convex-deployment.convex.cloud';
+// Spool's Convex deployment URL (hardcoded - customers don't need to configure this)
+const SPOOL_CONVEX_URL = 'https://sincere-hyena-934.convex.cloud';
 
 // Global Convex client instance
 let convexClient: ConvexReactClient | null = null;
@@ -219,8 +218,8 @@ function getAppBaseUrl(): string {
 }
 
 /**
- * Provider component for Convex
- * Customers need to wrap their app with this
+ * Provider component that automatically sets up Convex connection to Spool's infrastructure
+ * Customers just need to wrap their app with this - no additional configuration required!
  * 
  * Usage:
  * import { SpoolLiveUpdatesProvider } from '@spoolcms/nextjs';
@@ -230,8 +229,24 @@ function getAppBaseUrl(): string {
  * </SpoolLiveUpdatesProvider>
  */
 export function SpoolLiveUpdatesProvider({ children }: { children: React.ReactNode }) {
-  // For now, just return children - customers will need to set up ConvexProvider themselves
-  // This avoids TypeScript compilation issues while still providing the hook
-  console.warn('[SpoolLiveUpdates] Please wrap your app with ConvexProvider from convex/react');
-  return children as React.ReactElement;
+  const convexClient = getConvexClient();
+  
+  // Dynamically import ConvexProvider to avoid bundling issues
+  const [ConvexProvider, setConvexProvider] = useState<any>(null);
+  
+  useEffect(() => {
+    import('convex/react').then(({ ConvexProvider: Provider }) => {
+      setConvexProvider(() => Provider);
+    }).catch((error) => {
+      console.error('[SpoolLiveUpdates] Failed to load Convex provider:', error);
+    });
+  }, []);
+  
+  // Show loading state while Convex loads
+  if (!ConvexProvider) {
+    return children as React.ReactElement;
+  }
+  
+  // Automatically wrap with ConvexProvider using Spool's deployment
+  return React.createElement(ConvexProvider, { client: convexClient }, children);
 }
