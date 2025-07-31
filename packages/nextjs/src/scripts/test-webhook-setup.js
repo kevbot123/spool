@@ -141,7 +141,7 @@ async function testWebhookSetup() {
   console.log('4. Check your Next.js console for webhook processing messages');
   
   console.log('\n🔧 Development Mode:');
-  console.log('• Live updates work automatically on localhost with developmentConfig');
+  console.log('• Live updates now use the useSpoolLiveUpdates hook');
   console.log('• No ngrok or tunneling required for development');
   console.log('• Check console for "[DEV]" messages when content changes');
 }

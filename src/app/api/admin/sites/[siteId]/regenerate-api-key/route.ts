@@ -65,12 +65,26 @@ export async function POST(
       .from('sites')
       .update({ api_key: newApiKey })
       .eq('id', siteId)
-      .select('api_key')
+      .select('api_key, name')
       .single();
 
     if (updateError) {
       console.error('Error updating API key:', updateError);
       return NextResponse.json({ error: 'Failed to regenerate API key' }, { status: 500 });
+    }
+
+    // Sync the updated API key to Convex for live updates
+    try {
+      const { syncSiteToConvex } = await import('@/lib/live-updates');
+      await syncSiteToConvex({
+        id: siteId,
+        api_key: updatedSite.api_key,
+        name: updatedSite.name,
+      });
+      console.log(`[API_KEY_REGEN] Synced new API key to Convex: ${updatedSite.name}`);
+    } catch (convexError) {
+      console.error('[API_KEY_REGEN] Failed to sync API key to Convex:', convexError);
+      // Don't fail the API key regeneration if Convex sync fails
     }
 
     return NextResponse.json({ api_key: updatedSite.api_key });

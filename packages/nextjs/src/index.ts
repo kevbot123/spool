@@ -22,13 +22,19 @@ export { resolveConfig } from './utils/config';
 export { clearAllCaches } from './utils/cache';
 export { img } from './utils/image';
 
-// Webhook utilities
+// Webhook utilities (legacy - use live updates hook instead)
 export { 
   verifySpoolWebhook, 
   parseSpoolWebhook, 
   getSpoolWebhookHeaders, 
   createSpoolWebhookHandler
 } from './utils/webhook';
+
+// Live Updates (Convex-powered real-time updates)
+export { 
+  useSpoolLiveUpdates,
+  SpoolLiveUpdatesProvider
+} from './hooks/useSpoolLiveUpdates';
 
 // Types
 export type { 
@@ -59,6 +65,9 @@ export type {
 
 // Webhook types
 export type { SpoolWebhookPayload } from './utils/webhook';
+
+// Live Updates types
+export type { LiveUpdate, UseSpoolLiveUpdatesConfig } from './hooks/useSpoolLiveUpdates';
 
 // Type guards
 export { isPublishedContent, isDraftContent } from './types';

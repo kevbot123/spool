@@ -2,9 +2,11 @@
  * Complete webhook route example for Spool CMS
  * Copy this to: app/api/webhooks/spool/route.ts
  * 
+ * NOTE: For live updates, use the useSpoolLiveUpdates hook instead.
+ * This webhook handler is for production deployments and server-side processing only.
+ * 
  * This example includes:
  * - Production webhook handling with signature verification
- * - Development mode with live localhost updates
  * - Comprehensive revalidation logic
  * - Error handling and logging
  */
@@ -16,15 +18,7 @@ const handleWebhook = createSpoolWebhookHandler({
   // Webhook secret for signature verification (recommended for production)
   secret: process.env.SPOOL_WEBHOOK_SECRET,
   
-  // Development configuration for localhost live updates
-  developmentConfig: {
-    apiKey: process.env.SPOOL_API_KEY!,
-    siteId: process.env.SPOOL_SITE_ID!,
-    // Optional: specify different base URL (defaults to https://www.spoolcms.com)
-    // baseUrl: 'https://your-custom-spool-instance.com'
-  },
-  
-  // Main webhook handler - called for both production webhooks and development polling
+  // Main webhook handler - called for production webhooks
   onWebhook: async (data, headers) => {
     const { event, collection, slug, item_id } = data;
     

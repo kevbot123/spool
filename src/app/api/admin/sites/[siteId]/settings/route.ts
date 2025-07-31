@@ -113,6 +113,20 @@ export async function PUT(
       return NextResponse.json({ error: 'Failed to update site settings' }, { status: 500 });
     }
 
+    // Sync the updated site to Convex for live updates
+    try {
+      const { syncSiteToConvex } = await import('@/lib/live-updates');
+      await syncSiteToConvex({
+        id: updatedSite.id,
+        api_key: updatedSite.api_key,
+        name: updatedSite.name,
+      });
+      console.log(`[SITE_SETTINGS] Synced site settings to Convex: ${updatedSite.name}`);
+    } catch (convexError) {
+      console.error('[SITE_SETTINGS] Failed to sync site settings to Convex:', convexError);
+      // Don't fail the settings update if Convex sync fails
+    }
+
     return NextResponse.json(updatedSite);
 
   } catch (error) {
