@@ -1,6 +1,3 @@
-// Auto-start Spool dev-mode polling when in development environment
-import './dev-bootstrap';
-
 // Main exports for @spoolcms/nextjs package
 export { createSpoolHandler } from './handlers/spool-handler';
 export { 
@@ -22,13 +19,7 @@ export { resolveConfig } from './utils/config';
 export { clearAllCaches } from './utils/cache';
 export { img } from './utils/image';
 
-// Webhook utilities (legacy - use live updates hook instead)
-export { 
-  verifySpoolWebhook, 
-  parseSpoolWebhook, 
-  getSpoolWebhookHeaders, 
-  createSpoolWebhookHandler
-} from './utils/webhook';
+
 
 // Live Updates (Convex-powered real-time updates)
 export { 
@@ -63,8 +54,7 @@ export type {
   CollectionContent
 } from './types';
 
-// Webhook types
-export type { SpoolWebhookPayload } from './utils/webhook';
+
 
 // Live Updates types
 export type { LiveUpdate, UseSpoolLiveUpdatesConfig } from './hooks/useSpoolLiveUpdates';
