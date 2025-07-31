@@ -50,8 +50,8 @@ function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}
 export function createSpoolHandler(config?: SpoolConfig) {
   // Auto-detect config from environment if not provided
   const resolvedConfig = config || {
-    apiKey: process.env.SPOOL_API_KEY!,
-    siteId: process.env.SPOOL_SITE_ID!,
+      apiKey: process.env.NEXT_PUBLIC_SPOOL_API_KEY!,
+  siteId: process.env.NEXT_PUBLIC_SPOOL_SITE_ID!,
     baseUrl: process.env.SPOOL_BASE_URL,
   };
   
@@ -59,7 +59,7 @@ export function createSpoolHandler(config?: SpoolConfig) {
   
   // Validate required config
   if (!apiKey || !siteId) {
-    throw new Error('SPOOL_API_KEY and SPOOL_SITE_ID environment variables are required');
+    throw new Error('NEXT_PUBLIC_SPOOL_API_KEY and NEXT_PUBLIC_SPOOL_SITE_ID environment variables are required');
   }
 
   // Helper function to add CORS headers

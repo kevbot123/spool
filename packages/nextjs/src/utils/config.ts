@@ -21,10 +21,10 @@ export function resolveConfig(config?: Partial<SpoolConfig>): ResolvedConfig {
   const environment = detectEnvironment();
   
   // Resolve API key from multiple sources
-  const apiKey = resolveApiKey(config?.apiKey, environment);
+  const apiKey = resolveApiKey(config?.apiKey);
   
   // Resolve site ID from multiple sources
-  const siteId = resolveSiteId(config?.siteId, environment);
+  const siteId = resolveSiteId(config?.siteId);
   
   // Resolve base URL with smart defaults
   const baseUrl = resolveBaseUrl(config?.baseUrl, environment);
@@ -43,26 +43,16 @@ export function resolveConfig(config?: Partial<SpoolConfig>): ResolvedConfig {
 /**
  * Resolve API key from environment variables or config
  */
-function resolveApiKey(configApiKey?: string, environment?: EnvironmentContext): string {
-  const env = environment || detectEnvironment();
-  
+function resolveApiKey(configApiKey?: string): string {
   // Try config first
   if (configApiKey) {
     return configApiKey;
   }
   
-  // Try NEXT_PUBLIC_ prefixed variables first (works in both server and client)
-  const publicApiKey = process.env.NEXT_PUBLIC_SPOOL_API_KEY;
-  if (publicApiKey) {
-    return publicApiKey;
-  }
-  
-  // Fallback to server-only variables for backward compatibility
-  if (env.isServer) {
-    const serverApiKey = process.env.SPOOL_API_KEY;
-    if (serverApiKey) {
-      return serverApiKey;
-    }
+  // Use NEXT_PUBLIC_ prefixed variables (works in both server and client)
+  const apiKey = process.env.NEXT_PUBLIC_SPOOL_API_KEY;
+  if (apiKey) {
+    return apiKey;
   }
   
   throw new Error(
@@ -73,26 +63,16 @@ function resolveApiKey(configApiKey?: string, environment?: EnvironmentContext):
 /**
  * Resolve site ID from environment variables or config
  */
-function resolveSiteId(configSiteId?: string, environment?: EnvironmentContext): string {
-  const env = environment || detectEnvironment();
-  
+function resolveSiteId(configSiteId?: string): string {
   // Try config first
   if (configSiteId) {
     return configSiteId;
   }
   
-  // Try NEXT_PUBLIC_ prefixed variables first (works in both server and client)
-  const publicSiteId = process.env.NEXT_PUBLIC_SPOOL_SITE_ID;
-  if (publicSiteId) {
-    return publicSiteId;
-  }
-  
-  // Fallback to server-only variables for backward compatibility
-  if (env.isServer) {
-    const serverSiteId = process.env.SPOOL_SITE_ID;
-    if (serverSiteId) {
-      return serverSiteId;
-    }
+  // Use NEXT_PUBLIC_ prefixed variables (works in both server and client)
+  const siteId = process.env.NEXT_PUBLIC_SPOOL_SITE_ID;
+  if (siteId) {
+    return siteId;
   }
   
   throw new Error(

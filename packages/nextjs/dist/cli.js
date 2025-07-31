@@ -7,20 +7,20 @@ const path_1 = require("path");
 const ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spoolcms/nextjs';
 
 export const { GET, POST, PUT, DELETE } = createSpoolHandler({
-  apiKey: process.env.SPOOL_API_KEY!,
-  siteId: process.env.SPOOL_SITE_ID!,
+  apiKey: process.env.NEXT_PUBLIC_SPOOL_API_KEY!,
+  siteId: process.env.NEXT_PUBLIC_SPOOL_SITE_ID!,
 });`;
 const PAGES_ROUTE_TEMPLATE = `import { createSpoolHandler } from '@spoolcms/nextjs';
 
 const handler = createSpoolHandler({
-  apiKey: process.env.SPOOL_API_KEY!,
-  siteId: process.env.SPOOL_SITE_ID!,
+  apiKey: process.env.NEXT_PUBLIC_SPOOL_API_KEY!,
+  siteId: process.env.NEXT_PUBLIC_SPOOL_SITE_ID!,
 });
 
 export default handler;`;
 const ENV_TEMPLATE = `# Add these to your .env.local file:
-SPOOL_API_KEY=your_api_key_here
-SPOOL_SITE_ID=your_site_id_here`;
+NEXT_PUBLIC_SPOOL_API_KEY=your_api_key_here
+NEXT_PUBLIC_SPOOL_SITE_ID=your_site_id_here`;
 async function createSpoolRoute() {
     const cwd = process.cwd();
     console.log(`🔎 Current working directory: ${cwd}`);

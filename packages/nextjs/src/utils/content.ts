@@ -259,8 +259,8 @@ export async function getSpoolContent<T = SpoolContent>(
   
   // Use provided config or default from environment
   const resolvedConfig = resolveConfig(config || {
-    apiKey: process.env.SPOOL_API_KEY!,
-    siteId: process.env.SPOOL_SITE_ID!,
+    apiKey: process.env.NEXT_PUBLIC_SPOOL_API_KEY!,
+    siteId: process.env.NEXT_PUBLIC_SPOOL_SITE_ID!,
   });
   
   // Build endpoint URL
@@ -435,8 +435,8 @@ export async function generateSpoolSitemap(
 export async function getSpoolCollections(config?: SpoolConfig) {
   // Auto-detect config if not provided
   const resolvedConfigInput = config || {
-    apiKey: process.env.SPOOL_API_KEY!,
-    siteId: process.env.SPOOL_SITE_ID!,
+    apiKey: process.env.NEXT_PUBLIC_SPOOL_API_KEY!,
+    siteId: process.env.NEXT_PUBLIC_SPOOL_SITE_ID!,
   };
   const resolvedConfig = resolveConfig(resolvedConfigInput);
   const url = `${resolvedConfig.baseUrl}/api/spool/${resolvedConfig.siteId}/collections`;

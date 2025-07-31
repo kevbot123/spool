@@ -27,7 +27,7 @@ This guide provides all the necessary steps and code examples to integrate Spool
 npm install @spoolcms/nextjs@latest
 ```
 
-> **Latest v2.1.4:** UNIFIED CREDENTIALS! Now uses just ONE set of environment variables for both server and client-side usage. Convex live updates with auto-detection, 55% cost savings, and true zero configuration. Just use a React hook - no webhook endpoints needed!
+> **Latest v2.1.5:** SIMPLIFIED CREDENTIALS! Removed all backward compatibility - now uses ONLY `NEXT_PUBLIC_*` variables for crystal clear setup. One set of credentials, works everywhere, zero confusion. Convex live updates with auto-detection and true zero configuration!
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
