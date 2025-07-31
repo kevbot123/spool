@@ -15,17 +15,17 @@ describe('Body is unusable integration test', () => {
       baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     };
 
-    it('should fetch the Audienceful + Stripe post without Body is unusable error', async () => {
-      const result = await getSpoolContent({ collection: 'blog', slug: 'boost-revenue-with-audienceful-stripe', config: config });
+    it('should fetch a test post without Body is unusable error', async () => {
+      const result = await getSpoolContent({ collection: 'blog', slug: 'test-post', config: config });
       
       expect(result).toBeTruthy();
-      expect(result.data?.title).toBe('Boost Revenue with Audienceful + Stripe');
-      expect(result.data?.body).toContain('Audienceful integration on Stripe');
-      expect(result.slug).toBe('boost-revenue-with-audienceful-stripe');
+      expect(result.data?.title).toBe('Test Post');
+      expect(result.data?.body).toContain('Test content');
+      expect(result.slug).toBe('test-post');
     });
 
     it('should handle multiple requests to the same content without errors', async () => {
-      const slug = 'boost-revenue-with-audienceful-stripe';
+      const slug = 'test-post';
       
       // Make multiple concurrent requests
       const promises = Array(5).fill(null).map(() => 
@@ -37,7 +37,7 @@ describe('Body is unusable integration test', () => {
       // All requests should succeed and return the same data
       results.forEach(result => {
         expect(result).toBeTruthy();
-        expect(result.data?.title).toBe('Boost Revenue with Audienceful + Stripe');
+        expect(result.data?.title).toBe('Test Post');
         expect(result.slug).toBe(slug);
       });
     });
