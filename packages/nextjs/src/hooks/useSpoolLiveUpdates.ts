@@ -72,7 +72,7 @@ export function useSpoolLiveUpdates(config: UseSpoolLiveUpdatesConfig = {}) {
   }, [config.onUpdate]);
 
   // Subscribe to live updates via Convex
-  // Note: This will need to be updated with the actual API reference once Convex is deployed
+  // Note: Function name format for external deployment access
   const updates = useQuery(
     'liveUpdates:subscribe' as any,
     config.enabled !== false && apiKey && siteId ? {
@@ -89,10 +89,11 @@ export function useSpoolLiveUpdates(config: UseSpoolLiveUpdatesConfig = {}) {
       setError(null);
       
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[DEV] ✅ Connected to Spool Realtime for site: ${config.siteId}`);
+        console.log(`[DEV] ✅ Connected to Spool Realtime for site: ${siteId}`);
+        console.log(`[DEV] 📊 Updates received:`, updates);
       }
     }
-  }, [updates, config.siteId]);
+  }, [updates, siteId]);
 
   // Handle new updates
   useEffect(() => {
@@ -122,15 +123,25 @@ export function useSpoolLiveUpdates(config: UseSpoolLiveUpdatesConfig = {}) {
     }
   }, [updates]);
 
-  // Handle errors
+  // Handle errors and debug info
   useEffect(() => {
+    // Debug logging for connection issues
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[DEV] 🔍 Debug info:`, {
+        apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : 'missing',
+        siteId: siteId || 'missing',
+        enabled: config.enabled !== false,
+        updatesState: updates === undefined ? 'undefined' : Array.isArray(updates) ? `array(${updates.length})` : typeof updates
+      });
+    }
+    
     // Convex will throw errors if authentication fails
     // We can catch them here and provide user-friendly messages
-    if (updates === undefined && config.enabled !== false) {
+    if (updates === undefined && config.enabled !== false && apiKey && siteId) {
       // Still loading, not an error yet
       return;
     }
-  }, [updates, config.enabled]);
+  }, [updates, config.enabled, apiKey, siteId]);
 
   return {
     isConnected,
