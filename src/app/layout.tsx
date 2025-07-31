@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { LoadingProvider } from '@/context/LoadingContext'
+import { SiteProvider } from '@/context/SiteContext'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -51,8 +52,10 @@ export default function RootLayout({
         >
           <AuthProvider>
             <LoadingProvider>
-              {children}
-              <Toaster />
+              <SiteProvider>
+                {children}
+                <Toaster />
+              </SiteProvider>
             </LoadingProvider>
           </AuthProvider>
         </ThemeProvider>

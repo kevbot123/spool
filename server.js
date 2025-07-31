@@ -21,19 +21,7 @@ app.prepare().then(() => {
     }
   });
 
-  // Initialize WebSocket server
-  if (dev) {
-    // Only initialize WebSocket in development for now
-    // In production, this would be handled by a separate WebSocket service
-    try {
-      const { initializeWebSocketServer } = require('./src/lib/websocket-server.ts');
-      initializeWebSocketServer(server);
-      console.log('✅ WebSocket server initialized for live updates');
-    } catch (error) {
-      console.warn('⚠️  WebSocket server failed to initialize:', error.message);
-      console.log('📝 Live updates will fall back to webhook-only mode');
-    }
-  }
+  // Live updates are now handled by Convex - no WebSocket server needed
 
   server
     .once('error', (err) => {
