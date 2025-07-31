@@ -7,7 +7,14 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
 
 // Initialize Convex client for server-side operations
-const convex = new ConvexHttpClient(process.env.CONVEX_URL!);
+const CONVEX_URL = process.env.CONVEX_URL || "";
+let convex: ConvexHttpClient | null = null;
+if (CONVEX_URL) {
+  convex = new ConvexHttpClient(CONVEX_URL);
+} else {
+  // In build or test environments without Convex, we gracefully degrade.
+  console.warn("[CONVEX_LIVE_UPDATES] CONVEX_URL not set. Live-updates disabled at runtime/build.");
+}
 
 export interface ContentUpdateData {
   event_type: 'content.created' | 'content.updated' | 'content.published' | 'content.deleted';
@@ -26,8 +33,12 @@ export interface ContentUpdateData {
  * This replaces the Supabase broadcaster
  */
 export async function broadcastContentUpdate(siteId: string, data: ContentUpdateData) {
-  try {
-    const updateId = await convex.mutation(api.liveUpdates.broadcast, {
+    if (!convex) {
+      console.warn('[CONVEX_LIVE_UPDATES] Cannot broadcast update; CONVEX_URL not configured.');
+      return null;
+    }
+    try {
+      const updateId = await convex.mutation(api.liveUpdates.broadcast, {
       siteId,
       event: data.event_type,
       collection: data.collection,
@@ -58,16 +69,18 @@ export async function syncSiteToConvex(site: {
   api_key: string;
   name: string;
 }) {
+  if (!convex) {
+    console.warn('[CONVEX_LIVE_UPDATES] Cannot sync site; CONVEX_URL not configured.');
+    return null;
+  }
   try {
     const siteId = await convex.mutation(api.sites.syncSite, {
       id: site.id,
       apiKey: site.api_key,
       name: site.name,
     });
-    
     console.log(`[CONVEX_LIVE_UPDATES] Synced site to Convex: ${site.name} (${site.id})`);
     return siteId;
-    
   } catch (error) {
     console.error('[CONVEX_LIVE_UPDATES] Error syncing site:', error);
     throw error;
@@ -78,14 +91,16 @@ export async function syncSiteToConvex(site: {
  * Remove a site from Convex when it's deleted from PostgreSQL
  */
 export async function removeSiteFromConvex(siteId: string) {
+  if (!convex) {
+    console.warn('[CONVEX_LIVE_UPDATES] Cannot remove site; CONVEX_URL not configured.');
+    return null;
+  }
   try {
     const removed = await convex.mutation(api.sites.removeSite, {
       id: siteId,
     });
-    
     console.log(`[CONVEX_LIVE_UPDATES] Removed site from Convex: ${siteId}`);
     return removed;
-    
   } catch (error) {
     console.error('[CONVEX_LIVE_UPDATES] Error removing site:', error);
     throw error;
@@ -112,6 +127,10 @@ export async function sendTestUpdate(siteId: string) {
  * Get connection stats for monitoring
  */
 export async function getConnectionStats() {
+  if (!convex) {
+    console.warn('[CONVEX_LIVE_UPDATES] Cannot fetch stats; CONVEX_URL not configured.');
+    return null;
+  }
   try {
     const stats = await convex.query(api.connections.getConnectionStats);
     return stats;

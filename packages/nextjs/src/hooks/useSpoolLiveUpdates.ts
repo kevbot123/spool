@@ -37,8 +37,8 @@ export interface LiveUpdate {
 }
 
 export interface UseSpoolLiveUpdatesConfig {
-  apiKey: string;
-  siteId: string;
+  apiKey?: string; // Optional - will auto-detect from env
+  siteId?: string; // Optional - will auto-detect from env
   onUpdate?: (update: LiveUpdate) => void;
   enabled?: boolean;
 }
@@ -47,11 +47,24 @@ export interface UseSpoolLiveUpdatesConfig {
  * Hook for subscribing to Spool live updates
  * This is what customers will use in their Next.js apps
  */
-export function useSpoolLiveUpdates(config: UseSpoolLiveUpdatesConfig) {
+export function useSpoolLiveUpdates(config: UseSpoolLiveUpdatesConfig = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastTimestampRef = useRef<number>(0);
   const onUpdateRef = useRef(config.onUpdate);
+
+  // Auto-detect credentials from environment
+  const apiKey = config.apiKey || 
+    (typeof window !== 'undefined' ? 
+      (window as any).__NEXT_DATA__?.props?.pageProps?.env?.NEXT_PUBLIC_SPOOL_API_KEY || 
+      process.env.NEXT_PUBLIC_SPOOL_API_KEY 
+    : null);
+  
+  const siteId = config.siteId || 
+    (typeof window !== 'undefined' ? 
+      (window as any).__NEXT_DATA__?.props?.pageProps?.env?.NEXT_PUBLIC_SPOOL_SITE_ID ||
+      process.env.NEXT_PUBLIC_SPOOL_SITE_ID
+    : null);
   
   // Update the callback ref when it changes
   useEffect(() => {
@@ -62,9 +75,9 @@ export function useSpoolLiveUpdates(config: UseSpoolLiveUpdatesConfig) {
   // Note: This will need to be updated with the actual API reference once Convex is deployed
   const updates = useQuery(
     'liveUpdates:subscribe' as any,
-    config.enabled !== false ? {
-      siteId: config.siteId,
-      apiKey: config.apiKey,
+    config.enabled !== false && apiKey && siteId ? {
+      siteId,
+      apiKey,
       limit: 10,
     } : 'skip'
   );
@@ -231,22 +244,22 @@ function getAppBaseUrl(): string {
 export function SpoolLiveUpdatesProvider({ children }: { children: React.ReactNode }) {
   const convexClient = getConvexClient();
   
-  // Dynamically import ConvexProvider to avoid bundling issues
-  const [ConvexProvider, setConvexProvider] = useState<any>(null);
-  
-  useEffect(() => {
-    import('convex/react').then(({ ConvexProvider: Provider }) => {
-      setConvexProvider(() => Provider);
-    }).catch((error) => {
-      console.error('[SpoolLiveUpdates] Failed to load Convex provider:', error);
-    });
-  }, []);
-  
-  // Show loading state while Convex loads
-  if (!ConvexProvider) {
+  // Try to import ConvexProvider synchronously first
+  let ConvexProvider: any = null;
+  try {
+    const convexReact = require('convex/react');
+    ConvexProvider = convexReact.ConvexProvider;
+  } catch (error) {
+    // Convex not installed - provide fallback
+    console.warn('[SpoolLiveUpdates] Convex not installed. Live updates disabled. Install with: npm install convex');
     return children as React.ReactElement;
   }
   
-  // Automatically wrap with ConvexProvider using Spool's deployment
+  if (!ConvexProvider) {
+    console.warn('[SpoolLiveUpdates] ConvexProvider not available. Live updates disabled.');
+    return children as React.ReactElement;
+  }
+  
+  // Wrap with ConvexProvider using Spool's deployment
   return React.createElement(ConvexProvider, { client: convexClient }, children);
 }

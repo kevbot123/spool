@@ -4,8 +4,44 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { siteManagement, type Site, type SiteStatus, type SiteAnalytics } from '@/lib/site-management-client';
+// Site management types - these would typically come from your API client
+interface Site {
+  id: string;
+  name: string;
+  domain?: string;
+  status: 'active' | 'inactive' | 'suspended';
+}
+
+interface SiteStatus {
+  status: 'active' | 'inactive' | 'suspended';
+  lastActivity?: string;
+  contentCount: number;
+  storage: number;
+}
+
+interface SiteAnalytics {
+  pageViews: number;
+  uniqueVisitors: number;
+  contentUpdates: number;
+  period: string;
+}
 import { useSpoolLiveUpdates } from './useSpoolLiveUpdates';
+
+// Stub implementation - this would be replaced with actual API client
+const siteManagement = {
+  listSites: async () => ({ sites: [] as Site[] }),
+  getSiteStatus: async (siteId: string) => ({ 
+    status: 'active' as const, 
+    contentCount: 0, 
+    storage: 0 
+  }),
+  getSiteAnalytics: async (siteId: string) => ({
+    pageViews: 0,
+    uniqueVisitors: 0, 
+    contentUpdates: 0,
+    period: '7d'
+  })
+};
 
 export interface UseSiteManagementOptions {
   siteId?: string;
@@ -101,19 +137,18 @@ export function useSiteManagement(options: UseSiteManagementOptions = {}): [Site
   });
 
   // Live updates hook (only if siteId is provided and enabled)
-  const liveUpdatesResult = useSpoolLiveUpdates(
-    enableLiveUpdates && siteId ? {
-      apiKey: '', // Will be populated from site data
-      siteId,
-      onUpdate: (update) => {
-        // Refresh relevant data when live updates are received
-        if (update.type === 'content') {
-          refreshStatus();
-          refreshDashboard();
-        }
-      },
-    } : null
-  );
+  const liveUpdatesResult = useSpoolLiveUpdates({
+    apiKey: '', // Will be populated from site data
+    siteId: siteId || 'disabled',
+    enabled: enableLiveUpdates && !!siteId,
+    onUpdate: (update) => {
+      // Refresh relevant data when live updates are received
+      if (update.event === 'content.updated' || update.event === 'content.created' || update.event === 'content.published') {
+        refreshStatus();
+        refreshDashboard();
+      }
+    },
+  });
 
   // Update live updates state
   useEffect(() => {
@@ -122,12 +157,12 @@ export function useSiteManagement(options: UseSiteManagementOptions = {}): [Site
         ...prev,
         liveUpdates: {
           connected: liveUpdatesResult.isConnected,
-          lastUpdate: liveUpdatesResult.lastUpdate,
+          lastUpdate: liveUpdatesResult.latestUpdate,
           activeConnections: 0, // This would come from the status API
         },
       }));
     }
-  }, [liveUpdatesResult?.isConnected, liveUpdatesResult?.lastUpdate]);
+  }, [liveUpdatesResult?.isConnected, liveUpdatesResult?.latestUpdate]);
 
   // Helper function to update loading state
   const setLoading = useCallback((key: keyof SiteManagementState['loading'], value: boolean) => {
@@ -155,7 +190,7 @@ export function useSiteManagement(options: UseSiteManagementOptions = {}): [Site
       setState(prev => ({
         ...prev,
         sites,
-        currentSite: siteId ? sites.find(s => s.id === siteId) || prev.currentSite : prev.currentSite,
+        currentSite: siteId ? sites.find((s: Site) => s.id === siteId) || prev.currentSite : prev.currentSite,
       }));
     } catch (error) {
       setError('sites', error instanceof Error ? error.message : 'Failed to fetch sites');

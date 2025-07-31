@@ -51,7 +51,13 @@ function resolveApiKey(configApiKey?: string, environment?: EnvironmentContext):
     return configApiKey;
   }
   
-  // Server context: use regular environment variables
+  // Try NEXT_PUBLIC_ prefixed variables first (works in both server and client)
+  const publicApiKey = process.env.NEXT_PUBLIC_SPOOL_API_KEY;
+  if (publicApiKey) {
+    return publicApiKey;
+  }
+  
+  // Fallback to server-only variables for backward compatibility
   if (env.isServer) {
     const serverApiKey = process.env.SPOOL_API_KEY;
     if (serverApiKey) {
@@ -59,18 +65,8 @@ function resolveApiKey(configApiKey?: string, environment?: EnvironmentContext):
     }
   }
   
-  // Client context: use NEXT_PUBLIC_ prefixed variables
-  if (env.isClient) {
-    const clientApiKey = process.env.NEXT_PUBLIC_SPOOL_API_KEY;
-    if (clientApiKey) {
-      return clientApiKey;
-    }
-  }
-  
   throw new Error(
-    `Spool API key not found. Please set ${
-      env.isServer ? 'SPOOL_API_KEY' : 'NEXT_PUBLIC_SPOOL_API_KEY'
-    } environment variable or pass apiKey in config.`
+    `Spool API key not found. Please set NEXT_PUBLIC_SPOOL_API_KEY environment variable or pass apiKey in config.`
   );
 }
 
@@ -85,7 +81,13 @@ function resolveSiteId(configSiteId?: string, environment?: EnvironmentContext):
     return configSiteId;
   }
   
-  // Server context: use regular environment variables
+  // Try NEXT_PUBLIC_ prefixed variables first (works in both server and client)
+  const publicSiteId = process.env.NEXT_PUBLIC_SPOOL_SITE_ID;
+  if (publicSiteId) {
+    return publicSiteId;
+  }
+  
+  // Fallback to server-only variables for backward compatibility
   if (env.isServer) {
     const serverSiteId = process.env.SPOOL_SITE_ID;
     if (serverSiteId) {
@@ -93,18 +95,8 @@ function resolveSiteId(configSiteId?: string, environment?: EnvironmentContext):
     }
   }
   
-  // Client context: use NEXT_PUBLIC_ prefixed variables
-  if (env.isClient) {
-    const clientSiteId = process.env.NEXT_PUBLIC_SPOOL_SITE_ID;
-    if (clientSiteId) {
-      return clientSiteId;
-    }
-  }
-  
   throw new Error(
-    `Spool site ID not found. Please set ${
-      env.isServer ? 'SPOOL_SITE_ID' : 'NEXT_PUBLIC_SPOOL_SITE_ID'
-    } environment variable or pass siteId in config.`
+    `Spool site ID not found. Please set NEXT_PUBLIC_SPOOL_SITE_ID environment variable or pass siteId in config.`
   );
 }
 

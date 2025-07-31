@@ -24,27 +24,24 @@ This guide provides all the necessary steps and code examples to integrate Spool
 
 ### 1. Install the package
 ```bash
-npm install @spoolcms/nextjs@2.1.0
+npm install @spoolcms/nextjs@latest
 ```
 
-> **Latest v2.1.0:** CONVEX LIVE UPDATES! Revolutionary real-time updates with 55% cost savings and zero configuration. Just use a React hook - no webhook endpoints needed!
+> **Latest v2.1.4:** UNIFIED CREDENTIALS! Now uses just ONE set of environment variables for both server and client-side usage. Convex live updates with auto-detection, 55% cost savings, and true zero configuration. Just use a React hook - no webhook endpoints needed!
 
 ### 2. Add environment variables
 Add your Spool credentials to `.env.local`. You can find these keys in your Spool project settings.
 
 ```bash
 # .env.local
-SPOOL_API_KEY="your_spool_api_key"
-SPOOL_SITE_ID="your_spool_site_id"
-NEXT_PUBLIC_SITE_URL="https://yoursite.com"
-
-# For live updates (v2.1.0+) - automatically connects to Spool's infrastructure
 NEXT_PUBLIC_SPOOL_API_KEY="your_spool_api_key"
 NEXT_PUBLIC_SPOOL_SITE_ID="your_spool_site_id"
+NEXT_PUBLIC_SITE_URL="https://yoursite.com"
 ```
+
 > **Important:** Copy the **entire** API key including the `spool_` prefix.
 
-> **New in v2.1.0:** Live updates now use Convex for better performance and cost savings. No additional setup required - just use your existing Spool API credentials and live updates work automatically!
+> **Why NEXT_PUBLIC_?** Spool API keys are read-only and designed to be safely exposed publicly. They only allow access to published content that's meant to be public anyway. Using public variables enables both server-side content fetching AND client-side live updates with a single set of credentials.
 
 ### 3. Create API route
 Create `app/api/spool/[...route]/route.ts` (or `pages/api/spool/[...route].ts` for Pages Router):
@@ -87,9 +84,8 @@ Add the live updates hook to any component that needs real-time updates:
 import { useSpoolLiveUpdates } from '@spoolcms/nextjs';
 
 export default function LiveUpdateStatus() {
+  // Auto-detects credentials from environment - no config needed!
   const { isConnected, latestUpdate } = useSpoolLiveUpdates({
-    apiKey: process.env.NEXT_PUBLIC_SPOOL_API_KEY!,
-    siteId: process.env.NEXT_PUBLIC_SPOOL_SITE_ID!,
     onUpdate: (update) => {
       console.log('Content updated:', update);
       // Automatic revalidation happens behind the scenes
@@ -351,16 +347,14 @@ const { isConnected } = useSpoolLiveUpdates({
 
 ## ✅ Setup Checklist
 
-Before testing live updates, ensure you have:
+Before testing your Spool integration, ensure you have:
 
-- [ ] **Installed the package**: `npm install @spoolcms/nextjs@2.1.0` (or `@latest`)
+- [ ] **Installed the package**: `npm install @spoolcms/nextjs@latest`
 - [ ] **Set environment variables** in `.env.local`:
-  - `SPOOL_API_KEY="spool_your_api_key_here"`
-  - `SPOOL_SITE_ID="your_site_id_here"`
   - `NEXT_PUBLIC_SPOOL_API_KEY="spool_your_api_key_here"`
   - `NEXT_PUBLIC_SPOOL_SITE_ID="your_site_id_here"`
 - [ ] **Created API route**: `app/api/spool/[...route]/route.ts`
-- [ ] **Added provider**: `SpoolLiveUpdatesProvider` wrapping your app
+- [ ] **Added provider**: `SpoolLiveUpdatesProvider` wrapping your app (for live updates)
 - [ ] **Used the hook**: `useSpoolLiveUpdates` in components that need real-time updates
 
 **🧪 Test your setup**: Check browser console for connection messages
